@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>困惑是正常的，&#039;static 生命周期约束本来就不简单 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.jpg"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="跟其他语言一样，static 变量的根本特征是：它的数据会被写进程序的数据段（.rodata / .data / .bss），进程启动时会装载到内存中，然后一直持续到程序结束，内存位置都不会发生变动。 所以，通常来说，static 变量是全局性的，但这不是绝对的。应该这样说：static 变量具备成为全局变量的条件，但是否是全局的取决于声明它的位置，因为，除了可以在 module 级别声明外，我们"><meta property="og:type" content="article"><meta property="og:title" content="困惑是正常的，&#039;static 生命周期约束本来就不简单"><meta property="og:url" content="https://bluishglc.github.io/rust/static-lifetime-bound/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="跟其他语言一样，static 变量的根本特征是：它的数据会被写进程序的数据段（.rodata / .data / .bss），进程启动时会装载到内存中，然后一直持续到程序结束，内存位置都不会发生变动。 所以，通常来说，static 变量是全局性的，但这不是绝对的。应该这样说：static 变量具备成为全局变量的条件，但是否是全局的取决于声明它的位置，因为，除了可以在 module 级别声明外，我们"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://bluishglc.github.io/images/202609/c2.png"><meta property="article:published_time" content="2026-09-17T17:37:06.000Z"><meta property="article:modified_time" content="2026-11-03T06:47:50.452Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Rust"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://bluishglc.github.io/images/202609/c2.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://bluishglc.github.io/rust/static-lifetime-bound/"},"headline":"困惑是正常的，'static 生命周期约束本来就不简单","image":["https://bluishglc.github.io/images/202609/c2.png"],"datePublished":"2026-09-17T17:37:06.000Z","dateModified":"2026-11-03T06:47:50.452Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://bluishglc.github.io/img/logo.jpg"}},"description":"跟其他语言一样，static 变量的根本特征是：它的数据会被写进程序的数据段（.rodata / .data / .bss），进程启动时会装载到内存中，然后一直持续到程序结束，内存位置都不会发生变动。 所以，通常来说，static 变量是全局性的，但这不是绝对的。应该这样说：static 变量具备成为全局变量的条件，但是否是全局的取决于声明它的位置，因为，除了可以在 module 级别声明外，我们"}</script><link rel="canonical" href="https://bluishglc.github.io/rust/static-lifetime-bound/"><link rel="icon" href="/img/favicon.jpg"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-3-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-8-widescreen"><div class="card"><article class="card-content article" role="article"><h1 class="title is-3 is-size-4-mobile">困惑是正常的，&#039;static 生命周期约束本来就不简单</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Rust/">Rust</a></span><span class="level-item">发表于：<time dateTime="2026-09-17T17:37:06.000Z" title="2026-09-17 10:37:06">2026-09-17</time></span><span class="level-item">阅读用时：27 分钟 (约 3988 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/202609/c2.png" alt="困惑是正常的，&#039;static 生命周期约束本来就不简单" fetchpriority="high"></figure><div class="content"><p><code>&#39;static</code> 生命周期约束总给人一种不好拿捏的感觉，因为它出现在不同位置上时含义也会有所不同，需要仔细甄别。此外，它还总会和其他一些机制关联着一起出现，比如闭包、Fn trait、生命周期约束以及多线程场景，这会增加理解的困难度，所以，对 <code>&#39;static</code> 感到困惑是正常的。本文会带领大家全面了解一下 ‘static 生命周期约束。本文原文链接：<a target="_blank" rel="noopener" href="https://laurence.blog.csdn.net/article/details/165619915">https://laurence.blog.csdn.net/article/details/165619915</a> 禁止转载。</p>
+<h1 id="1-从-static-变量谈起"><a href="#1-从-static-变量谈起" class="headerlink" title="1. 从 static 变量谈起"></a>1. 从 static 变量谈起</h1><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> X: <span class="type">i32</span> = <span class="number">42</span>;</span><br><span class="line"><span class="keyword">const</span> Y: <span class="type">i32</span> = <span class="number">42</span>;</span><br></pre></td></tr></table></figure>
+
+<p>跟其他语言一样，static 变量的根本特征是：它的数据会被写进程序的数据段（.rodata &#x2F; .data &#x2F; .bss），进程启动时会装载到内存中，然后一直持续到程序结束，内存位置都不会发生变动。</p>
+<p>所以，通常来说，static 变量是全局性的，但这不是绝对的。应该这样说：static 变量具备成为全局变量的条件，但是否是全局的取决于声明它的位置，因为，除了可以在 module 级别声明外，我们也可以在一个函数的局部作用域中声明一个 static 变量，它同样是放在数据段，运行时加载进内存的，只不过，它声明的作用域限制了它的“可见性”。</p>
+<p>经常与 static 变量一起比较的是 const 常量，static 变量有自己确切的内存地址，可以对它：取引用、取地址，而 const 常量更像是它代表的那个值的“别名”，它没有自己的内存地址，在编译时，遇到使用到它的地方，编译器会就地物化一份这个值。</p>
+<h1 id="2-‘static-生命周期约束"><a href="#2-‘static-生命周期约束" class="headerlink" title="2. ‘static 生命周期约束"></a>2. ‘static 生命周期约束</h1><p><strong><code>&#39;static</code> 表示其标记对象的生命周期是程序的整个运行期，也就是说这个对象在程序运行期间会一直存活</strong>，结合它所处的“上下文”（所处的位置），<code>&#39;static</code> 可以出现在四种位置上，以及一种容易被认为是可能的位置，但实际上是不允许的，以下是具体描述和示例：</p>
+<table>
+<thead>
+<tr>
+<th align="left">出现的位置</th>
+<th align="left">作用</th>
+<th align="left">示例</th>
+<th align="left">是否合法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">修饰引用</td>
+<td align="left">声明引用可以活到程序结束</td>
+<td align="left">let s: &amp;’static str &#x3D; “hello”</td>
+<td align="left">☑</td>
+</tr>
+<tr>
+<td align="left">作为类型约束</td>
+<td align="left">约束类型不得含有外部引用</td>
+<td align="left">T: ‘static</td>
+<td align="left">☑</td>
+</tr>
+<tr>
+<td align="left">supertrait 的位置上（依然是类型约束）</td>
+<td align="left">约束实现者不得含有外部引用</td>
+<td align="left">trait Foo: ‘static {…}</td>
+<td align="left">☑</td>
+</tr>
+<tr>
+<td align="left">结构体类型的尖括号中</td>
+<td align="left">作为一个具体的生命周期类型</td>
+<td align="left">b: Bar&lt;’static&gt;</td>
+<td align="left">☑</td>
+</tr>
+<tr>
+<td align="left">结构体定义的尖括号中</td>
+<td align="left">不合法</td>
+<td align="left">struct Bar&lt;’static&gt; {…} &#x2F;&#x2F; error!</td>
+<td align="left">☒</td>
+</tr>
+</tbody></table>
+<h2 id="2-1-修饰引用"><a href="#2-1-修饰引用" class="headerlink" title="2.1 修饰引用"></a>2.1 修饰引用</h2><p><strong>使用 <code>&#39;static</code> 修饰一个引用时意思是“这个引用能一直活到程序结束，也就是“你想持有多久都行”。显然，不是随便什么引用加上个 <code>&#39;static</code> 修饰就能活到程序结束，引用的“底气”来自于它的值，是因为引用的值能“贯穿程序的整个生命周期”，所以引用才有机会冠以 <code>&#39;static</code> 修饰</strong>，那都有哪些值具备这种能力呢？</p>
+<p><strong>1. static 变量的引用</strong></p>
+<p>这是最常见的 <code>&#39;static</code> 引用的来源：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> X: <span class="type">i32</span> = <span class="number">42</span>;</span><br><span class="line"><span class="keyword">let</span> <span class="variable">a</span>: &amp;<span class="symbol">&#x27;static</span> <span class="type">i32</span> = &amp;X;</span><br></pre></td></tr></table></figure>
+
+<p><strong>2. 字面量的引用</strong></p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> <span class="variable">b</span>: &amp;<span class="symbol">&#x27;static</span> <span class="type">str</span> = <span class="string">&quot;hello&quot;</span>;</span><br><span class="line"><span class="keyword">const</span> N: <span class="type">i32</span> = <span class="number">7</span>;</span><br><span class="line"><span class="keyword">let</span> <span class="variable">c</span>: &amp;<span class="symbol">&#x27;static</span> <span class="type">i32</span> = &amp;N;</span><br></pre></td></tr></table></figure>
+
+<p><strong>3. Box::leak 泄漏的值</strong></p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> <span class="variable">d</span>: &amp;<span class="symbol">&#x27;static</span> <span class="type">String</span> = <span class="type">Box</span>::<span class="title function_ invoke__">leak</span>(<span class="type">Box</span>::<span class="title function_ invoke__">new</span>(<span class="type">String</span>::<span class="title function_ invoke__">from</span>(<span class="string">&quot;hello&quot;</span>)));</span><br></pre></td></tr></table></figure>
+
+<p><code>Box::leak()</code> 函数会消耗掉 Box 实例，然后把它存放在堆上的数据泄漏出来，这时候我们可以使用一个 <code>&#39;static</code> 引用来接住这个泄漏出来的数据，就像上面示例代码做的那样。这种处理方法主要用于在程序的剩余生命期内保留数据。</p>
+<p>示例中的 <code>d</code> 反而是对 <code>&#39;static</code> 引用的一种更深刻的表达，作为一个 <code>&#39;static</code> 引用，它指向的值不在数据段，没有任何 static 声明，但它依然成立！它所指向的数据（内存中的位置）会在程序结束前一直有效。</p>
+<h2 id="2-2-作为类型约束"><a href="#2-2-作为类型约束" class="headerlink" title="2.2 作为类型约束"></a>2.2 作为类型约束</h2><h3 id="2-2-1-‘static-作为类型约束的含义"><a href="#2-2-1-‘static-作为类型约束的含义" class="headerlink" title="2.2.1 ‘static 作为类型约束的含义"></a>2.2.1 ‘static 作为类型约束的含义</h3><p>当 <code>&#39;static</code> 作为类型约束时，它表达的含义是：这个类型内部不得含有任何外部引用（<code>&#39;static</code> 引用除外），说得再具体一些的话就是：<strong>结构体不得含有任何引用类型的字段（<code>&#39;static</code> 引用除外）</strong>，枚举、元组等同理。这里顺带解释一个偶尔会有人使用的概念：短期借用、短生命周期引用，它们的意思就是：除 <code>&#39;static</code> 引用之外的所有引用，因为每次都说：不得含有任何引用类型（<code>&#39;static</code> 引用除外）会比较麻烦，所以有人把排除掉 <code>&#39;static</code> 引用后的引用类型叫：短期借用或短生命周期引用，所以刚才的表述也可说成是：<strong>结构体不得含有任何短生命周期引用</strong>，这个“短”也不见得真有多短，只是相对于 <code>&#39;static</code> 而言的。</p>
+<p>这里我们需要强化两个知识点：首先是“类型约束”：类型约束[^1]主要包括：trait bound（特质约束）、lifetime bound（生命周期约束）两种，它们都是用来修饰泛型的“类型参数”的，记住：没有泛型就没有所谓的“约束”；然后是“类型”有哪些？也就是“类型约束”都是作用在什么上面？最常见的当然是结构体！<strong>对于结构体来说，如果它有 <code>&#39;static</code> 约束，就是指不允许它含有任何引用类型的字段（<code>&#39;static</code> 引用除外），如果是枚举和元组，同样是看它的组成元素里有没有任何引用类型（<code>&#39;static</code> 引用除外），注意：<code>&#39;static</code> 约束的检查机制是递归检查类型中的所有字段，包括字段中的字段，只要发现一个引用类型（<code>&#39;static</code> 引用除外），就不满足，一个都没有才满足</strong>。另外，记住：trait 从来不是一种类型，类型约束从来不是作用到一个 trait 上，而是作用到它的实现者上，即使见到 <code>trait Foo: &#39;static {...}</code> 这样写法，也不要错误的认为 <code>&#39;static</code> 可以约束 trait，它实际上约束的还是 Foo 的实现者，是要求它的实现者内部不得含有任何引用类型的字段。下面，我们看一个示例，既然是要展示类型约束，那必定要有泛型，所以，还是要引入一个泛型函数作为 driver:</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">Owned</span> &#123;</span><br><span class="line">    name: <span class="type">String</span>,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 定义结构体时只要出现引用，如果不是 &#x27;static 引用，必须要引入生命周期标注！ </span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Borrowed</span>&lt;<span class="symbol">&#x27;a</span>&gt; &#123;</span><br><span class="line">    name: &amp;<span class="symbol">&#x27;a</span> <span class="type">str</span>,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">check</span>&lt;T: <span class="symbol">&#x27;static</span>&gt;(_: T) &#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">s</span> = <span class="type">String</span>::<span class="title function_ invoke__">from</span>(<span class="string">&quot;hi&quot;</span>);</span><br><span class="line">    <span class="comment">// Owned 不含引用，满足：T: &#x27;static 约束</span></span><br><span class="line">    <span class="title function_ invoke__">check</span>(Owned &#123; name: s.<span class="title function_ invoke__">clone</span>() &#125;); <span class="comment">// ☑    </span></span><br><span class="line">    <span class="comment">// Borrowed 含有引用，不满足：T: &#x27;static 约束</span></span><br><span class="line">    <span class="title function_ invoke__">check</span>(Borrowed &#123; name: &amp;s &#125;);  <span class="comment">// ☒      </span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>有些人会对 <code>&#39;static</code> 作为类型约束时的含义感到困惑，觉得没法把它本来的语义和对类型的约束效果联系起来，所以直接“死记硬背”了它作为类型约束时的含义：不能含有外部引用。实际上， <code>&#39;static</code> 作为类型约束时表达出的语义还是很自然的： <code>&#39;static</code> 修饰的是一个类型，套用它的原始语义的话，意思是说：这个类型可以一直活到程序运行结束，类型又不是一个具体值，本来不就是一直存在吗？这个想法就被“惯性思维”带跑了，别忘了：类型里可以包含引用字段，有了引用，类型的生命周期就会对外部的值产生的依赖，这时候，类型就必须添加生命周期标注了，除非依赖的是 <code>&#39;static</code> 引用，也就是说：<strong>从生命周期这个维度观察，类型可以分成两种：一种是生命周期依赖不受外界影响的，另一种是生命周期会依赖外部值的生命周期的，具体到代码上的表现就是：前者只含有值或 <code>&#39;static</code> 引用；后者则在定义中引入了外部引用（如果出现就必须进行生命周期标注），只是 Rust 没有给这两种类型起过正式的称谓。但是，<code>&#39;static</code> 约束刚好能精准地将这两种类型区分开了，满足 <code>&#39;static</code> 约束的就是第一种类型，不满足的就是第二种类型，所以，我们在日常表述时，说：“一个类型是 <code>&#39;static</code> 的”就是说它不包含引用类型（<code>&#39;static</code> 引用除外）；说：“一个类型不是 <code>&#39;static</code> 的”就表示它内部一定有短生命周期引用</strong>。</p>
+<h3 id="2-2-2-满足-‘static-约束的类型种类"><a href="#2-2-2-满足-‘static-约束的类型种类" class="headerlink" title="2.2.2 满足 ‘static 约束的类型种类"></a>2.2.2 满足 ‘static 约束的类型种类</h3><p>接下来，我们再看满足约束的实现者这一侧，我们说：一个类型是否满足 <code>&#39;static</code> 就是看它有没有外部引用，这个描述虽然正确，但不够细致，一个类型是否含有外部引用并不是单单看它的字段有没有引用类型这么简单（当然，这是其中一种情形），有两方面的因素会影响最终的结果：</p>
+<p>①  一个类型，比如一个结构体，如果引入了泛型，那它就不是一个单一结构体了，而是一个结构体“模板”，此时，它是否满足 <code>&#39;static</code> 约束就不能单单看它自身有没有引用字段了，还要看具体的类型参数，如果在实例化时传入了引用类型，那这个具体的实例同样也是不满足 <code>&#39;static</code> 约束的（参考下面示例中的 struct C）；</p>
+<p>② 一个类型，比如一个结构体，确实依赖到了引用字段，此时必须在结构体声明上添加生命周期标注，但是，如果在实例化时传入的是 <code>&#39;static</code> 引用，反而可以满足 <code>&#39;static</code> 约束（参考下面示例中的 struct D）。</p>
+<p>以下列举了四种典型的类型（结构体）定义，有的可以直接确定是否满足 <code>&#39;static</code> 约束，有的则是因为引入了泛型要再递进一层分析泛型类型是否满足 <code>&#39;static</code> 约束，还有的是因为引入了生命周期参数，如果传入是 <code>&#39;static</code> 引用，就满足，否则就不满足：</p>
+<table>
+<thead>
+<tr>
+<th align="left">情形</th>
+<th align="left">定义</th>
+<th align="left">是否满足 ‘static 约束</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">1</td>
+<td align="left">struct A { x: i32 }</td>
+<td align="left">总是</td>
+</tr>
+<tr>
+<td align="left">2</td>
+<td align="left">struct B { s: &amp;’static str }</td>
+<td align="left">总是</td>
+</tr>
+<tr>
+<td align="left">3</td>
+<td align="left">struct C<T> { x: T }</td>
+<td align="left">取决于 T，如果 T 满足 ‘static 约束，则 C 满足，反之亦然</td>
+</tr>
+<tr>
+<td align="left">4</td>
+<td align="left">struct D&lt;’a&gt; { s: &amp;’a str }</td>
+<td align="left">取决于具体的生命周期，如果是 ‘static，则 D 满足，否则不满足</td>
+</tr>
+</tbody></table>
+<h3 id="2-2-3-特别场景：作为闭包的类型约束"><a href="#2-2-3-特别场景：作为闭包的类型约束" class="headerlink" title="2.2.3 特别场景：作为闭包的类型约束"></a>2.2.3 特别场景：作为闭包的类型约束</h3><p>我觉得需要特别把 <code>&#39;static</code> 作为闭包的类型约束单独拿出来介绍一下。首先，闭包也是有类型的（Fn、FnMut、FnOnce），所以，理论上，<code>&#39;static</code> 作为闭包类型约束和 <code>&#39;static</code> 作为普通类型（比如结构体）的约束应该是没有分别的，但是闭包毕竟不是结构体，<code>&#39;static</code> 能约束到闭包的什么呢？这是一个很好的问题，如果找到关键联系，理解起来就会非常轻松。</p>
+<p>我们知道，<strong>闭包都会被编译器自动编译成匿名的结构体，它所捕获的外部值或引用都是这个结构体中的字段。这就和 <code>&#39;static</code> 作为结构体的类型约束能对齐了！当 <code>&#39;static</code> 作为闭包的类型约束时（也就是出现在 <code>T: Fn()/FnMut()/FnOnce() + &#39;static</code> 这种位置上时），它实际上约束的是：闭包不得捕获外部的引用（<code>&#39;static</code> 引用除外）</strong>！这种情形有一个最常见的例子，就是 <code>thread::spawn()</code> 需要的闭包，它的类型约束就是：<code>F: FnOnce() -&gt; T + Send + &#39;static</code>，如果你传给 <code>thread::spawn()</code> 的闭包依赖到了一个外部的引用，编译会报错，一般的解决方法就是使用 move 关键字把引用的值直接 move 进闭包。</p>
+<h2 id="2-4-出现在-supertrait-的位置上"><a href="#2-4-出现在-supertrait-的位置上" class="headerlink" title="2.4 出现在 supertrait 的位置上"></a>2.4 出现在 supertrait 的位置上</h2><p><code>&#39;static</code> 还可以出现在 supertrait 的位置上，但这个描述本身就有一定欺骗性，<strong>永远不要把 <code>&#39;static</code> 当成 trait</strong>！出现在 supertrait 位置上的 <code>&#39;static</code> 并不是真得 supertrait，其实还是类型约束，约束是的 <code>self</code>，也就是 trait 的实现者。看下面这个例子：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">trait</span> <span class="title class_">Plugin</span>: <span class="symbol">&#x27;static</span> &#123;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">run</span>(&amp;<span class="keyword">self</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">A</span> &#123; name: <span class="type">String</span> &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">impl</span> <span class="title class_">Plugin</span> <span class="keyword">for</span> <span class="title class_">A</span> &#123;             <span class="comment">// A 不含引用字段，可编译</span></span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">run</span>(&amp;<span class="keyword">self</span>) &#123; <span class="built_in">println!</span>(<span class="string">&quot;&#123;&#125;&quot;</span>, <span class="keyword">self</span>.name); &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">B</span>&lt;<span class="symbol">&#x27;a</span>&gt; &#123; src: &amp;<span class="symbol">&#x27;a</span> <span class="type">str</span> &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">impl</span>&lt;<span class="symbol">&#x27;a</span>&gt; Plugin <span class="keyword">for</span> <span class="title class_">B</span>&lt;<span class="symbol">&#x27;a</span>&gt; &#123;     <span class="comment">// B 含有引用字段，无法实现 Plugin，编译错误</span></span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">run</span>(&amp;<span class="keyword">self</span>) &#123; <span class="built_in">println!</span>(<span class="string">&quot;&#123;&#125;&quot;</span>, <span class="keyword">self</span>.src); &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-5-作为生命周期泛型参数的一个“常量”"><a href="#2-5-作为生命周期泛型参数的一个“常量”" class="headerlink" title="2.5 作为生命周期泛型参数的一个“常量”"></a>2.5 作为生命周期泛型参数的一个“常量”</h2><p><code>&#39;static</code> 最后一种用法就是作为生命周期参数的一个“具体类型”替换在泛型中声明的一个生命周期。<strong><code>&#39;static</code> 是唯一有名字的具体生命周期，可以视作 <code>&#39;a</code> 这种生命周期参数的一个“常量”</strong>，实际上，<code>&#39;static</code> 的这种用法我们在 2.2.2 节已经介绍到了，就是针对 <code>struct D&lt;&#39;a&gt; { s: &amp;&#39;a str }</code> 这种 带生命周期标注的结构体，当我们创建一个 D 的实例时，传入的引用会把生命周期约束关系带入到这个实例中。这里有一种特殊场景：我们可以传入 <code>&#39;static</code> 得到一个不依赖外部引用或者只有 <code>&#39;static</code> 引用的具体类型。下面，列举了三种常见的出现形式：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">D</span>&lt;<span class="symbol">&#x27;a</span>&gt; &#123; s: &amp;<span class="symbol">&#x27;a</span> <span class="type">str</span> &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">f</span>(d: D&lt;<span class="symbol">&#x27;static</span>&gt;) &#123; ... &#125;        <span class="comment">// ☑ 作为参数</span></span><br><span class="line"><span class="keyword">type</span> <span class="title class_">StaticD</span> = D&lt;<span class="symbol">&#x27;static</span>&gt;;       <span class="comment">// ☑ 类型别名</span></span><br><span class="line"><span class="keyword">let</span> <span class="variable">d</span>: D&lt;<span class="symbol">&#x27;static</span>&gt; = D &#123; s: <span class="string">&quot;hi&quot;</span> &#125;;  <span class="comment">// ☑ 作为变量</span></span><br></pre></td></tr></table></figure>
+
+<p>这里，我们要澄清两个概念：生命周期泛型参数与生命周期标注。对于 <code>struct D&lt;&#39;a&gt; { s: &amp;&#39;a str }</code> 而言，它确实有“泛型”的一面，因为它使用 <code>&lt;&gt;</code> 声明了泛型参数，而里面的这个** <code>&#39;a</code> 叫生命周期泛型参数[^2]，简称：生命周期参数，但它同时也是生命周期标注，两种含义并不冲突，并且也很难剥离开**。</p>
+<p>通常，我是将 <code>&#39;a</code> 看作一种生命周期标注，很少会将其看作一个生命周期泛型参数，因为：当 <code>&#39;a</code> 作为生命周期参数时，它的“具体值”是在实例化结构体时，由编译器根据传入的引用自动推断出来的，它确实是一个具体的生命周期的“值”，这是 <code>&#39;a</code> 具有“泛型”意味的原因，但是，这个“值”你是写不出来的（也不需要写出来），提供这个值的方式是在要关联的引用字段上添加标注，然后让编译器去推断。</p>
+<p>所以，在绝大多数情况下，我们是体会不到 <code>&#39;a</code> 作为生命周期泛型参数的“意义”，根本原因就是，我们几乎写不出一种具体的生命周期的“值”，全都是靠它作为生命周期标注由编译器自动推断的，<code>&#39;a</code> 作为泛型参数的那一面完全被遮挡了。如果我们能明确地写出一种具体的生命周期，就可以看到它作为“生命周期泛型参数”的一面，有能写出来的具体的生命周期吗？有且只有一个，就是 <code>&#39;static</code>！这就是我们能看到的 <code>&lt;&#39;a&gt;</code> 最像一个泛型参数而不是生命周期约束的示例：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">D</span>&lt;<span class="symbol">&#x27;a</span>&gt; &#123; s: &amp;<span class="symbol">&#x27;a</span> <span class="type">str</span> &#125;</span><br><span class="line"><span class="keyword">let</span> <span class="variable">d</span>: D&lt;<span class="symbol">&#x27;static</span>&gt; = D &#123; s: <span class="string">&quot;hi&quot;</span> &#125;;</span><br></pre></td></tr></table></figure>
+
+
+<p>[^1]: 其实是有三种，还有一种叫 outlives bound，没有合适的中文译名，outlives 意为：比…活得久。典型的 outlives bound 写作 <code>&#39;a: &#39;b</code>，读作 “a outlives ‘b”，它的意思是： ‘a: ‘b ‘a 至少活得跟 ‘b 一样久。更多信息参考：<a target="_blank" rel="noopener" href="https://nomicon.purewhite.io/dropck.html">https://nomicon.purewhite.io/dropck.html</a></p>
+<p>[^2]: Generic Parameter（泛型参数）包含三类：Type Parameter（T）、Lifetime Parameter（’a）、Const Parameter（const N: usize）。生命周期参数是泛型参数的一种</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>困惑是正常的，&#039;static 生命周期约束本来就不简单</p><p><a href="https://bluishglc.github.io/rust/static-lifetime-bound/">https://bluishglc.github.io/rust/static-lifetime-bound/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-09-17</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-02</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Rust/">Rust</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/rust/rust-newtype-pattern/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Rust 设计模式：newtype</span></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-2-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">3</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">2</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">3</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog">关注我</a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="作者公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="作者公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">作者公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script></div></div><div class="card widget" data-type="book"><div class="card-content"><div class="menu"><h3 class="menu-label">出版图书</h3><img class="book-image" src="/images/profile/book.jpg" alt="出版图书" loading="lazy" decoding="async"><div class="content book-content"><p>本书由电子工业出版社博文视点出版发行，系统地介绍了大数据平台的架构设计、数据采集、主数据管理、实时流计算、批处理与数据仓库、数据存储以及作业调度，每一章会结合原型项目讲解架构、技术选型和实现细节。</p>
+</div></div></div></div><div class="card widget" data-type="recent-posts"><div class="card-content"><h3 class="menu-label">最新文章</h3><article class="media"><figure class="media-left"><a class="image" href="/others/hexo-icarus-blog-build/"><img src="https://raw.githubusercontent.com/bluishglc/blogimages/master/2026/Location-Data-Generic-Image.jpg" alt="基于 Hexo + Icarus 搭建个人博客" loading="lazy" decoding="async"></a></figure><div class="media-content"><p class="date"><time datetime="2026-11-02T02:33:45.000Z">2026-11-01</time></p><p class="title"><a href="/others/hexo-icarus-blog-build/">基于 Hexo + Icarus 搭建个人博客</a></p><p class="categories"><a href="/categories/%E6%9D%82%E9%A1%B9/">杂项</a></p></div></article><article class="media"><figure class="media-left"><a class="image" href="/rust/rust-newtype-pattern/"><img src="/../../images/202609/c_.png" alt="Rust 设计模式：newtype" loading="lazy" decoding="async"></a></figure><div class="media-content"><p class="date"><time datetime="2026-11-02T02:33:45.000Z">2026-11-01</time></p><p class="title"><a href="/rust/rust-newtype-pattern/">Rust 设计模式：newtype</a></p><p class="categories"><a href="/categories/Rust/">Rust</a></p></div></article><article class="media"><figure class="media-left"><a class="image" href="/rust/static-lifetime-bound/"><img src="/../../images/202609/c2.png" alt="困惑是正常的，&#039;static 生命周期约束本来就不简单" loading="lazy" decoding="async"></a></figure><div class="media-content"><p class="date"><time datetime="2026-09-17T17:37:06.000Z">2026-09-17</time></p><p class="title"><a href="/rust/static-lifetime-bound/">困惑是正常的，&#039;static 生命周期约束本来就不简单</a></p><p class="categories"><a href="/categories/Rust/">Rust</a></p></div></article></div></div><div class="card widget" data-type="site-stats"><div class="card-content"><div class="menu"><h3 class="menu-label">统计</h3><ul class="menu-list"><li><a class="level is-mobile"><span class="level-start"><span class="level-item">访客</span></span><span class="level-end"><span class="level-item tag" id="busuanzi_value_site_uv">0</span></span></a></li><li><a class="level is-mobile"><span class="level-start"><span class="level-item">访问</span></span><span class="level-end"><span class="level-item tag" id="busuanzi_value_site_pv">0</span></span></a></li></ul></div></div></div><div class="column-right-shadow is-hidden-widescreen is-sticky"></div></div><div class="column column-right is-4-tablet is-4-desktop is-2-widescreen is-hidden-touch is-hidden-desktop-only order-3 is-sticky"><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-从-static-变量谈起"><span class="level-left"><span class="level-item">1. 从 static 变量谈起</span></span></a></li><li><a class="level is-mobile" href="#2-‘static-生命周期约束"><span class="level-left"><span class="level-item">2. ‘static 生命周期约束</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-1-修饰引用"><span class="level-left"><span class="level-item">2.1 修饰引用</span></span></a></li><li><a class="level is-mobile" href="#2-2-作为类型约束"><span class="level-left"><span class="level-item">2.2 作为类型约束</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-2-1-‘static-作为类型约束的含义"><span class="level-left"><span class="level-item">2.2.1 ‘static 作为类型约束的含义</span></span></a></li><li><a class="level is-mobile" href="#2-2-2-满足-‘static-约束的类型种类"><span class="level-left"><span class="level-item">2.2.2 满足 ‘static 约束的类型种类</span></span></a></li><li><a class="level is-mobile" href="#2-2-3-特别场景：作为闭包的类型约束"><span class="level-left"><span class="level-item">2.2.3 特别场景：作为闭包的类型约束</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-4-出现在-supertrait-的位置上"><span class="level-left"><span class="level-item">2.4 出现在 supertrait 的位置上</span></span></a></li><li><a class="level is-mobile" href="#2-5-作为生命周期泛型参数的一个“常量”"><span class="level-left"><span class="level-item">2.5 作为生命周期泛型参数的一个“常量”</span></span></a></li></ul></li></ul></div></div><script src="/js/toc.js" defer></script></div><div class="card widget" data-type="archives"><div class="card-content"><div class="menu"><h3 class="menu-label">归档</h3><ul class="menu-list"><li><a class="level is-mobile" href="/archives/2026/11/"><span class="level-start"><span class="level-item">2026 年 11 月</span></span><span class="level-end"><span class="level-item tag">2</span></span></a></li><li><a class="level is-mobile" href="/archives/2026/09/"><span class="level-start"><span class="level-item">2026 年 09 月</span></span><span class="level-end"><span class="level-item tag">1</span></span></a></li></ul></div></div></div><div class="card widget" data-type="categories"><div class="card-content"><div class="menu"><h3 class="menu-label">分类</h3><ul class="menu-list"><li><a class="level is-mobile" href="/categories/%E6%9D%82%E9%A1%B9/"><span class="level-start"><span class="level-item">杂项</span></span><span class="level-end"><span class="level-item tag">1</span></span></a></li><li><a class="level is-mobile" href="/categories/Rust/"><span class="level-start"><span class="level-item">Rust</span></span><span class="level-end"><span class="level-item tag">2</span></span></a></li></ul></div></div></div><div class="card widget" data-type="tags"><div class="card-content"><div class="menu"><h3 class="menu-label">标签</h3><div class="field is-grouped is-grouped-multiline"><div class="control"><a class="tags has-addons" href="/tags/Rust/"><span class="tag">Rust</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E6%9D%82%E9%A1%B9/"><span class="tag">杂项</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/"><span class="tag">设计模式</span></a></div></div></div></div></div></div></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>
