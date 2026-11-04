@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>高级特性秀场：spawn 闭包的类型约束 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.jpg"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="我们已经在本博客的数篇文章中接连讨论了 Rust 的闭包、Fn / FnMut / FnOnce 特质、多线程、Send 特质和 &#039;static 约束等高级特性，在具备了这些知识储备后，我们终于可以来拆解 spawn 闭包的类型约束了，这是一个集以上众多高级特性于一身，生动诠释 Rust 语言表现力的经典场景。友情提示：本文牵涉知识点众多，但每一个关键知识点我们都已专门介绍过，在它们出现的地方会给"><meta property="og:type" content="article"><meta property="og:title" content="高级特性秀场：spawn 闭包的类型约束"><meta property="og:url" content="https://bluishglc.github.io/rust/rust-spawn-closure/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="我们已经在本博客的数篇文章中接连讨论了 Rust 的闭包、Fn / FnMut / FnOnce 特质、多线程、Send 特质和 &#039;static 约束等高级特性，在具备了这些知识储备后，我们终于可以来拆解 spawn 闭包的类型约束了，这是一个集以上众多高级特性于一身，生动诠释 Rust 语言表现力的经典场景。友情提示：本文牵涉知识点众多，但每一个关键知识点我们都已专门介绍过，在它们出现的地方会给"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://bluishglc.github.io/images/202609/c3.png"><meta property="article:published_time" content="2026-11-04T14:28:17.000Z"><meta property="article:modified_time" content="2026-11-04T14:37:37.682Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Rust"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://bluishglc.github.io/images/202609/c3.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://bluishglc.github.io/rust/rust-spawn-closure/"},"headline":"高级特性秀场：spawn 闭包的类型约束","image":["https://bluishglc.github.io/images/202609/c3.png"],"datePublished":"2026-11-04T14:28:17.000Z","dateModified":"2026-11-04T14:37:37.682Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://bluishglc.github.io/img/logo.jpg"}},"description":"我们已经在本博客的数篇文章中接连讨论了 Rust 的闭包、Fn / FnMut / FnOnce 特质、多线程、Send 特质和 'static 约束等高级特性，在具备了这些知识储备后，我们终于可以来拆解 spawn 闭包的类型约束了，这是一个集以上众多高级特性于一身，生动诠释 Rust 语言表现力的经典场景。友情提示：本文牵涉知识点众多，但每一个关键知识点我们都已专门介绍过，在它们出现的地方会给"}</script><link rel="canonical" href="https://bluishglc.github.io/rust/rust-spawn-closure/"><link rel="icon" href="/img/favicon.jpg"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-3-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-8-widescreen"><div class="card"><article class="card-content article" role="article"><h1 class="title is-3 is-size-4-mobile">高级特性秀场：spawn 闭包的类型约束</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Rust/">Rust</a></span><span class="level-item">发表于：<time dateTime="2026-11-04T14:28:17.000Z" title="2026-11-04 06:28:17">2026-11-04</time></span><span class="level-item">阅读用时：18 分钟 (约 2677 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/202609/c3.png" alt="高级特性秀场：spawn 闭包的类型约束" fetchpriority="high"></figure><div class="content"><p>我们已经在本博客的数篇文章中接连讨论了 Rust 的<a target="_blank" rel="noopener" href="https://laurence.blog.csdn.net/article/details/162036095">闭包</a>、<a target="_blank" rel="noopener" href="https://blog.csdn.net/bluishglc/article/details/165326831">Fn &#x2F; FnMut &#x2F; FnOnce 特质</a>、<a target="_blank" rel="noopener" href="https://blog.csdn.net/bluishglc/article/details/163855748">多线程</a>、<a target="_blank" rel="noopener" href="https://blog.csdn.net/bluishglc/article/details/164339989">Send 特质</a>和 <a target="_blank" rel="noopener" href="https://blog.csdn.net/bluishglc/article/details/165619915">‘static 约束</a>等高级特性，在具备了这些知识储备后，我们终于可以来拆解 spawn 闭包的类型约束了，这是一个集以上众多高级特性于一身，生动诠释 Rust 语言表现力的经典场景。友情提示：本文牵涉知识点众多，但每一个关键知识点我们都已专门介绍过，在它们出现的地方会给出对应链接。本文原文链接：<a target="_blank" rel="noopener" href="https://laurence.blog.csdn.net/article/details/166011287">https://laurence.blog.csdn.net/article/details/166011287</a> 禁止转载。好文推荐<a target="_blank" rel="noopener" href="https://laurence.blog.csdn.net/article/details/166119041">《Rust GPUI 桌面应用开发入门：Assets 资源文件的加载与使用》</a></p>
+<h1 id="1-方法签名"><a href="#1-方法签名" class="headerlink" title="1. 方法签名"></a>1. 方法签名</h1><p>我们知道，<code>thread::spawn()</code> 用于孵化一个单独的线程，用户将打算在线程中执行的代码写成一个闭包并传给这个函数，就完成了一个多线程任务，得益于 Rust 诸多高级特性的支持，这种线程的定义和执行方式简洁而优雅，更重要的是，它还提供了诸多的线程安全保护机制，除了始终在发挥作用的所有权和借用检查之外（这里不是单单指它们在内存安全中的常规作用，更多的是指它们在线程安全上发挥的作用，具体可参考<a target="_blank" rel="noopener" href="https://laurence.blog.csdn.net/article/details/164368886">《无为而治，Rust 多线程的处世哲学》</a>的第 2 节），还有一部保护机制就来自于我们今天要介绍的闭包类型约束上。让我们正式切入主题，看一下 <code>thread::spawn()</code> 方法的签名：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">spawn</span>&lt;F, T&gt;(f: F) <span class="punctuation">-&gt;</span> JoinHandle&lt;T&gt;</span><br><span class="line"><span class="keyword">where</span></span><br><span class="line">    F: <span class="title function_ invoke__">FnOnce</span>() <span class="punctuation">-&gt;</span> T + <span class="built_in">Send</span> + <span class="symbol">&#x27;static</span>,</span><br><span class="line">    T: <span class="built_in">Send</span> + <span class="symbol">&#x27;static</span></span><br></pre></td></tr></table></figure>
+
+<p>我们重点关注的是对闭包类型 F 的约束 <code>F: FnOnce() -&gt; T + Send + &#39;static</code>，这一行容易被误读，<code>Send + &#39;static</code> 不是返回值，而是对 F 的类型约束的一部分，正确的分组是：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">F: <span class="title function_ invoke__">FnOnce</span>() <span class="punctuation">-&gt;</span> T + <span class="built_in">Send</span> + <span class="symbol">&#x27;static</span></span><br><span class="line"><span class="comment">//  ^^^^^^^^^^^^^^   ^^^^^^^^^^^^^^</span></span><br><span class="line"><span class="comment">//  F 的第一个 bound      F 的另外两个 bound</span></span><br></pre></td></tr></table></figure>
+
+<p>这一行同时声明了三件事：</p>
+<p><strong>&bull;</strong> F 是一个无参数、返回类型为 T 的一次性闭包，即 <code>FnOnce() -&gt; T</code> 部分<br><strong>&bull;</strong> F 必须是一个 Send，即：F 跨线程 move 是线程安全的<br><strong>&bull;</strong> F 必须是一个 <code>&#39;static</code> 类型，即：F 不得含有任何外部引用（<code>&#39;static</code> 引用除外）下图是对以上三部分声明的详细解释，我们将在接下来的章节逐一解释这三个约束。</p>
+<p><img src="/../../images/202609/spawn_closure_type.png"></p>
+<h1 id="2-闭包的类型约束：FnOnce-T"><a href="#2-闭包的类型约束：FnOnce-T" class="headerlink" title="2. 闭包的类型约束：FnOnce() -&gt; T"></a>2. 闭包的类型约束：FnOnce() -&gt; T</h1><p>我们先来看 F 的第一个类型约束：<code>FnOnce() -&gt; T</code>，它明确地告诉了我们 spawn 函数需要一个什么样的函数。这里先消除一个误解，spawn 并没说只能接受闭包，<code>FnOnce() -&gt; T</code> 是对函数类型的描述，实际上，我们完全可以将一个函数传给 spawn，就像这样：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::thread;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">f</span>() &#123; <span class="built_in">println!</span>(<span class="string">&quot;Hello, world!&quot;</span>); &#125;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">handle</span> = thread::<span class="title function_ invoke__">spawn</span>(f);</span><br><span class="line">    handle.<span class="title function_ invoke__">join</span>().<span class="title function_ invoke__">unwrap</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>只是因为 <code>FnOnce() -&gt; T</code> 限制了函数不可以有参数，这就直接回绝了绝大多数函数以函数指针或函数项的形式传入 spawn 的可能，而闭包则不受此限制，因为闭包可以通过自由变量引入外部值，不必非得使用参数，这就是为什么人们几乎总是给 spawn 传入一个闭包的原因。</p>
+<p>很多人在初次看到 <code>F: FnOnce() -&gt; T</code> 时会误认为 spawn 只接受一次性闭包，并认定这是最严格的闭包约束。殊不知，是完全搞反了！实际上，这是最宽松的约束，只要参数和返回值的类型匹配，你可以将任何函数和闭包传给 spawn，不管这个闭包是否捕获自由变量以及捕获的是不可变引用、可变引用还是值，都可以传给 spawn（当然，还有其他的约束会起作用，比如 <code>&#39;static</code>，但这是另一个话题）。如果你对此感到诧异或无法理解，那说明你对 Fn、FnMut、FnOnce 三个 trait 的理解还不够透彻，推荐你阅读<a target="_blank" rel="noopener" href="https://laurence.blog.csdn.net/article/details/165326831">《你理解的 Fn、FnMut、FnOnce 可能从一开始就错了…》</a>。</p>
+<h1 id="3-闭包的类型约束：Send"><a href="#3-闭包的类型约束：Send" class="headerlink" title="3. 闭包的类型约束：Send"></a>3. 闭包的类型约束：Send</h1><p>Send 约束与线程息息相关，最表层的解释是：如果一个类型要 move 进线程中，它必须是 Send 的。因为只有被标记为 Send 的类型才可以安全地在线程间 move。这里有两个更深入的问题需要解释：一个是到底什么样的类型可以被标记为 Send？另一个是为什么要求闭包得是 Send 的？我们先回答第二个问题，要求闭包必须是 Send 的原因是：闭包可能会捕获外部值，编译器会把这个值封装进闭包对应的匿名结构体中，对闭包施加 Send 约束的目的其实是通过自动传导机制把 Send 约束传播到闭包捕获的外部值上，因为此时，闭包是结构体，它捕获的值是结构体的一个字段，对结构体的 Send 约束会自动作用到字段上，也就是说：如果一个闭包捕获了一个不是 Send 的值（比如一个 Rc 实例），那 spawn 会拒绝这个闭包，报类型不匹配错误！</p>
+<p>至于到底什么样的类型可以被标记为 Send？这是一个非常复杂的话题，我们已经在<a target="_blank" rel="noopener" href="https://laurence.blog.csdn.net/article/details/164339989">《万物皆可多线程？深入解读 Rust 的 Send 和 Sync》</a>一文中把这个问题解释得非常透彻了。解释这个问题通常会用 Rc 类型作为示例来解释，因为 Rc 是一个非常典型的非 Send 类型，但是，要完全理解 Rc 为什么是非 Send 类型又要对共享所有权有清晰的认识，于是，我们又专门撰写了<a target="_blank" rel="noopener" href="https://laurence.blog.csdn.net/article/details/164194143">《Rust 所有权进阶必读：为什么 Rc 共享所有权是个伪概念？》</a>来进行解释。</p>
+<h1 id="4-闭包的类型约束：’static"><a href="#4-闭包的类型约束：’static" class="headerlink" title="4.  闭包的类型约束：’static"></a>4.  闭包的类型约束：’static</h1><p>准确地说，<code>&#39;static</code> 是生命周期约束，但是生命周期约束也是泛型类型约束的一种。我们曾在<a target="_blank" rel="noopener" href="https://laurence.blog.csdn.net/article/details/165619915">《困惑是正常的,’static 生命周期约束本来就不简单》</a>一文中系统地介绍过它，而 spawn 闭包的这个 <code>&#39;static</code> 约束是一个非常“妙”的案例，我们曾在<a target="_blank" rel="noopener" href="https://laurence.blog.csdn.net/article/details/164368886">《无为而治，Rust 多线程的处世哲学》</a>一文中专门点评过这个 <code>&#39;static</code> 约束：<br>由于闭包中的代码会在一个新线程中执行，如果闭包捕获了一个外部值的引用，那闭包中的引用和外部值谁先失效就变成了一件不确定的事情。如果是单线程环境，靠所有权和借用检查分析静态代码（它们最后一次使用的地方）是可以确定的，但是在多线程环境中，如果值和引用分属于两个线程中，那谁先失效确实是无法预判的，一旦另一个线程中的值先于当前线程中的引用失效，那当前线程中的引用就是“悬垂引用”了。怎么才能避免这种情况呢？spawn 的做法就是：给闭包添加上 <code>&#39;static</code> 约束，禁止闭包依赖外部引用（<code>&#39;static</code> 引用除外）。这里顺带解释一个偶尔会有人使用的概念：短期借用、短生命周期引用，其实它们的意思就是：除 <code>&#39;static</code> 引用之外的所有引用，因为每次都说：禁止依赖引用（<code>&#39;static</code> 引用除外）会比较麻烦，所以有人把排除掉 <code>&#39;static</code> 引用后的引用类型叫：短期借用或短生命周期引用，这个“短”也不是真的有多短，只是相对于 <code>&#39;static</code> 而言的。<br>我们前面提到过：闭包会被编译成匿名结构体，它捕获的外部值和引用都在这个结构体中，如果捕获了引用，结构体必须要添加生命周期约束，保证结构体和它捕获的引用的生命周期一致，下面的示例代码分别展示了捕获不可变和可变引用闭包时生成的匿名结构体的样子：</p>
+<p><strong>&bull; 捕获不可变引用的闭包</strong></p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* 闭包 */</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">let</span> <span class="variable">x</span> = <span class="type">String</span>::<span class="title function_ invoke__">from</span>(<span class="string">&quot;hello&quot;</span>);</span><br><span class="line"><span class="keyword">let</span> <span class="variable">c</span> = || <span class="built_in">println!</span>(<span class="string">&quot;&#123;&#125;&quot;</span>, x);</span><br><span class="line"></span><br><span class="line"><span class="comment">/* 编译器生成的匿名结构体（伪代码）*/</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Closure</span>&lt;<span class="symbol">&#x27;a</span>&gt; &#123;</span><br><span class="line">    x: &amp;<span class="symbol">&#x27;a</span> <span class="type">String</span>, <span class="comment">// 字段是引用，带生命周期&#x27;a</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>&bull; 捕获可变引用的闭包</strong></p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* 闭包 */</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">x</span> = <span class="number">0</span>;</span><br><span class="line"><span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">c</span> = || x += <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/* 编译器生成的匿名结构体（伪代码）*/</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Closure</span>&lt;<span class="symbol">&#x27;a</span>&gt; &#123;</span><br><span class="line">    x: &amp;<span class="symbol">&#x27;a</span> <span class="keyword">mut</span> <span class="type">i32</span>, <span class="comment">// 字段是可变引用</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>不管是捕获不可变引用的闭包还是可变引用的闭包，因为它们捕获了引用，所以结构体必须添加生命周期标注以确保它和被捕获引用的生命周期一致！但是，现在，由于多线程导致的不确定性，spawn 给闭包添加上了 <code>&#39;static</code> 约束，实际上也就是给这个结构体添加上了 <code>&#39;static</code> 约束，这个约束会自动传导给闭包中的每一个字段，那就意味着：结构体不得含有引用类型(<code>&#39;static</code> 引用除外），考虑到并不是什么值都能借出 <code>&#39;static</code> 引用，所以，实际上，<strong>这一“招”直接把闭包捕获外部引用的路给“堵死”了</strong>！但是，闭包总是需要从环境中获得类似参数性质的数据，如果不允许捕获引用，那唯一可行的做法就是：把所有依赖的引用的值全部 move 进闭包！</p>
+<p>为什么把依赖到的引用的值 move 进闭包后，就不违反 <code>&#39;static</code> 约束了呢？因为移动进闭包里之后，闭包捕获的就是值了，不再依赖任何引用，没有了引用，<code>&#39;static</code> 约束就等于被“架空”了。下面的代码演示了这种关系：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* 闭包 */</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">let</span> <span class="variable">x</span> = <span class="type">String</span>::<span class="title function_ invoke__">from</span>(<span class="string">&quot;hello&quot;</span>);</span><br><span class="line"><span class="keyword">let</span> <span class="variable">c</span> = <span class="keyword">move</span> || <span class="built_in">println!</span>(<span class="string">&quot;&#123;&#125;&quot;</span>, x);</span><br><span class="line"></span><br><span class="line"><span class="comment">/* 编译器生成的匿名结构体（伪代码）*/</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Closure</span> &#123;</span><br><span class="line">    x: <span class="type">String</span>, <span class="comment">// 字段是完整的值！不是引用。所有权 move 进结构体</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>至此，spawn 闭包的类型约束： <code>F: FnOnce() -&gt; T + Send + &#39;static</code> 就全部介绍完了，最后，我们再来总结一下 spawn 到底需要什么样的闭包：</p>
+<p>① FnOnce 型闭包（注意：Fn 继承自 FnOnce，无任何外部依赖的 Fn 闭包或函数也满足条件）；</p>
+<p>② 不得依赖任何非 <code>&#39;static</code> 引用；</p>
+<p>③ 若确实需要外部依赖，可使用 move 关键字将依赖的值直接移动到闭包内，且值必须是 Send 的</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>高级特性秀场：spawn 闭包的类型约束</p><p><a href="https://bluishglc.github.io/rust/rust-spawn-closure/">https://bluishglc.github.io/rust/rust-spawn-closure/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-11-04</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-04</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Rust/">Rust</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/others/hexo-icarus-blog-build/"><span class="level-item">基于 Hexo + Icarus 搭建个人博客</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-2-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">4</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">2</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">3</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog">关注我</a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="作者公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="作者公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">作者公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script></div></div><div class="card widget" data-type="book"><div class="card-content"><div class="menu"><h3 class="menu-label">出版图书</h3><img class="book-image" src="/images/profile/book.jpg" alt="出版图书" loading="lazy" decoding="async"><div class="content book-content"><p>本书由电子工业出版社博文视点出版发行，系统地介绍了大数据平台的架构设计、数据采集、主数据管理、实时流计算、批处理与数据仓库、数据存储以及作业调度，每一章会结合原型项目讲解架构、技术选型和实现细节。</p>
+</div></div></div></div><div class="card widget" data-type="recent-posts"><div class="card-content"><h3 class="menu-label">最新文章</h3><article class="media"><figure class="media-left"><a class="image" href="/rust/rust-spawn-closure/"><img src="/../../images/202609/c3.png" alt="高级特性秀场：spawn 闭包的类型约束" loading="lazy" decoding="async"></a></figure><div class="media-content"><p class="date"><time datetime="2026-11-04T14:28:17.000Z">2026-11-04</time></p><p class="title"><a href="/rust/rust-spawn-closure/">高级特性秀场：spawn 闭包的类型约束</a></p><p class="categories"><a href="/categories/Rust/">Rust</a></p></div></article><article class="media"><figure class="media-left"><a class="image" href="/others/hexo-icarus-blog-build/"><img src="https://raw.githubusercontent.com/bluishglc/blogimages/master/2026/Location-Data-Generic-Image.jpg" alt="基于 Hexo + Icarus 搭建个人博客" loading="lazy" decoding="async"></a></figure><div class="media-content"><p class="date"><time datetime="2026-11-02T02:33:45.000Z">2026-11-01</time></p><p class="title"><a href="/others/hexo-icarus-blog-build/">基于 Hexo + Icarus 搭建个人博客</a></p><p class="categories"><a href="/categories/%E6%9D%82%E9%A1%B9/">杂项</a></p></div></article><article class="media"><figure class="media-left"><a class="image" href="/rust/rust-newtype-pattern/"><img src="/../../images/202609/c_.png" alt="Rust 设计模式：newtype" loading="lazy" decoding="async"></a></figure><div class="media-content"><p class="date"><time datetime="2026-11-02T02:33:45.000Z">2026-11-01</time></p><p class="title"><a href="/rust/rust-newtype-pattern/">Rust 设计模式：newtype</a></p><p class="categories"><a href="/categories/Rust/">Rust</a></p></div></article><article class="media"><figure class="media-left"><a class="image" href="/rust/static-lifetime-bound/"><img src="/../../images/202609/c2.png" alt="困惑是正常的，&#039;static 生命周期约束本来就不简单" loading="lazy" decoding="async"></a></figure><div class="media-content"><p class="date"><time datetime="2026-09-17T17:37:06.000Z">2026-09-17</time></p><p class="title"><a href="/rust/static-lifetime-bound/">困惑是正常的，&#039;static 生命周期约束本来就不简单</a></p><p class="categories"><a href="/categories/Rust/">Rust</a></p></div></article></div></div><div class="card widget" data-type="site-stats"><div class="card-content"><div class="menu"><h3 class="menu-label">统计</h3><ul class="menu-list"><li><a class="level is-mobile"><span class="level-start"><span class="level-item">访客</span></span><span class="level-end"><span class="level-item tag" id="busuanzi_value_site_uv">0</span></span></a></li><li><a class="level is-mobile"><span class="level-start"><span class="level-item">访问</span></span><span class="level-end"><span class="level-item tag" id="busuanzi_value_site_pv">0</span></span></a></li></ul></div></div></div><div class="card widget" data-type="subscribe-email"><div class="card-content"><div class="menu"><h3 class="menu-label">follow.it</h3><form action="https://api.follow.it/subscription-form/ZnR0ZVdZNEJYNUw5NHpnN0dOYzJEVGpXMHM5Z1l2dG5JRzJ4OVhlU2I4UzlybFk5MjZBRDROSXBTL2M4UEtJZWhMRDd1dk5nem5DZy9BTzRFbzJTRHRlOHlhZUhsY3BQeTEwbzE5TVpDZEZaVEJJc0FHRXlOWmNTTGwweGxhNUp8YUE5MTM1aC9pOG9tc2NMZVpPSXhPZ0ppbURKM0VubGZ2eGo3bTZEdmJwQT0=/8" method="post" target="_blank"><div class="field has-addons"><div class="control has-icons-left is-expanded"><input class="input" name="email" type="email" placeholder="Email"><span class="icon is-small is-left"><i class="fas fa-envelope"></i></span></div><div class="control"><input class="button" type="submit" value="订阅"></div></div></form></div></div></div><div class="column-right-shadow is-hidden-widescreen is-sticky"></div></div><div class="column column-right is-4-tablet is-4-desktop is-2-widescreen is-hidden-touch is-hidden-desktop-only order-3 is-sticky"><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-方法签名"><span class="level-left"><span class="level-item">1. 方法签名</span></span></a></li><li><a class="level is-mobile" href="#2-闭包的类型约束：FnOnce-T"><span class="level-left"><span class="level-item">2. 闭包的类型约束：FnOnce() -&gt; T</span></span></a></li><li><a class="level is-mobile" href="#3-闭包的类型约束：Send"><span class="level-left"><span class="level-item">3. 闭包的类型约束：Send</span></span></a></li><li><a class="level is-mobile" href="#4-闭包的类型约束：’static"><span class="level-left"><span class="level-item">4.  闭包的类型约束：’static</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div><div class="card widget" data-type="archives"><div class="card-content"><div class="menu"><h3 class="menu-label">归档</h3><ul class="menu-list"><li><a class="level is-mobile" href="/archives/2026/11/"><span class="level-start"><span class="level-item">2026 年 11 月</span></span><span class="level-end"><span class="level-item tag">3</span></span></a></li><li><a class="level is-mobile" href="/archives/2026/09/"><span class="level-start"><span class="level-item">2026 年 09 月</span></span><span class="level-end"><span class="level-item tag">1</span></span></a></li></ul></div></div></div><div class="card widget" data-type="categories"><div class="card-content"><div class="menu"><h3 class="menu-label">分类</h3><ul class="menu-list"><li><a class="level is-mobile" href="/categories/%E6%9D%82%E9%A1%B9/"><span class="level-start"><span class="level-item">杂项</span></span><span class="level-end"><span class="level-item tag">1</span></span></a></li><li><a class="level is-mobile" href="/categories/Rust/"><span class="level-start"><span class="level-item">Rust</span></span><span class="level-end"><span class="level-item tag">3</span></span></a></li></ul></div></div></div><div class="card widget" data-type="tags"><div class="card-content"><div class="menu"><h3 class="menu-label">标签</h3><div class="field is-grouped is-grouped-multiline"><div class="control"><a class="tags has-addons" href="/tags/Rust/"><span class="tag">Rust</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E6%9D%82%E9%A1%B9/"><span class="tag">杂项</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/"><span class="tag">设计模式</span></a></div></div></div></div></div></div></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>
