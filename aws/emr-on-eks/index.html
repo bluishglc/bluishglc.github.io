@@ -1,0 +1,877 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>创建并运行 EMR on EKS 集群 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="EMR on EKS的创建工作完全是命令行驱动的，目前尚无对应的UI界面来完成相关操作。本文将通过命令行演示如何创建并运行一个EMR on EKS集群。创建EMR on EKS的过程可以分为两个阶段：第一阶段是先创建出一个EKS集群，第二阶段是在这个EKS集群之上创建EMR的虚拟集群，以下是具体操作步骤。 注：在操作过程中，我们将会陆续得到一些值，例如EKS集群的名称，虚拟集群的ID，这些变量在后"><meta property="og:type" content="article"><meta property="og:title" content="创建并运行 EMR on EKS 集群"><meta property="og:url" content="https://laurence.enlightgram.com/aws/emr-on-eks/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="EMR on EKS的创建工作完全是命令行驱动的，目前尚无对应的UI界面来完成相关操作。本文将通过命令行演示如何创建并运行一个EMR on EKS集群。创建EMR on EKS的过程可以分为两个阶段：第一阶段是先创建出一个EKS集群，第二阶段是在这个EKS集群之上创建EMR的虚拟集群，以下是具体操作步骤。 注：在操作过程中，我们将会陆续得到一些值，例如EKS集群的名称，虚拟集群的ID，这些变量在后"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/profile/thumbnail.png"><meta property="article:published_time" content="2021-06-04T22:10:47.000Z"><meta property="article:modified_time" content="2026-11-06T02:21:32.602Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Spark"><meta property="article:tag" content="EMR"><meta property="article:tag" content="EKS"><meta property="article:tag" content="Kubernetes"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/profile/thumbnail.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/aws/emr-on-eks/"},"headline":"创建并运行 EMR on EKS 集群","image":["https://laurence.enlightgram.com/images/profile/thumbnail.png"],"datePublished":"2021-06-04T22:10:47.000Z","dateModified":"2026-11-06T02:21:32.602Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"EMR on EKS的创建工作完全是命令行驱动的，目前尚无对应的UI界面来完成相关操作。本文将通过命令行演示如何创建并运行一个EMR on EKS集群。创建EMR on EKS的过程可以分为两个阶段：第一阶段是先创建出一个EKS集群，第二阶段是在这个EKS集群之上创建EMR的虚拟集群，以下是具体操作步骤。 注：在操作过程中，我们将会陆续得到一些值，例如EKS集群的名称，虚拟集群的ID，这些变量在后"}</script><link rel="canonical" href="https://laurence.enlightgram.com/aws/emr-on-eks/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">创建并运行 EMR on EKS 集群</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/AWS/">AWS</a></span><span class="level-item">发表于：<time dateTime="2021-06-04T22:10:47.000Z" title="2021-06-04 15:10:47">2021-06-04</time></span><span class="level-item">阅读用时：21 分钟 (约 3153 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>EMR on EKS的创建工作完全是命令行驱动的，目前尚无对应的UI界面来完成相关操作。本文将通过命令行演示如何创建并运行一个EMR on EKS集群。创建EMR on EKS的过程可以分为两个阶段：第一阶段是先创建出一个EKS集群，第二阶段是在这个EKS集群之上创建EMR的虚拟集群，以下是具体操作步骤。</p>
+<p>注：在操作过程中，我们将会陆续得到一些值，例如EKS集群的名称，虚拟集群的ID，这些变量在后续的操作中会再次使用，为了便于提升文中脚本的可复用性，我们会单独将这些值抽取出来，赋给一个变量，同时用export导出，便于后续的引用。以下是操作过程中将会生成并被引用到的一些变量，以及本例我们将采用的值：</p>
+<table>
+<thead>
+<tr>
+<th align="left">变量名称</th>
+<th align="left">本例取值</th>
+<th align="left">描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">REGION</td>
+<td align="left">us-east-1</td>
+<td align="left">当前所处的AWS REGION</td>
+</tr>
+<tr>
+<td align="left">ZONES</td>
+<td align="left">us-east-1a,us-east-1b,us-east-1c</td>
+<td align="left">分配给将要创建的EKS集群的可用区</td>
+</tr>
+<tr>
+<td align="left">EKS_CLUSTER_NAME</td>
+<td align="left">it-infrastructure</td>
+<td align="left">将要创建的EKS集群的名称</td>
+</tr>
+<tr>
+<td align="left">DATALAKE_NAMESPACE</td>
+<td align="left">datalake</td>
+<td align="left">将要在EKS上创建的面向数据系统的Kubenetes命名空间，将要创建的EMR on EKS虚拟集群会被置于该空间下</td>
+</tr>
+<tr>
+<td align="left">VIRTUAL_CLUSTER_NAME</td>
+<td align="left">emr-cluster-1</td>
+<td align="left">将要创建的EMR on EKS虚拟集群的名字</td>
+</tr>
+<tr>
+<td align="left">SSH_PUBLIC_KEY</td>
+<td align="left"><code>&lt;从EC2-&gt;Kye Pairs处查找&gt;</code></td>
+<td align="left">将要创建的EKS集群需要指定公钥</td>
+</tr>
+<tr>
+<td align="left">EXECUTION_ROLE_ARN</td>
+<td align="left"><code>&lt;从IAM的Admin Role处查找&gt;</code></td>
+<td align="left">用于运行EMR on EKS的IAM Role</td>
+</tr>
+<tr>
+<td align="left">VIRTUAL_CLUSTER_ID</td>
+<td align="left"><code>&lt;过程中产生&gt;</code></td>
+<td align="left">将要创建的EMR on EKS虚拟集群的ID</td>
+</tr>
+</tbody></table>
+<p>以下是为上述全局变量赋值的命令(VIRTUAL_CLUSTER_ID将在后续操作中产生，暂不赋值)：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> REGION=<span class="string">&quot;us-east-1&quot;</span></span><br><span class="line"><span class="built_in">export</span> ZONES=<span class="string">&quot;us-east-1a,us-east-1b,us-east-1c&quot;</span></span><br><span class="line"><span class="built_in">export</span> EKS_CLUSTER_NAME=<span class="string">&quot;it-infrastructure&quot;</span></span><br><span class="line"><span class="built_in">export</span> DATALAKE_NAMESPACE=<span class="string">&quot;datalake&quot;</span></span><br><span class="line"><span class="built_in">export</span> VIRTUAL_CLUSTER_NAME=<span class="string">&quot;emr-cluster-1&quot;</span></span><br><span class="line"><span class="built_in">export</span> SSH_PUBLIC_KEY=<span class="string">&quot;&lt;your-pub-key-name&gt;&quot;</span></span><br><span class="line"><span class="built_in">export</span> EXECUTION_ROLE_ARN=<span class="string">&quot;&lt;your-admin-role-arn&gt;&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="0-前置条件"><a href="#0-前置条件" class="headerlink" title="0. 前置条件"></a>0. 前置条件</h3><ul>
+<li><p>确保有你有一台Linux主机，并已安装awscli命令行</p>
+</li>
+<li><p>确保配置给awscli的access_key属于一个Admin账号</p>
+</li>
+</ul>
+<h3 id="1-安装ekscli"><a href="#1-安装ekscli" class="headerlink" title="1. 安装ekscli"></a>1. 安装ekscli</h3><p>ekscli是用于操作eks的命令行工具，我们需要使用到该工具，须先行安装，安装命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">curl --silent --location <span class="string">&quot;https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_<span class="subst">$(uname -s)</span>_amd64.tar.gz&quot;</span> | tar xz -C /tmp</span><br><span class="line"><span class="built_in">sudo</span> <span class="built_in">mv</span> /tmp/eksctl /usr/bin</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-安装kubectl"><a href="#2-安装kubectl" class="headerlink" title="2. 安装kubectl"></a>2. 安装kubectl</h3><p>kubectl是用于管理kubenetes集群的命令行工具，我们需要使用到该工具，须先行安装，安装命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">curl -o kubectl https://amazon-eks.s3.us-west-2.amazonaws.com/1.20.4/2021-04-12/bin/linux/amd64/kubectl</span><br><span class="line"><span class="built_in">chmod</span> +x ./kubectl</span><br><span class="line"><span class="built_in">mkdir</span> -p <span class="variable">$HOME</span>/bin &amp;&amp; <span class="built_in">cp</span> ./kubectl <span class="variable">$HOME</span>/bin/kubectl &amp;&amp; <span class="built_in">export</span> PATH=<span class="variable">$PATH</span>:<span class="variable">$HOME</span>/bin</span><br><span class="line"><span class="built_in">echo</span> <span class="string">&#x27;export PATH=$PATH:$HOME/bin&#x27;</span> &gt;&gt; ~/.bashrc</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-创建EKS集群"><a href="#3-创建EKS集群" class="headerlink" title="3. 创建EKS集群"></a>3. 创建EKS集群</h3><p>接下来，我们要在美东1创建名为 <code>ABC_IT_INFRASTRUCTURE</code> 的EKS集群，命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">eksctl create cluster \</span><br><span class="line">    --region <span class="variable">$REGION</span> \</span><br><span class="line">    --name <span class="variable">$EKS_CLUSTER_NAME</span> \</span><br><span class="line">    --zones <span class="variable">$ZONES</span> \</span><br><span class="line">    --node-type m5.xlarge \</span><br><span class="line">    --nodes 5 \</span><br><span class="line">    --with-oidc \</span><br><span class="line">    --ssh-access \</span><br><span class="line">    --ssh-public-key <span class="variable">$SSH_PUBLIC_KEY</span> \</span><br><span class="line">    --managed</span><br></pre></td></tr></table></figure>
+
+<p>上述命令行需要注意如下几点：</p>
+<ul>
+<li><p><code>$SSH_PUBLIC_KEY</code> 为你在AWS上的公钥key的ID，这个字符串可在EC2控制台-&gt;Key Pairs处查找，name列即是；</p>
+</li>
+<li><p><code>--zones</code> 并不是必选项，如不指定，会随机选择AZ，但是有时随机选择的AZ在创建时并没有足够的资源支撑请求创建的EKS集群，这时就需要显式地指定zone来避开不可用的zone；</p>
+</li>
+<li><p><code>--node-type</code> 和 <code>--nodes</code> 也不是必选项，如不指定，集群默认部署在2个m5.large节点上，对于EMR来说，这个集群的配置太低了，所以必须显式配置这两项，赋予集群更大的资源；</p>
+</li>
+</ul>
+<p>上述命令行需要执行较长时间（约20分钟左右），当最后出现:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">EKS cluster &quot;ABC_IT_INFRASTRUCTURE&quot; in &quot;us-east-1&quot; region is ready</span><br></pre></td></tr></table></figure>
+
+<p>表明EKS集群已经建好。需要注意的是，该命令在执行过程中会通过Cloud Formation创建大量的基础设施，包括IAM Role，VPC，EC2等等，中途发生错误的可能性较大，且很多操作是不能自动回滚的，所以需要打开Cloud Formation的控制台并持续关注，如发现未清理的Stack，须手动删除Stack后再重新执行上述命令。</p>
+<p><code>eksctl create cluster</code> 还有很多可配置的选项，可以通过如下命令查看详细说明：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">eksctl create cluster -h</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-查看EKS集群状态"><a href="#4-查看EKS集群状态" class="headerlink" title="4. 查看EKS集群状态"></a>4. 查看EKS集群状态</h3><p>EKS集群创建完成后，为确保集群是否健康，可通过命令行查看一下集群状况（该步骤非必须，可跳过）。</p>
+<ul>
+<li>查看集群各物理节点状况</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kubectl get nodes -o wide</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>查看集群POD的状况</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kubectl get pods --all-namespaces -o wide</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-创建Namespace"><a href="#5-创建Namespace" class="headerlink" title="5. 创建Namespace"></a>5. 创建Namespace</h3><p>为便于对资源进行管理，我们可以在Kubenetes集群上为数据相关的系统创建单独的namespace，取名 <code>ABC_DATALAKE</code> ，后续创建的EMR虚拟集群将被置于该namespace下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kubectl create namespace <span class="variable">$DATALAKE_NAMESPACE</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="6-授权访问Namespace"><a href="#6-授权访问Namespace" class="headerlink" title="6. 授权访问Namespace"></a>6. 授权访问Namespace</h3><p>默认情况下，EMR on EKS是无权直接访问和使用EKS上的namespace的，需要我们创建一个 Kubernetes role，然后将该Role绑定到一个Kubernetes user上，同时将一个服务角色AWSServiceRoleForAmazonEMRContainers映射到这个user上，这样才能桥接Kubenetes端和EMR on EKS服务端之间的权限认证，幸运的是我们不需要手动逐一完成这些操作，通过一条eksctl命令可以直接实现：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">eksctl create iamidentitymapping \</span><br><span class="line">    --region <span class="variable">$REGION</span> \</span><br><span class="line">    --cluster <span class="variable">$EKS_CLUSTER_NAME</span> \</span><br><span class="line">    --namespace <span class="variable">$DATALAKE_NAMESPACE</span> \</span><br><span class="line">    --service-name <span class="string">&quot;emr-containers&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>控制台的输出也会印证上面的论述：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">2021-06-02 12:39:49 [ℹ]  created &quot;datalake:Role.rbac.authorization.k8s.io/emr-containers&quot;</span><br><span class="line">2021-06-02 12:39:49 [ℹ]  created &quot;datalake:RoleBinding.rbac.authorization.k8s.io/emr-containers&quot;</span><br><span class="line">2021-06-02 12:39:49 [ℹ]  adding identity &quot;arn:aws:iam::1234567898765:role/AWSServiceRoleForAmazonEMRContainers&quot; to auth ConfigMap</span><br></pre></td></tr></table></figure>
+
+<h3 id="7-创建Job-Execution-Role"><a href="#7-创建Job-Execution-Role" class="headerlink" title="7. 创建Job Execution Role"></a>7. 创建Job Execution Role</h3><p>运行EMR on EKS需要一个IAM Role，在这个Role中要配置授权EMR on EKS可以使用的资源有哪些，例如s3上某些桶，cloudwatch等服务，这些被称之为Role Policies，官方文档给出过一份Role Policies的参考配置，可参见：<a target="_blank" rel="noopener" href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/creating-job-execution-role">https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/creating-job-execution-role</a>. html 。</p>
+<p><em>为方便起见，本文将直接使用Admin角色作为job execution role</em> 。</p>
+<h3 id="8-创建Role的Trust-Relationship"><a href="#8-创建Role的Trust-Relationship" class="headerlink" title="8. 创建Role的Trust Relationship"></a>8. 创建Role的Trust Relationship</h3><p>如果通过第7步创建了一个role，还需要对这个role进行编辑，添加这个role和EMR服务账号（EMR managed service account）之间的互信。这里所谓的EMR服务账号（EMR managed service account）是在job提交时自动创建的，所以在配置中在EMR服务账号部分会使用统配符。</p>
+<p>不过幸运的是，我们不需要手动编辑Role的Trust Relationships部分，我们可以如下命令行自动添加这个Trust Relationship：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">aws emr-containers update-role-trust-policy \</span><br><span class="line">   --cluster-name <span class="variable">$EKS_CLUSTER_NAME</span> \</span><br><span class="line">   --namespace <span class="variable">$DATALAKE_NAMESPACE</span> \</span><br><span class="line">   --role-name &lt;Admin or the-job-excution-role-name-you-created&gt;</span><br></pre></td></tr></table></figure>
+
+<p>其中，你需要将 <code>&lt;Admin or the-job-excution-role-name-you-created&gt;</code> 替换为Admin或者是在第7步中创建的role的名称。当创建成功之后，可以在Role的Trust Relationships页面看到生成的类似下面的相关配置：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;Effect&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Allow&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;Principal&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;Federated&quot;</span><span class="punctuation">:</span> <span class="string">&quot;arn:aws:iam::1234567898765:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/1C2DF227CD8E011A693BCF03D7EBD581&quot;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;Action&quot;</span><span class="punctuation">:</span> <span class="string">&quot;sts:AssumeRoleWithWebIdentity&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;Condition&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;StringLike&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;oidc.eks.us-east-1.amazonaws.com/id/1C2DF227CD8E011A693BCF03D7EBD581:sub&quot;</span><span class="punctuation">:</span> <span class="string">&quot;system:serviceaccount:kube-system:emr-containers-sa-*-*-1234567898765-3l0vgne6&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p><em>即使我们在第7步选择使用Admin角色作为job execution role，该步操作依然需要执行，–role-name取值Admin, 否则在作业执行过程中无权完成创建Log Group以及在s3上存储日志等操作</em> 。</p>
+<h3 id="9-在EKS上创建EMR虚拟集群"><a href="#9-在EKS上创建EMR虚拟集群" class="headerlink" title="9. 在EKS上创建EMR虚拟集群"></a>9. 在EKS上创建EMR虚拟集群</h3><p>接下来我们就将创建EMR集群了，其实更准确的叫法应该是“注册”，因为这一步执行完成后并不会在EKS上生成一个EMR集群，这里创建的是一个虚拟的集群，集群要在第一次提交作业时才会创建。创建集群的命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># create virtual cluster description file</span></span><br><span class="line"><span class="built_in">tee</span> <span class="variable">$VIRTUAL_CLUSTER_NAME</span>.json &lt;&lt;<span class="string">EOF</span></span><br><span class="line"><span class="string">&#123;</span></span><br><span class="line"><span class="string">  &quot;name&quot;: &quot;$VIRTUAL_CLUSTER_NAME&quot;,</span></span><br><span class="line"><span class="string">  &quot;containerProvider&quot;: &#123;</span></span><br><span class="line"><span class="string">    &quot;type&quot;: &quot;EKS&quot;,</span></span><br><span class="line"><span class="string">    &quot;id&quot;: &quot;$EKS_CLUSTER_NAME&quot;,</span></span><br><span class="line"><span class="string">    &quot;info&quot;: &#123;</span></span><br><span class="line"><span class="string">      &quot;eksInfo&quot;: &#123;</span></span><br><span class="line"><span class="string">        &quot;namespace&quot;: &quot;$DATALAKE_NAMESPACE&quot;</span></span><br><span class="line"><span class="string">      &#125;</span></span><br><span class="line"><span class="string">    &#125;</span></span><br><span class="line"><span class="string">  &#125;</span></span><br><span class="line"><span class="string">&#125;</span></span><br><span class="line"><span class="string">EOF</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># create virtual cluster</span></span><br><span class="line">aws emr-containers create-virtual-cluster --cli-input-json file://./<span class="variable">$VIRTUAL_CLUSTER_NAME</span>.json</span><br></pre></td></tr></table></figure>
+
+<p>上述命令先创建一个集群描述文件 <code>$VIRTUAL_CLUSTER_NAME.json</code> , 这个文件描述了EMR集群的名称以及要建在哪个EKS集群的哪个Namespace上，然后通过 <code>aws emr-containers create-virtual-cluster</code> 创建出这个文件描述的虚拟集群。</p>
+<p>上述命令如果执行成功，会在控制台输出一份描述集群的 json数据 ，其中的 <code>id</code> 字段较为重要，后续提交作业时都会使用到这个id，如果没有保存下来，也可以通过如下命令随时查询：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">aws emr-containers list-virtual-clusters</span><br></pre></td></tr></table></figure>
+
+<p>将获得的id付给全局变量 <code>VIRTUAL_CLUSTER_ID</code> ，后续操作将会多次引用到该ID：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> VIRTUAL_CLUSTER_ID=<span class="string">&#x27;&lt;cluster-id&gt;&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="10-向EMR-on-EKS提交作业"><a href="#10-向EMR-on-EKS提交作业" class="headerlink" title="10. 向EMR on EKS提交作业"></a>10. 向EMR on EKS提交作业</h3><p>虚拟集群建好之后，就可以提交大数据作业了，EMR on EKS是基于容器的，不同于EMR通过shell登录进行操作（可以但不方便），常规的使用方式是将其视为一个计算资源的黑盒，向其提交作业即可。以下是一条向EMR on EKS提交作业的示例命令，它执行的是spark自带的example程序 <code>pi.py</code> </p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">aws emr-containers start-job-run \</span><br><span class="line">--virtual-cluster-id <span class="variable">$VIRTUAL_CLUSTER_ID</span> \</span><br><span class="line">--name sample-job-name \</span><br><span class="line">--execution-role-arn <span class="variable">$EXECUTION_ROLE_ARN</span> \</span><br><span class="line">--release-label emr-6.2.0-latest \</span><br><span class="line">--job-driver <span class="string">&#x27;&#123;&quot;sparkSubmitJobDriver&quot;: &#123;&quot;entryPoint&quot;: &quot;local:///usr/lib/spark/examples/src/main/python/pi.py&quot;,&quot;sparkSubmitParameters&quot;: &quot;--conf spark.executor.instances=2 --conf spark.executor.memory=2G --conf spark.executor.cores=2 --conf spark.driver.cores=1&quot;&#125;&#125;&#x27;</span> \</span><br><span class="line">--configuration-overrides <span class="string">&#x27;&#123;&quot;monitoringConfiguration&quot;: &#123;&quot;cloudWatchMonitoringConfiguration&quot;: &#123;&quot;logGroupName&quot;: &quot;/emr-on-eks/$VIRTUAL_CLUSTER_NAME&quot;, &quot;logStreamNamePrefix&quot;: &quot;pi&quot;&#125;&#125;&#125;&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p><code>start-job-run</code> 这条命令最需要关注的是 <code>--job-driver</code> 这个参数，所有关于作业本身的相关信息都在这个参数里了。基于文档可知，目前的EMR on EKS仅支持 <code>sparkSubmitJobDriver</code> 一种形式的作业提交，即只能是以spark-submit可接受的形式提交作业，也就是通过jar包+class或pyspark脚本的形式提交作业。jar包及其依赖jar文件可部署在s3上。</p>
+<p>一种更加优雅的作业提交方式是提供一份job run的json描述文件，把所有集群、作业和作业配置相关的信息集中配置在这份json文件中，然后通过命令执行，如下所示：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># create job description file</span></span><br><span class="line"><span class="built_in">tee</span> start-job-run-request.json &lt;&lt;<span class="string">EOF</span></span><br><span class="line"><span class="string">&#123;</span></span><br><span class="line"><span class="string">  &quot;name&quot;: &quot;sample-job-name&quot;, </span></span><br><span class="line"><span class="string">  &quot;virtualClusterId&quot;: &quot;$VIRTUAL_CLUSTER_ID&quot;,  </span></span><br><span class="line"><span class="string">  &quot;executionRoleArn&quot;: &quot;$EXECUTION_ROLE_ARN&quot;, </span></span><br><span class="line"><span class="string">  &quot;releaseLabel&quot;: &quot;emr-6.2.0-latest&quot;, </span></span><br><span class="line"><span class="string">  &quot;jobDriver&quot;: &#123;</span></span><br><span class="line"><span class="string">    &quot;sparkSubmitJobDriver&quot;: &#123;</span></span><br><span class="line"><span class="string">      &quot;entryPoint&quot;: &quot;local:///usr/lib/spark/examples/src/main/python/pi.py&quot;,</span></span><br><span class="line"><span class="string">      &quot;sparkSubmitParameters&quot;: &quot;--conf spark.executor.instances=2 --conf spark.executor.memory=2G --conf spark.executor.cores=2 --conf spark.driver.cores=1&quot;</span></span><br><span class="line"><span class="string">    &#125;</span></span><br><span class="line"><span class="string">  &#125;, </span></span><br><span class="line"><span class="string">  &quot;configurationOverrides&quot;: &#123;</span></span><br><span class="line"><span class="string">    &quot;applicationConfiguration&quot;: [</span></span><br><span class="line"><span class="string">      &#123;</span></span><br><span class="line"><span class="string">        &quot;classification&quot;: &quot;spark-defaults&quot;, </span></span><br><span class="line"><span class="string">        &quot;properties&quot;: &#123;</span></span><br><span class="line"><span class="string">          &quot;spark.driver.memory&quot;:&quot;2G&quot;</span></span><br><span class="line"><span class="string">         &#125;</span></span><br><span class="line"><span class="string">      &#125;</span></span><br><span class="line"><span class="string">    ], </span></span><br><span class="line"><span class="string">    &quot;monitoringConfiguration&quot;: &#123;</span></span><br><span class="line"><span class="string">      &quot;persistentAppUI&quot;: &quot;ENABLED&quot;, </span></span><br><span class="line"><span class="string">      &quot;cloudWatchMonitoringConfiguration&quot;: &#123;</span></span><br><span class="line"><span class="string">    &quot;logGroupName&quot;: &quot;/emr-on-eks/$VIRTUAL_CLUSTER_NAME&quot;, </span></span><br><span class="line"><span class="string">        &quot;logStreamNamePrefix&quot;: &quot;pi&quot;</span></span><br><span class="line"><span class="string">      &#125;, </span></span><br><span class="line"><span class="string">      &quot;s3MonitoringConfiguration&quot;: &#123;</span></span><br><span class="line"><span class="string">        &quot;logUri&quot;: &quot;s3://glc-emr-on-eks-logs/&quot;</span></span><br><span class="line"><span class="string">      &#125;</span></span><br><span class="line"><span class="string">    &#125;</span></span><br><span class="line"><span class="string">  &#125;</span></span><br><span class="line"><span class="string">&#125;</span></span><br><span class="line"><span class="string">EOF</span></span><br><span class="line"><span class="comment"># start job</span></span><br><span class="line">aws emr-containers start-job-run --cli-input-json file://./start-job-run-request.json</span><br></pre></td></tr></table></figure>
+
+<p>关于json文件的编写，可以参考：<a target="_blank" rel="noopener" href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/emr-eks-jobs-CLI.html#emr-eks-jobs-submit">https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/emr-eks-jobs-CLI.html#emr-eks-jobs-submit</a></p>
+<p>最后是关于EMR集群的配置，与纯EMR集群类似，集群配置也是通过json文件提交的，写到 <code>applicationConfiguration</code> 里面，例如上述配置中的 <code>&quot;classification&quot;: &quot;spark-defaults&quot;</code> 部分。由于EMR on EKS目前仅支持Spark，所以也只有如下几类classification可配置</p>
+<table>
+<thead>
+<tr>
+<th align="left">Classifications</th>
+<th align="left">Descriptions</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">core-site</td>
+<td align="left">Change values in Hadoop’s core-site.xml file.</td>
+</tr>
+<tr>
+<td align="left">emrfs-site</td>
+<td align="left">Change EMRFS settings.</td>
+</tr>
+<tr>
+<td align="left">spark-metrics</td>
+<td align="left">Change values in Spark’s metrics.properties file.</td>
+</tr>
+<tr>
+<td align="left">spark-defaults</td>
+<td align="left">Change values in Spark’s spark-defaults.conf file.</td>
+</tr>
+<tr>
+<td align="left">spark-env</td>
+<td align="left">Change values in the Spark environment.</td>
+</tr>
+<tr>
+<td align="left">spark-hive-site</td>
+<td align="left">Change values in Spark’s hive-site.xml file.</td>
+</tr>
+<tr>
+<td align="left">spark-log4j</td>
+<td align="left">Change values in Spark’s log4j.properties file.</td>
+</tr>
+</tbody></table>
+<h3 id="11-删除与清理"><a href="#11-删除与清理" class="headerlink" title="11. 删除与清理"></a>11. 删除与清理</h3><p>删除与清理集群的顺序应与创建过程相反，先删除ERM虚拟集群，然后再删除EKS集群：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1. list all jobs</span></span><br><span class="line">aws emr-containers list-job-runs --virtual-cluster-id <span class="variable">$VIRTUAL_CLUSTER_ID</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 2. cancel running jobs</span></span><br><span class="line">aws emr-containers cancel-job-run --<span class="built_in">id</span> &lt;job-run-id&gt; --virtual-cluster-id <span class="variable">$VIRTUAL_CLUSTER_ID</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 3. delete virtual cluster</span></span><br><span class="line">aws emr-containers delete-virtual-cluster --<span class="built_in">id</span> <span class="variable">$VIRTUAL_CLUSTER_ID</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 4. delete eks cluster</span></span><br><span class="line">eksctl delete cluster --region <span class="variable">$REGION</span> --name <span class="variable">$EKS_CLUSTER_NAME</span></span><br></pre></td></tr></table></figure>
+
+<p>注意：第4步在删除EKS集群时，须找到对应Cloud Formation模板里的一项资源 <code>NodeInstanceRole</code> ，手动dettach 该Role上的所有policies，命令才能执行成功。</p>
+<h3 id="12-常见错误"><a href="#12-常见错误" class="headerlink" title="12. 常见错误"></a>12. 常见错误</h3><ul>
+<li><p>通过eksctl create cluster创建的eks集群默认是两个m5.large节点，这个配置很难支撑一个EMR集群，所以务必要指定一下节点数量和节点类型：</p>
+</li>
+<li><p>如果在第3步创建EKS集群遇到类似如下的错误：</p>
+</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">AWS::EKS::Cluster/ControlPlane: CREATE_FAILED – &quot;Cannot create cluster &#x27;my-bigdata-infra-cluster&#x27; because us-east-1e, the targeted availability zone, does not currently have sufficient capacity to support the cluster. Retry and choose from these availability zones: us-east-1a, us-east-1b, us-east-1c, us-east-1d, us-east-1f (Service: AmazonEKS; Status Code: 400; Error Code: UnsupportedAvailabilityZoneException; Request ID: 61028748-0cc1-4100-9152-aab79a475fe6; Proxy: null)&quot;</span><br></pre></td></tr></table></figure>
+
+<p>说明自动分配或指定的某一个AZ目前不可用，可在 <code>--zones</code> 参数列表中取其他AZ替换。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>创建并运行 EMR on EKS 集群</p><p><a href="https://laurence.enlightgram.com/aws/emr-on-eks/">https://laurence.enlightgram.com/aws/emr-on-eks/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2021-06-04</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Spark/">Spark</a><a class="link-muted mr-2" rel="tag" href="/tags/EMR/">EMR</a><a class="link-muted mr-2" rel="tag" href="/tags/EKS/">EKS</a><a class="link-muted mr-2" rel="tag" href="/tags/Kubernetes/">Kubernetes</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/hadoop/spark-on-yarn-capacity-scheduler/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">关于 Spark on Yarn 的资源分配与 Capacity Scheduler 的研究</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/hudi/hudi-emr-reldatatypesystem-error/"><span class="level-item">EMR + Hudi报ClassNotFoundException: RelDataTypeSystem错误的解决方法</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#0-前置条件"><span class="level-left"><span class="level-item">0. 前置条件</span></span></a></li><li><a class="level is-mobile" href="#1-安装ekscli"><span class="level-left"><span class="level-item">1. 安装ekscli</span></span></a></li><li><a class="level is-mobile" href="#2-安装kubectl"><span class="level-left"><span class="level-item">2. 安装kubectl</span></span></a></li><li><a class="level is-mobile" href="#3-创建EKS集群"><span class="level-left"><span class="level-item">3. 创建EKS集群</span></span></a></li><li><a class="level is-mobile" href="#4-查看EKS集群状态"><span class="level-left"><span class="level-item">4. 查看EKS集群状态</span></span></a></li><li><a class="level is-mobile" href="#5-创建Namespace"><span class="level-left"><span class="level-item">5. 创建Namespace</span></span></a></li><li><a class="level is-mobile" href="#6-授权访问Namespace"><span class="level-left"><span class="level-item">6. 授权访问Namespace</span></span></a></li><li><a class="level is-mobile" href="#7-创建Job-Execution-Role"><span class="level-left"><span class="level-item">7. 创建Job Execution Role</span></span></a></li><li><a class="level is-mobile" href="#8-创建Role的Trust-Relationship"><span class="level-left"><span class="level-item">8. 创建Role的Trust Relationship</span></span></a></li><li><a class="level is-mobile" href="#9-在EKS上创建EMR虚拟集群"><span class="level-left"><span class="level-item">9. 在EKS上创建EMR虚拟集群</span></span></a></li><li><a class="level is-mobile" href="#10-向EMR-on-EKS提交作业"><span class="level-left"><span class="level-item">10. 向EMR on EKS提交作业</span></span></a></li><li><a class="level is-mobile" href="#11-删除与清理"><span class="level-left"><span class="level-item">11. 删除与清理</span></span></a></li><li><a class="level is-mobile" href="#12-常见错误"><span class="level-left"><span class="level-item">12. 常见错误</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

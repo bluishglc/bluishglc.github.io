@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Rust 错误处理：panic! 和 Result - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="绝大多数编程语言都有异常处理机制， Rust 没有异常，而是使用了：可恢复错误 Result 和不可恢复（遇到错误时停止程序执行）错误 panic! 。本文，我们研究一下 Rust 是如何进行错误处理的。 panic! 与不可恢复的错误 panic 是“恐慌”的意思， panic! 是一个宏，当程序遇到不可恢复的致命错误时，主动抛出，和 throw exception 类 似： 使用 panic!"><meta property="og:type" content="article"><meta property="og:title" content="Rust 错误处理：panic! 和 Result"><meta property="og:url" content="https://laurence.enlightgram.com/rust/rust-error-handling/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="绝大多数编程语言都有异常处理机制， Rust 没有异常，而是使用了：可恢复错误 Result 和不可恢复（遇到错误时停止程序执行）错误 panic! 。本文，我们研究一下 Rust 是如何进行错误处理的。 panic! 与不可恢复的错误 panic 是“恐慌”的意思， panic! 是一个宏，当程序遇到不可恢复的致命错误时，主动抛出，和 throw exception 类 似： 使用 panic!"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/rust/rust-error-handling/1.png"><meta property="article:published_time" content="2026-06-01T16:49:59.000Z"><meta property="article:modified_time" content="2026-11-06T03:20:27.578Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Rust"><meta property="article:tag" content="异常处理"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/rust/rust-error-handling/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/rust/rust-error-handling/"},"headline":"Rust 错误处理：panic! 和 Result","image":["https://laurence.enlightgram.com/images/rust/rust-error-handling/1.png"],"datePublished":"2026-06-01T16:49:59.000Z","dateModified":"2026-11-06T03:20:27.578Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"绝大多数编程语言都有异常处理机制， Rust 没有异常，而是使用了：可恢复错误 Result 和不可恢复（遇到错误时停止程序执行）错误 panic! 。本文，我们研究一下 Rust 是如何进行错误处理的。 panic! 与不可恢复的错误 panic 是“恐慌”的意思， panic! 是一个宏，当程序遇到不可恢复的致命错误时，主动抛出，和 throw exception 类 似： 使用 panic!"}</script><link rel="canonical" href="https://laurence.enlightgram.com/rust/rust-error-handling/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Rust 错误处理：panic! 和 Result</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Rust/">Rust</a></span><span class="level-item">发表于：<time dateTime="2026-06-01T16:49:59.000Z" title="2026-06-01 09:49:59">2026-06-01</time></span><span class="level-item">阅读用时：20 分钟 (约 2956 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/rust/rust-error-handling/1.png" alt="Rust 错误处理：panic! 和 Result" fetchpriority="high"></figure><div class="content"><p>绝大多数编程语言都有异常处理机制， Rust 没有异常，而是使用了：可恢复错误 <code>Result&lt;T, E&gt;</code> 和不可恢复（遇到错误时停止程序执行）错误 <code>panic!</code> 。本文，我们研究一下 Rust 是如何进行错误处理的。</p>
+<h2 id="1-panic-与不可恢复的错误"><a href="#1-panic-与不可恢复的错误" class="headerlink" title="1. panic! 与不可恢复的错误"></a>1. panic! 与不可恢复的错误</h2><p>panic 是“恐慌”的意思， <code>panic!</code> 是一个宏，当程序遇到不可恢复的致命错误时，主动抛出，和 throw exception 类 似：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="built_in">panic!</span>(<span class="string">&quot;crash and burn&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-使用-panic-的-backtrace"><a href="#2-使用-panic-的-backtrace" class="headerlink" title="2. 使用 panic! 的 backtrace"></a>2. 使用 panic! 的 backtrace</h2><p>backtrace 就是调用栈回溯，默认情况下程序 panic! 的时候不会打印 backtrace 的。让我们先抛出一个 panic：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">v</span> = <span class="built_in">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];</span><br><span class="line"></span><br><span class="line">    v[<span class="number">99</span>];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>越界访问数组会导致 panic!，报错内容是：</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">PS C:\@Workspace\WS_Rust\rust-practices\crates\trpl-chapter-9&gt; cargo run --bin backtrace</span><br><span class="line">    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s</span><br><span class="line">     Running `C:\@Workspace\WS_Rust\rust-practices\target\debug\backtrace.exe`</span><br><span class="line"></span><br><span class="line">thread &#x27;main&#x27; (16112) panicked at crates\trpl-chapter-9\src\bin\backtrace.rs:4:6:</span><br><span class="line">index out of bounds: the len is 3 but the index is 99</span><br><span class="line">note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</span><br><span class="line">error: process didn&#x27;t exit successfully: `C:\@Workspace\WS_Rust\rust-practices\target\debug\backtrace.exe` (exit code: 101)</span><br></pre></td></tr></table></figure>
+
+<p>这里没有我们想要的 backtrace 信息。如果想要看到它，需要配置一个环境变量 <code>RUST_BACKTRACE</code> ，通常有两个值可供选择： <code>1</code> 和 <code>FULL</code> ，前者是打印“简化版”调用栈，后者打印完整调用栈。设置这个变量的方法是：</p>
+<ul>
+<li><p>临时设置（仅当前命令行有效）： <code>set RUST_BACKTRACE=FULL</code></p>
+</li>
+<li><p>永久设置：修改系统环境变量</p>
+</li>
+</ul>
+<p>如果你使用 IDE，则可以在 IDE 的运行配置中找一个适当的地方添加进去。RustRover 默认是直接开启在，这可以从它的 Run Conifugration 里看到：</p>
+<p> <img src="/../../images/rust/rust-error-handling/2.png" alt="在这里插入图片描述"></p>
+<p>打开 backtrace 后，再抛出 panic! 的时候就会打印栈回溯信息：</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">C:\@Workspace\WS_Rust\rust-practices\crates\trpl-chapter-9&gt;cargo run --bin backtrace</span><br><span class="line">    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s</span><br><span class="line">     Running `C:\@Workspace\WS_Rust\rust-practices\target\debug\backtrace.exe`</span><br><span class="line"></span><br><span class="line">thread &#x27;main&#x27; (8980) panicked at crates\trpl-chapter-9\src\bin\backtrace.rs:4:6:</span><br><span class="line">index out of bounds: the len is 3 but the index is 99</span><br><span class="line">stack backtrace:</span><br><span class="line">   0: std::panicking::panic_handler</span><br><span class="line">             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\panicking.rs:689</span><br><span class="line">   1: core::panicking::panic_fmt</span><br><span class="line">             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\panicking.rs:80</span><br><span class="line">   2: core::panicking::panic_bounds_check</span><br><span class="line">             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\panicking.rs:271</span><br><span class="line">   3: core::slice::index::impl$2::index&lt;i32&gt;</span><br><span class="line">             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\slice\index.rs:272</span><br><span class="line">   4: alloc::vec::impl$14::index&lt;i32,usize,alloc::alloc::Global&gt;</span><br><span class="line">             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\alloc\src\vec\mod.rs:3804</span><br><span class="line">   5: backtrace::main</span><br><span class="line">             at .\src\bin\backtrace.rs:4</span><br><span class="line">   6: core::ops::function::FnOnce::call_once&lt;void (*)(),tuple$&lt;&gt; &gt;</span><br><span class="line">             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\ops\function.rs:250</span><br><span class="line">note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.</span><br><span class="line">error: process didn&#x27;t exit successfully: `C:\@Workspace\WS_Rust\rust-practices\target\debug\backtrace.exe` (exit code: 101)</span><br></pre></td></tr></table></figure>
+
+<h2 id="3-Result-与可恢复的错误"><a href="#3-Result-与可恢复的错误" class="headerlink" title="3. Result 与可恢复的错误"></a>3. Result 与可恢复的错误</h2><p>Rust 的 Result 与其他语言里的异常机制有一个非常显著的差异：Result 是一个普通的枚举类型，如果一个函数可能会发生错误，Rust 是让这个函数把发生的错误封装成 Result 作为返回值返回！这是很不同的一种处理方式。 <strong>传统异常（exception）是：“让错误脱离正常返回路径，通过另一条隐式控制流传播”，而 Rust 的 Result 本质上是：“把失败显式编码进函数返回值类型里”</strong> 。让我们通过代码来体会一下。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::fs::File;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">f</span> = File::<span class="title function_ invoke__">open</span>(<span class="string">&quot;hello.txt&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">f</span> = <span class="keyword">match</span> f &#123;</span><br><span class="line">        <span class="title function_ invoke__">Ok</span>(file) =&gt; file,</span><br><span class="line">        <span class="title function_ invoke__">Err</span>(error) =&gt; &#123;</span><br><span class="line">            <span class="built_in">panic!</span>(<span class="string">&quot;Problem opening the file: &#123;:?&#125;&quot;</span>, error)</span><br><span class="line">        &#125;,</span><br><span class="line">    &#125;;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>File ::open 方法的 <a target="_blank" rel="noopener" href="https://rustwiki.org/zh-CN/std/fs/struct.File.html#method.open">[ 官方文档 ]</a> 给出的函数签名显示，它的返回值是 <code>Result&lt;File&gt;</code> 类型，于是，上面的代码使用模式匹配把返回值进行拆解：Ok 表示成功打开了文件，可获得包裹在里面的 File 实例；Err 表示失败，可获得包裹在里面的错误信息，然后做进一步的应对处理，此处是直接 panic! 了。</p>
+<p>你可以明显地感觉到这与抛出异常是不同的， <strong>异常是走了异常处理独立的路径，而 Rust 则是把可能的错误包裹到返回值里让调用方去处理（当然它也可以再向上返回）</strong> 。</p>
+<p>上面示例中的错误处理可能有些太“武断”，如果你想做粒度更细，针对性更强的错误处理，可以针对不同的错误类型进一步展开编写应对逻辑：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::fs::File;</span><br><span class="line"><span class="keyword">use</span> std::io::ErrorKind;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">f</span> = File::<span class="title function_ invoke__">open</span>(<span class="string">&quot;hello.txt&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">f</span> = <span class="keyword">match</span> f &#123;</span><br><span class="line">        <span class="title function_ invoke__">Ok</span>(file) =&gt; file,</span><br><span class="line">        <span class="title function_ invoke__">Err</span>(error) =&gt; <span class="keyword">match</span> error.<span class="title function_ invoke__">kind</span>() &#123;</span><br><span class="line">            ErrorKind::NotFound =&gt; <span class="keyword">match</span> File::<span class="title function_ invoke__">create</span>(<span class="string">&quot;hello.txt&quot;</span>) &#123;</span><br><span class="line">                <span class="title function_ invoke__">Ok</span>(fc) =&gt; fc,</span><br><span class="line">                <span class="title function_ invoke__">Err</span>(e) =&gt; <span class="built_in">panic!</span>(<span class="string">&quot;Problem creating the file: &#123;:?&#125;&quot;</span>, e),</span><br><span class="line">            &#125;,</span><br><span class="line">            other_error =&gt; <span class="built_in">panic!</span>(<span class="string">&quot;Problem opening the file: &#123;:?&#125;&quot;</span>, other_error),</span><br><span class="line">        &#125;,</span><br><span class="line">    &#125;;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>虽然不是异常处理，但上述代码很好地展示了如何应对可恢复的错误，你可以看到：第 11 行，当错误类型是 NotFound 时，我们的应对措施是“创建它”，这就是很好的错误处理方式，也是“可恢复的错误”的一个典型示例。</p>
+<h2 id="4-错误处理的快捷方式：unwrap-和-expect"><a href="#4-错误处理的快捷方式：unwrap-和-expect" class="headerlink" title="4. 错误处理的快捷方式：unwrap 和 expect"></a>4. 错误处理的快捷方式：unwrap 和 expect</h2><p>Result 搭配模式配置已经是很优雅的错误处理方式了，但每次都显式地书写 Ok 和 Err 未必都是必要的，在很多时候，我们可能需要“一套标准流程”，例如：如果是 Ok，拿到返回的实际值，如果是 Err 直接调用 panic!，像这种固定流程可以简写为一个函数，就是 <code>unwrap</code> ！下面的代码就是一个例子，你可以鲜明地看出来：语法又精简了一步：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::fs::File;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="comment">// unwrap 方法的操作是：如果文件存在（Ok 时），返回它，如果不存在（Err 时），直接 panic!</span></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">f</span> = File::<span class="title function_ invoke__">open</span>(<span class="string">&quot;hello.txt&quot;</span>).<span class="title function_ invoke__">unwrap</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>另一个与 unwrap 非常接近的方法是 expect 方法，unwrap 没有参数，expect 有一个参数，可以让用户自己来写 panic! 时的错误信息：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::fs::File;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">f</span> = File::<span class="title function_ invoke__">open</span>(<span class="string">&quot;hello.txt&quot;</span>).<span class="title function_ invoke__">expect</span>(<span class="string">&quot;Failed to open hello.txt&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>不过这里的真得要吐槽一个这个函数的命名，太糟糕了！为什么取这个名字？因为它的参数是错误信息，配上 expect 这个名字可读性很差。</p>
+<h2 id="5-错误传播"><a href="#5-错误传播" class="headerlink" title="5. 错误传播"></a>5. 错误传播</h2><p>跟异常一样，错误是层层 escalate 的，如果当前的层级（函数）搞不定这个错误，就上升到上一级（调用方）去处理，上一级处理不了，就再往上传播。有时候并不是处理不了，而是在不同的层级上有相应的应对逻辑要执行。不过，从以往的编程经验来看，层层 escalate 错误的情形并不常见。此外，补充一个设计技巧或规范：如果是异常体系，你确定需要向上传播异常时，在不同的层面要分装对应抽象层级的异常类，例如：在底层时可能是一个“文件无法打开”一类的错误，到了某个业务类的时候，比如 config .getInt(“xxx”) 如果报错，可能会封装一个“无法读取配置”的异常。但这在 Rust 里不适用，因为它没有类型化错误信息，总是使用 Result 一种类型。</p>
+<p>下面的例子展示了一个函数如何针对文件打开失败的错误进行二次传播：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::io;</span><br><span class="line"><span class="keyword">use</span> std::io::Read;</span><br><span class="line"><span class="keyword">use</span> std::fs::File;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">read_username_from_file</span>() <span class="punctuation">-&gt;</span> <span class="type">Result</span>&lt;<span class="type">String</span>, io::Error&gt; &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">f</span> = File::<span class="title function_ invoke__">open</span>(<span class="string">&quot;hello.txt&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">f</span> = <span class="keyword">match</span> f &#123;</span><br><span class="line">        <span class="title function_ invoke__">Ok</span>(file) =&gt; file,</span><br><span class="line">        <span class="title function_ invoke__">Err</span>(e) =&gt; <span class="keyword">return</span> <span class="title function_ invoke__">Err</span>(e),</span><br><span class="line">    &#125;;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">s</span> = <span class="type">String</span>::<span class="title function_ invoke__">new</span>();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">match</span> f.<span class="title function_ invoke__">read_to_string</span>(&amp;<span class="keyword">mut</span> s) &#123;</span><br><span class="line">        <span class="title function_ invoke__">Ok</span>(_) =&gt; <span class="title function_ invoke__">Ok</span>(s),</span><br><span class="line">        <span class="title function_ invoke__">Err</span>(e) =&gt; <span class="title function_ invoke__">Err</span>(e),</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>由于在打开文件（第 6 行）和读取文件内容（第 15 行）都有可能报错，上述方法在执行这两个操作时需要分别针对返回的 Result 进行模式匹配处理，其中在遇到 Err 时，统一把它们再次封装成 Err 示例并返回，所以 <code>read_username_from_file</code> 这个方法的返回值也变成了 Result，这样，它的调用方在调用它时，也需要处理它返回的 Result，从而形成一种“错误传播”机制。</p>
+<h2 id="6-运算符"><a href="#6-运算符" class="headerlink" title="6. ? 运算符"></a>6. ? 运算符</h2><p>由于错误传播是很常用的一种机制，如果总是像上面那样“拆解 Result 之后取出 e 再包装回去”会很啰嗦，因此， Rust 提供了一种简化的书写方式： <code>?</code> 运算符。同样是上面的代码，使用 ? 运算符实现就会变成：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::io;</span><br><span class="line"><span class="keyword">use</span> std::io::Read;</span><br><span class="line"><span class="keyword">use</span> std::fs::File;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">read_username_from_file</span>() <span class="punctuation">-&gt;</span> <span class="type">Result</span>&lt;<span class="type">String</span>, io::Error&gt; &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">f</span> = File::<span class="title function_ invoke__">open</span>(<span class="string">&quot;hello.txt&quot;</span>)?;</span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">s</span> = <span class="type">String</span>::<span class="title function_ invoke__">new</span>();</span><br><span class="line">    f.<span class="title function_ invoke__">read_to_string</span>(&amp;<span class="keyword">mut</span> s)?;</span><br><span class="line">    <span class="title function_ invoke__">Ok</span>(s)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>怎么理解这个 <code>?</code> 呢？对比着上一版实现就很好解释，以 <code>open</code> 方法后面的 这个 <code>?</code> 为例：它的意思就是说：如果这个方法返回的是 Ok，那就取出 Ok 里的值赋给 f，如果是 Err，那整个函数就直接在此处返回了，返回的是从 open 方法报出来的 Err。同样的， <code>read_to_string</code> 方法也是如此，不过，稍有不同的是：它没有返回值，而是靠引用参数“带”回返回值，这里可能会有一个让人疑惑的地方：我们能理解 open 方法会取出 Ok 里的值并返回，这是固定逻辑，可以自动化实现，但 <code>read_to_string</code> 的逻辑是把 Ok 里的值取出来赋给引用参数 s， <code>?</code> 运算符是怎么知道这逻辑的呢？或者说它是怎么知道要这样处理呢？</p>
+<p>这是初次接触 <code>?</code> 运算符时很容易产生的一个错误判断。实际情况是：s 从来没有出现在由 <code>?</code> 运算符掌管的模式匹配逻辑中，因为： <code>f.read_to_string(&amp;mut s)?</code> 展开的形式是这样的：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">match</span> f.<span class="title function_ invoke__">read_to_string</span>(&amp;<span class="keyword">mut</span> s) &#123;</span><br><span class="line">    <span class="title function_ invoke__">Ok</span>(v) =&gt; v, <span class="comment">// v 表示读取了多少字节，这个值其实被抛弃了</span></span><br><span class="line">    <span class="title function_ invoke__">Err</span>(e) =&gt; <span class="keyword">return</span> <span class="title function_ invoke__">Err</span>(e.<span class="title function_ invoke__">into</span>()),</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>你可以查看一下 <code>read_to_string</code> 方法的官方文旦，它的返回值类型其实是 <code>Result&lt;usize, io::Error&gt;</code> ，其中 usize 就是 Ok 时的返回值，也就是上面展开代码中的 v，它表示读取了多少字节，这个值其实被抛弃了。“s 被赋予了读取的字符串”这个动作是 <code>read_to_string</code> 方法里面的逻辑，与返回的 Result 无关，它的 Result 并不包含读取到的文件内容，文件内容是靠引用参数 s 从函数里面带出来的。</p>
+<p><code>?</code> 运算符更妙的一个地方是你可以用方法链的形式连续调用，实现更简洁的表达。上面的例子我们还可以进一步简化为下面的样子：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::io;</span><br><span class="line"><span class="keyword">use</span> std::io::Read;</span><br><span class="line"><span class="keyword">use</span> std::fs::File;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">read_username_from_file</span>() <span class="punctuation">-&gt;</span> <span class="type">Result</span>&lt;<span class="type">String</span>, io::Error&gt; &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">s</span> = <span class="type">String</span>::<span class="title function_ invoke__">new</span>();</span><br><span class="line"></span><br><span class="line">    File::<span class="title function_ invoke__">open</span>(<span class="string">&quot;hello.txt&quot;</span>)?.<span class="title function_ invoke__">read_to_string</span>(&amp;<span class="keyword">mut</span> s)?;</span><br><span class="line"></span><br><span class="line">    <span class="title function_ invoke__">Ok</span>(s)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>似乎不需要再过多解释了，前面的两个版本身就是解释了。简单地说明一下吧：open 方法返回的是 Result， <code>?</code> 运算符自动拆解 Result 取出里面 Ok 包裹的值并返回（如果是 Err，直接拿 Err 实例返回），因为返回的是一个 File 实例，所以又可以在它上面直接调用 <code>read_to_string</code> 方法，这个方法返回的也是 Result 类型，末尾再次使用 <code>?</code> 运算符自动拆解它的返回值。</p>
+<p>尽管 <code>?</code> 运算符是一个很优雅便捷的语法，但是，你应该也注意到了：由于它的处理是一种固化的模式：就是展开 Result，取出 Ok 中的“值”并返回，或是取出 Err 中的“错误”并返回，特别是返回 Err 这个分支，它是会让函数立即退出的，所以，一个函数一旦在函数体内使用了 <code>?</code> 运算符，那这个函数就必须得返回 Result（或 Option) 类型，否则就会报 “the <code>?</code> operator can only be used in a function that returns <code>Result</code> or <code>Option</code> ” 错误。考虑到错误传播机制可以上升到最顶层的 main 函数，因此，Rust 特意允许 main 函数也可以返回 Result (默认返回的是 <code>()</code> 类型），就像下面这样：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() <span class="punctuation">-&gt;</span> <span class="type">Result</span>&lt;(), <span class="type">Box</span>&lt;<span class="keyword">dyn</span> Error&gt;&gt; &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">f</span> = File::<span class="title function_ invoke__">open</span>(<span class="string">&quot;hello.txt&quot;</span>)?;</span><br><span class="line">    <span class="title function_ invoke__">Ok</span>(())</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</div><div class="article-licensing box"><div class="licensing-title"><p>Rust 错误处理：panic! 和 Result</p><p><a href="https://laurence.enlightgram.com/rust/rust-error-handling/">https://laurence.enlightgram.com/rust/rust-error-handling/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-06-01</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Rust/">Rust</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%BC%82%E5%B8%B8%E5%A4%84%E7%90%86/">异常处理</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/rust/rust-borrow-checker-permission-model/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">你真得懂 Rust 借用检查吗？一文聊透 Borrow Checker 底层逻辑：权限模型</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/rust/rust-collections/"><span class="level-item">Rust 语言特性：常用集合</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-panic-与不可恢复的错误"><span class="level-left"><span class="level-item">1. panic! 与不可恢复的错误</span></span></a></li><li><a class="level is-mobile" href="#2-使用-panic-的-backtrace"><span class="level-left"><span class="level-item">2. 使用 panic! 的 backtrace</span></span></a></li><li><a class="level is-mobile" href="#3-Result-与可恢复的错误"><span class="level-left"><span class="level-item">3. Result 与可恢复的错误</span></span></a></li><li><a class="level is-mobile" href="#4-错误处理的快捷方式：unwrap-和-expect"><span class="level-left"><span class="level-item">4. 错误处理的快捷方式：unwrap 和 expect</span></span></a></li><li><a class="level is-mobile" href="#5-错误传播"><span class="level-left"><span class="level-item">5. 错误传播</span></span></a></li><li><a class="level is-mobile" href="#6-运算符"><span class="level-left"><span class="level-item">6. ? 运算符</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

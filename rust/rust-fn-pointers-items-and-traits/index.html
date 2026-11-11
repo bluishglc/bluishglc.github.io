@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>一团乱麻？带你厘清 Rust 中的函数指针、函数项、fn 类型、Fn Trait - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="对于 Rust 新手来说，一次性搞清楚函数指针、函数项、Fn trait、fn type 这些概念并不是一件容易的事情。很多人仔细研究了每一种机制，却依旧梳理不出“头绪”，对它们之间错综复杂的关系感到困惑和迷茫。本文，我们将带领大家沿着一条清晰的逻辑主线，逐一梳理这些概念，相信一定能带给你“豁然开朗”的感觉。 知识图谱 函数指针、函数项、fn 类 型、Fn Trait 这四种机制放之间的关系非常紧"><meta property="og:type" content="article"><meta property="og:title" content="一团乱麻？带你厘清 Rust 中的函数指针、函数项、fn 类型、Fn Trait"><meta property="og:url" content="https://laurence.enlightgram.com/rust/rust-fn-pointers-items-and-traits/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="对于 Rust 新手来说，一次性搞清楚函数指针、函数项、Fn trait、fn type 这些概念并不是一件容易的事情。很多人仔细研究了每一种机制，却依旧梳理不出“头绪”，对它们之间错综复杂的关系感到困惑和迷茫。本文，我们将带领大家沿着一条清晰的逻辑主线，逐一梳理这些概念，相信一定能带给你“豁然开朗”的感觉。 知识图谱 函数指针、函数项、fn 类 型、Fn Trait 这四种机制放之间的关系非常紧"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/rust/rust-fn-pointers-items-and-traits/1.png"><meta property="article:published_time" content="2026-08-10T10:45:00.000Z"><meta property="article:modified_time" content="2026-11-11T02:50:16.431Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Rust"><meta property="article:tag" content="Fn Trait"><meta property="article:tag" content="函数指针"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/rust/rust-fn-pointers-items-and-traits/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/rust/rust-fn-pointers-items-and-traits/"},"headline":"一团乱麻？带你厘清 Rust 中的函数指针、函数项、fn 类型、Fn Trait","image":["https://laurence.enlightgram.com/images/rust/rust-fn-pointers-items-and-traits/1.png"],"datePublished":"2026-08-10T10:45:00.000Z","dateModified":"2026-11-11T02:50:16.431Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"对于 Rust 新手来说，一次性搞清楚函数指针、函数项、Fn trait、fn type 这些概念并不是一件容易的事情。很多人仔细研究了每一种机制，却依旧梳理不出“头绪”，对它们之间错综复杂的关系感到困惑和迷茫。本文，我们将带领大家沿着一条清晰的逻辑主线，逐一梳理这些概念，相信一定能带给你“豁然开朗”的感觉。 知识图谱 函数指针、函数项、fn 类 型、Fn Trait 这四种机制放之间的关系非常紧"}</script><link rel="canonical" href="https://laurence.enlightgram.com/rust/rust-fn-pointers-items-and-traits/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">一团乱麻？带你厘清 Rust 中的函数指针、函数项、fn 类型、Fn Trait</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Rust/">Rust</a></span><span class="level-item">发表于：<time dateTime="2026-08-10T10:45:00.000Z" title="2026-08-10 03:45:00">2026-08-10</time></span><span class="level-item">阅读用时：32 分钟 (约 4818 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/rust/rust-fn-pointers-items-and-traits/1.png" alt="一团乱麻？带你厘清 Rust 中的函数指针、函数项、fn 类型、Fn Trait" fetchpriority="high"></figure><div class="content"><p>对于 Rust 新手来说，一次性搞清楚函数指针、函数项、Fn trait、fn type 这些概念并不是一件容易的事情。很多人仔细研究了每一种机制，却依旧梳理不出“头绪”，对它们之间错综复杂的关系感到困惑和迷茫。本文，我们将带领大家沿着一条清晰的逻辑主线，逐一梳理这些概念，相信一定能带给你“豁然开朗”的感觉。</p>
+<h2 id="1-知识图谱"><a href="#1-知识图谱" class="headerlink" title="1. 知识图谱"></a>1. 知识图谱</h2><p>函数指针、函数项、fn 类 型、Fn Trait 这四种机制放之间的关系非常紧密，通常会在代码中“结伴”出现，它们往往出现在：回调、动态切换函数（策略模式）、高阶函数等一些典型场景中，在这些场景里，对函数的使用形式是一致的，即：</p>
+<blockquote>
+<p>需要将一个函数 A 以参数形式传给另一个函数 B</p>
+</blockquote>
+<p>这时我们会遇到一个现实问题：</p>
+<blockquote>
+<p>函数 A 的“类型”应该怎样描述？因为在定义函数 B 时需要指明它需要的是一个什么样的函数参数，以及函数 A 的“值”（或者“引用”、“指针”）又该如何描述？因为在调用函数 B 时需要传入函数 A 的“值”（或者“引用”、“指针”）</p>
+</blockquote>
+<p>我们今天要讨论的函数指针、函数项、fn 类型、Fn Trait 这四种机制可以说就是为了解决这个现实问题而引入的。为了让大家能清楚引入这些机制的“前因后果”，我们先简短地回顾一下函数的“进化史”：最初，以 C&#x2F;C++ 为代表的 编程语言 率先引入了函数指针，实现了回调、运行时的函数切换（策略模式）等重要功能；后来，进入到以 Java&#x2F;C# 为代表的基于虚拟机的纯面向对象编程语言时代，函数指针被“抛弃”了，通过接口、设计模式、匿名内部类等机制，这些纯面向对象语言实现了与函数指针类似的功能，在这一时期，由于函数是“委身”在类下面的“成员函数”，所以函数其实是被“弱化”了；再后来，随着函数式编程的兴起，函数在很多语言中的地位被抬升到了前所未有的高度，成为了语言中的“一等公民”，这一时期，函数已经实现了类型和值的分离，定义和使用方式发生了质的变化。</p>
+<p>作为一门后发的编程语言，Rust 可以说是“博采众长”，在对“函数”的设计上，体现得淋漓尽致。一方面，作为一门系统系编程语言，Rust 沿用了 C&#x2F;C++ 中的一些经典机制，“函数指针”就是其中之一；另一方面，Rust 大量引入了函数式编程的理念和机制，将函数“类型化”，使用特定的 trait 进行描述，再加上 闭包 的参与，形成了一套 FP 风格的函数机制；最后，为使传统的“函数指针”和“FP 风格的函数（闭包）”两种机制能有机地融合在一起，不至于形成两种割裂的风格，Rust 又做了一些“打通”工作。以上三方面基本概括了 Rust 语言在函数及其关联机制上的“布局”，这个布局可以用下面这张图清晰地表述出来：</p>
+<p><img src="/../../images/rust/rust-fn-pointers-items-and-traits/2.jpeg"></p>
+<p>这张图同时也是函数指针、函数项、Fn Trait、fn Type 这些概念和机制的“知识图谱”，它揭示了它们之间真正的内在联系，帮助大家从全局视角观察和理解这些概念和机制所处的位置以及相互之间的关系。本文，我们也是围绕这张图进行介绍的，其中主要涉及这样几个关键话题：</p>
+<ul>
+<li><p>什么是函数“类型”和“值”的分离？</p>
+</li>
+<li><p>函数指针与 fn 类型</p>
+</li>
+<li><p>函数项及其类型</p>
+</li>
+<li><p>闭包及其类型</p>
+</li>
+<li><p>函数类型大一统：Fn &#x2F; FnMut &#x2F; FnOnce</p>
+</li>
+<li><p>重新思考：Rust 如何实现了函数“类型”和“值”的分离？</p>
+</li>
+</ul>
+<p>特别声明：本博客长期遭受 51CTO 无休止的盗文、剽窃，再次声讨其可耻行径！文章多处已嵌入此声明，盗用本文即传播了这份声明！</p>
+<h2 id="2-什么是函数“类型”和“值”的分离？"><a href="#2-什么是函数“类型”和“值”的分离？" class="headerlink" title="2. 什么是函数“类型”和“值”的分离？"></a>2. 什么是函数“类型”和“值”的分离？</h2><p>在写作本文时，我们始终用“函数式编程”的视角来观察和审视 Rust 对函数的处理机制，因为函数式编程是函数进化到现在的最高形态，以这种“最高”视角观察，可以让我们看清 Rust 函数及其关联机制的“全貌”，也更能理解引入这些机制的“动机”。这个观察视角的“出发点”其实是在观察：什么是函数的“类型”？什么是函数的“值”？它们有没有被语言明确地“分离”开？</p>
+<p>让我们看一个标准的“类型”和“值”分离后的函数定义，你就能深刻地体会到函数式编程所处的“境界”，这是一个用 Scala 实现的示例，不用担心看不懂 Scala 代码，示例其实非常简单。为什么不用 Rust 来写呢？因为 Rust 做不到，这里没有“贬低” Rust 的意思，实际上，在本文的最后，我们会看到 Rust 是如何用自己的方式实现了函数“类型”和“值”的分离，但在这里，我觉得有必要让大家知道：到底什么才是真正意义上的函数“类型”和“值”的分离：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> plusOne:<span class="type">Int</span>=&gt;<span class="type">Int</span>=&#123;</span><br><span class="line">    (num)=&gt;num+<span class="number">1</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在这个极其简单的示例中，我们定义一个变量 <code>plusOne</code> ，但同时它又是一个函数：</p>
+<ul>
+<li><p><code>val</code> 是用于定义变量的关键字，类似于 Rust 中的 <code>let</code> ；</p>
+</li>
+<li><p><code>plusOne</code> 是变量名，当然，也是函数名；</p>
+</li>
+<li><p><code>Int=&gt;Int</code> 是变量的类型，当然，也是函数的类型</p>
+</li>
+<li><p><code>{ (num)=&gt;num+1 }</code> 则是函数的值（也就是函数的实现）</p>
+</li>
+</ul>
+<p>在这个示例中，我们实际上演示了完全不同于 <code>fn func_name()</code> 这种传统形式的函数定义方式，这种像定义普通变量一样定义函数的形式可以归纳为：</p>
+<blockquote>
+<p>函数名: 函数类型 &#x3D; 函数值（函数的实现部分）</p>
+</blockquote>
+<p>这种形式就是函数“类型”和“值”完全分离的标志，因为，如此一来，在传递函数参数时，我们就可以在形参上书写出所需函数的“类型”，在调用时，将函数的“值”作为实参传给函数了。关于函数“类型”和“值”分离的深层意义，可以参考 <a href="/scala/function-literals-and-fp/">《从函数字面量发现函数式编程》</a> ）。不过，如前文所述，在 Rust 中我们写不出这种形式的函数定义[^1]，这里我们是想让大家明白：函数“类型”和“值”的分离应该是什么样的？这是我们的“愿景”，当一一介绍完全部机制，重新回顾 Rust 是如何实现函数参数的类型定义和传递时，我们会看到 Rust “异曲同工”的结果。</p>
+<h2 id="3-函数指针与-fn-类型"><a href="#3-函数指针与-fn-类型" class="headerlink" title="3. 函数指针与 fn 类型"></a>3. 函数指针与 fn 类型</h2><p>让我们回归到 Rust 语言，看一下继承自 C&#x2F;C++ 的传统函数指针是怎样工作的。看下面这个示例：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// 示例 (1)</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">plus_one</span>(num: <span class="type">i32</span>) <span class="punctuation">-&gt;</span> <span class="type">i32</span> &#123;</span><br><span class="line">    num + <span class="number">1</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">handle_vec</span>(v: <span class="type">Vec</span>&lt;<span class="type">i32</span>&gt;, f: <span class="keyword">impl</span> <span class="title class_">Fn</span>(<span class="type">i32</span>) <span class="punctuation">-&gt;</span> <span class="type">i32</span>) <span class="punctuation">-&gt;</span> <span class="type">Vec</span>&lt;<span class="type">i32</span>&gt; &#123;</span><br><span class="line">    v.<span class="title function_ invoke__">into_iter</span>().<span class="title function_ invoke__">map</span>(f).<span class="title function_ invoke__">collect</span>()</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">nums</span> = <span class="built_in">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">plus_one_fn</span>: <span class="title function_ invoke__">fn</span>(<span class="type">i32</span>) <span class="punctuation">-&gt;</span> <span class="type">i32</span> = plus_one;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">result</span> = <span class="title function_ invoke__">handle_vec</span>(nums, plus_one_fn);</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">&quot;&#123;:?&#125;&quot;</span>, result);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>示例中的 <code>plus_one_fn</code> 是一个“指针”，与 C&#x2F;C++ 中的“函数指针”完全一致，打印它的值输出的就是一个 内存 地址。这个 <code>plus_one_fn</code> 的类型是： <code>fn(i32) -&gt; i32</code> ，它以函数参数列表为“骨架”抽取出类型声明，并在前面辅以 <code>fn</code> 关键字修饰，在 Rust 中，函数指针的类型就是“ <code>fn</code> 类型”。“ <code>fn</code> 类型”是 Rust 语言的内置类型（Primitive Type），并且是一种类型构造器（Type Constructor）。也就是说，它不是一种具体的类型，而是一类类型；示例中的 <code>fn(i32) -&gt; i32</code> 就是 <code>fn</code> 类型的一种具体类型。此外，Rust 编译器 会为 <code>fn</code> 类型自动实现 <code>Fn</code> &#x2F; <code>FnMut</code> &#x2F; <code>FnOnce</code> 三个 trait 中的一个或多个，这就是为什么 <code>plus_one_fn</code> 能匹配参数 <code>f: impl Fn(i32) -&gt; i32</code> 并传给 <code>handle_vec</code> 的关键原因。关于 <code>Fn(i32) -&gt; i32</code> 下文会专门讨论。</p>
+<h2 id="4-函数项及其类型"><a href="#4-函数项及其类型" class="headerlink" title="4. 函数项及其类型"></a>4. 函数项及其类型</h2><p>上述介绍对于熟悉 C&#x2F;C++ 函数指针的读者来说还是很容易理解的，尽管函数类型使用了“ <code>fn</code> 类型”这种称谓，但整体上是熟悉的语法和机制。比较独特的是出现在第 13 行等号后面的 <code>plus_one</code> 了，它是 Rust 中特有的一个概念，叫“函数项”（Function Item）。“函数项”是编译器为了表示某个具体函数而生成的一种零大小（Zero Sized）的类型。直白地说：只要把一个定义好的函数的“名字”拿出来，用于赋值或传参时，这个被拿出来的“函数名”就是“函数项”，它就代表那个函数本身。 <strong>函数项和函数指针看上去非常像，实际上，函数项可以看成是”编译期”对一个函数的“引用”，而函数指针则是”运行期”的函数地址</strong> 。正因为函数项是”编译期”对一个函数的引用，所以它才是零大小（Zero-Sized）的，因为函数代码存放在程序内存的 text 段里，而函数项在编译期仅仅是一个“名字”。就如同一个变量 <code>let a = 1</code> ，变量 <code>a</code> 只是程序员和编译器约定的一个“符号”，栈上不会保存一个内容是 <code>a</code> 的字符和关联的内存地址，变量名 <code>a</code> 只存在于编译阶段，在运行阶段根本没有所谓的“变量名”，程序完全靠 “内存地址偏移” 而非 “名字” 来定位栈上的变量，函数项也是如此，所以它才可以没有大小。</p>
+<p>函数项的另一个重要问题是：函数项的“类型”是什么样的？例如示例中的 <code>plus_one</code> ，它是什么类型呢？首先，它的类型绝不是 <code>fn(i32) -&gt; i32</code> ，我们说：函数指针和函数项是两种不同的类型，所以，函数项的类型必不可能是 fn 类型，实际上，编译器会为每一个函数项自动生成一个匿名类型，也就是说，每一个函数项都确确实实有一个自己的类型，但这个类型是匿名的，所以，我们写不出，也不需要显式地写出来，因为在使用函数项的地方，已经合适它的“另外的”类型候在那里了。有两种具体的情形，一种是当我们把一个“函数项”赋给一个“函数指针”时，Rust 编译器会帮我们把函数项类型自动转换为函数指针，在我们的示例代码中，作为函数项的 <code>plus_one</code> 之所以能赋给 <code>plus_one_fn</code> 这个函数指针是因为这里其实发生了一次自动类型转换；而另一种更常见的情形是：我们也可以把函数项作为参数传给使用 Fn 描述的类型参数。这是因为编译器也为函数项也自动实现了 Fn、FnMut、FnOne。看这个示例：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// 示例 (2)</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">plus_one</span>(x: <span class="type">i32</span>) <span class="punctuation">-&gt;</span> <span class="type">i32</span> &#123;</span><br><span class="line">    x + <span class="number">1</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">handle_vec</span>(v: <span class="type">Vec</span>&lt;<span class="type">i32</span>&gt;, f: <span class="keyword">impl</span> <span class="title class_">Fn</span>(<span class="type">i32</span>) <span class="punctuation">-&gt;</span> <span class="type">i32</span>) <span class="punctuation">-&gt;</span> <span class="type">Vec</span>&lt;<span class="type">i32</span>&gt; &#123;</span><br><span class="line">    v.<span class="title function_ invoke__">into_iter</span>().<span class="title function_ invoke__">map</span>(f).<span class="title function_ invoke__">collect</span>()</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">nums</span> = <span class="built_in">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">result</span> = <span class="title function_ invoke__">handle_vec</span>(nums, plus_one);</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">&quot;&#123;:?&#125;&quot;</span>, result);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>示例 (2) 与示例 (1) 的差别仅在于第 13 行，我们没有通过函数指针，而是直接把函数项，也就是 <code>plus_one</code> 传给了 <code>handle_vec</code> ，之所以可以这样做就是因为：函数项也自动实现了 Fn、FnMut、FnOne（准确地说是：编译器在为函数项生成它的匿名类型时，一并自动实现了 Fn、FnMut、FnOne），因此 <code>plus_one</code> 也能匹配参数 <code>f: impl Fn(i32) -&gt; i32</code> ，可以直接传给 <code>handle_vec</code> ，这和上一节函数指针的情况类似。</p>
+<p>如果不是在运行期需要动态 切换 执行函数，函数项要远比函数指针来得方便，仅仅是一个“函数名”，就可以作为参数传递了，这确实令人极为“舒适”，并且函数项还是一个编译期机制，具有零成本抽象优势。</p>
+<h2 id="5-闭包及其类型"><a href="#5-闭包及其类型" class="headerlink" title="5. 闭包及其类型"></a>5. 闭包及其类型</h2><p>关于闭包，我们已经在 <a href="/rust/rust-closures/">《Rust 语言特性：闭包》</a> 一文介绍过了，但是并没有介绍闭包的类型，这是闭包能作为参数传递给一个函数的关键。还是先看一个示例：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// 示例 (3)</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">handle_vec</span>(v: <span class="type">Vec</span>&lt;<span class="type">i32</span>&gt;, f: <span class="keyword">impl</span> <span class="title class_">Fn</span>(<span class="type">i32</span>) <span class="punctuation">-&gt;</span> <span class="type">i32</span>) <span class="punctuation">-&gt;</span> <span class="type">Vec</span>&lt;<span class="type">i32</span>&gt; &#123;</span><br><span class="line">    v.<span class="title function_ invoke__">into_iter</span>().<span class="title function_ invoke__">map</span>(f).<span class="title function_ invoke__">collect</span>()</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">nums</span> = <span class="built_in">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">result</span> = <span class="title function_ invoke__">handle_vec</span>(nums, |x| x + <span class="number">1</span>);</span><br><span class="line">    <span class="comment">// let result = hof(nums, |x| x + 1 );</span></span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">&quot;&#123;:?&#125;&quot;</span>, result);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在示例 (3) 中，我们不再使用函数去实现加 1 功能，而是直接改用闭包去实现： <code>|x| x + 1</code> ，那这个闭包的类型是什么呢？是 <code>Fn(i32) -&gt; i32</code> 吗？不是！闭包的类型也是由编译器自动生成的，匿名的，且自动实现了 Fn &#x2F; FnMut &#x2F; FnOnce 三个 trait 中的一个或多个，这就是为什么 <code>|x| x + 1</code> 可以匹配 <code>Fn(i32) -&gt; i32</code> 类型的原因。如此一来，函数指针、函数项和闭包都可以匹配 Fn 类型的函数参数，三者在使用形式上就可以完全统一了。但要注意的是：函数指针、函数项、闭包三者的类型始终是不同的，是因为编译器自动为它们实现了 Fn &#x2F; FnMut &#x2F; FnOnce 三个 trait 中的一个或多个，才使得它们都可以作为 Fn 类型的参数传给高阶函数。</p>
+<h2 id="6-函数类型大一统：Fn-FnMut-FnOnce"><a href="#6-函数类型大一统：Fn-FnMut-FnOnce" class="headerlink" title="6. 函数类型大一统：Fn &#x2F; FnMut &#x2F; FnOnce"></a>6. 函数类型大一统：Fn &#x2F; FnMut &#x2F; FnOnce</h2><p>最终，我们来到了 Fn &#x2F; FnMut &#x2F; FnOnce。前面三个章节都提到过一个关键信息：</p>
+<blockquote>
+<p>函数指针、函数项、闭包三种类型全部由编译器自动为其实现了 Fn &#x2F; FnMut &#x2F; FnOnce，这使得它们都可以传给由 Fn &#x2F; FnMut &#x2F; FnOnce 描述的函数参数，从而实现了函数的“指针”、“引用”、“值”等不同指代形式在类型上的“统一”，彼此可以无缝替换使用了。</p>
+</blockquote>
+<p>为了更形象地说明这一点，我们把前面三个示例“打包”到一起，在不修改 <code>handle_vec</code> 函数签名的情况下，分别使用函数指针、函数项、闭包三种形式作为实参传给 <code>handle_vec</code> ，全部可以成功运行：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// 示例 (4)</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">plus_one</span>(num: <span class="type">i32</span>) <span class="punctuation">-&gt;</span> <span class="type">i32</span> &#123;</span><br><span class="line">    num + <span class="number">1</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">handle_vec</span>(v: <span class="type">Vec</span>&lt;<span class="type">i32</span>&gt;, f: <span class="keyword">impl</span> <span class="title class_">Fn</span>(<span class="type">i32</span>) <span class="punctuation">-&gt;</span> <span class="type">i32</span>) <span class="punctuation">-&gt;</span> <span class="type">Vec</span>&lt;<span class="type">i32</span>&gt; &#123;</span><br><span class="line">    v.<span class="title function_ invoke__">into_iter</span>().<span class="title function_ invoke__">map</span>(f).<span class="title function_ invoke__">collect</span>()</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="comment">// 1. 函数指针</span></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">plus_one_fn</span>: <span class="title function_ invoke__">fn</span>(<span class="type">i32</span>) <span class="punctuation">-&gt;</span> <span class="type">i32</span> = plus_one;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">result_1</span> = <span class="title function_ invoke__">handle_vec</span>(<span class="built_in">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>], plus_one_fn);</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">&quot;&#123;:?&#125;&quot;</span>, result_1);</span><br><span class="line">    <span class="comment">// 2. 函数项</span></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">result_2</span> = <span class="title function_ invoke__">handle_vec</span>(<span class="built_in">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>], plus_one);</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">&quot;&#123;:?&#125;&quot;</span>, result_2);</span><br><span class="line">    <span class="comment">// 3. 闭包</span></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">result_3</span> = <span class="title function_ invoke__">handle_vec</span>(<span class="built_in">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>], |x| x + <span class="number">1</span>);</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">&quot;&#123;:?&#125;&quot;</span>, result_3);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>最后，我们简单的介绍一下 Fn &#x2F; FnMut &#x2F; FnOnce 三者的区别：对于普通函数项和函数指针，它们都会实现 Fn、FnMut、FnOnce；因为普通函数没有所谓的“捕获环境”，不存在调用过程修改或消耗自用变量的问题，所以在作为参数约束时，通常都是使用 Fn。只有闭包由于会捕获环境，才需要根据它对捕获环境的使用方式区分 Fn &#x2F; FnMut &#x2F; FnOnce，它们对应三种情形：</p>
+<ul>
+<li><p>如果闭包对自己捕获的状态是只读的，无论执行多少次结果都一样，对于这样的闭包，编译器会自动为其实现 Fn；</p>
+</li>
+<li><p>如果闭包需要修改自已捕获的状态，则编译器会自动为其实现 FnMut，比如闭包捕获了一个 <code>mut</code> 变量，并在闭包内修改了它的值；</p>
+</li>
+<li><p>如果闭包需要消耗掉自已捕获的状态，则编译器会自动为其实现 FnOnce，意味者闭包只能执行一次，比如闭包捕获了一个 String 值，并在闭包内将它消耗了，则这个闭包只能执行这一次。</p>
+</li>
+</ul>
+<p>以上归纳起来，可以表述为如下的关系：</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">            可调用对象</span><br><span class="line">                │</span><br><span class="line">   ┌────────────┼────────────┐</span><br><span class="line">   │            │            │</span><br><span class="line">   ▼            ▼            ▼</span><br><span class="line">函数项        函数指针       闭包</span><br><span class="line">   │            │            │</span><br><span class="line">   │            │            │</span><br><span class="line">   ▼            ▼            ▼</span><br><span class="line">  Fn           Fn           根据捕获方式：是否捕获了可变引用</span><br><span class="line">  FnMut        FnMut        或消耗了自由变量的值，来决定使用：</span><br><span class="line">  FnOnce       FnOnce       Fn / FnMut / FnOnce</span><br></pre></td></tr></table></figure>
+
+<p>还有一点，以 <code>Fn(i32) -&gt; i32</code> 这种书写形式就可以看出，Fn 绝不是一个普通的、完全编写代码就能定义出来的 trait，Rust 显然对这种 trait 做了特殊的支持！特别声明：本博客长期遭受 51CTO 无休止的盗文、剽窃，再次声讨其可耻行径！文章多处已嵌入此声明，盗用本文即传播了这份声明！</p>
+<h2 id="7-重新思考：Rust-如何实现了函数“类型”和“值”的分离？"><a href="#7-重新思考：Rust-如何实现了函数“类型”和“值”的分离？" class="headerlink" title="7. 重新思考：Rust 如何实现了函数“类型”和“值”的分离？"></a>7. 重新思考：Rust 如何实现了函数“类型”和“值”的分离？</h2><p>重新回顾一下前面几个章节的核心内容：</p>
+<ul>
+<li><p>函数指针是指向函数的“指针”，其“类型”是 <code>fn</code> 类型，同时编译器自动为其实现了 <code>Fn</code> &#x2F; <code>FnMut</code> &#x2F; <code>FnOnce</code> ；</p>
+</li>
+<li><p>函数项可以视作是编译期对函数的“引用”，它的“类型”是由编译器自动生成的，且是匿名的（没有类型名），同时编译器也自动为它实现了Fn &#x2F; FnMut &#x2F; FnOnce；</p>
+</li>
+<li><p>闭包没有指针，没有函数项，其自身可以视作自身的“值”，它的“类型”也是由编译器自动生成的，且是匿名的（没有类型名），同时编译器也自动为它实现了 <code>Fn</code> &#x2F; <code>FnMut</code> &#x2F; <code>FnOnce</code> 三个 trait 中的一个或多个；</p>
+</li>
+</ul>
+<p>结合前文的示例来梳理的话，是这样的：</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">plus_one_fn</span><br><span class="line">│</span><br><span class="line">└── 函数指针</span><br><span class="line">    │</span><br><span class="line">    └── 类型：fn(i32) -&gt; i32</span><br><span class="line">        │</span><br><span class="line">        └── 其类型实现 Fn(i32) -&gt; i32</span><br><span class="line"></span><br><span class="line">plus_one</span><br><span class="line">│</span><br><span class="line">└── 函数项</span><br><span class="line">    │</span><br><span class="line">    └── 由编译器生成匿名类型</span><br><span class="line">        │</span><br><span class="line">        ├── 可以转换成 fn(i32) -&gt; i32</span><br><span class="line">        │</span><br><span class="line">        └── 其类型实现 Fn(i32) -&gt; i32</span><br><span class="line"></span><br><span class="line">|x| x + 1</span><br><span class="line">│</span><br><span class="line">└── 闭包</span><br><span class="line">    │</span><br><span class="line">    └── 由编译器生成匿名类型</span><br><span class="line">        │</span><br><span class="line">        └── 其类型实现 Fn(i32) -&gt; i32</span><br></pre></td></tr></table></figure>
+
+<p>在 Rust 中，函数并没有在语言层面上实现“类型”和“值”的分离，函数的函数指针和函数项可以视作是对函数“值”（函数本身）的指针与引用，而闭包的“值”是闭包自身；在类型方面，函数指针、函数项和闭包都有自己的类型，但它们的类型又都由编译器自动为它们实现了 <code>Fn</code> &#x2F; <code>FnMut</code> &#x2F; <code>FnOnce</code> 三个 trait 中的一个或多个，使得三者在类型上得到了“统一”，Rust 是通过这样的语言机制布局实现了实际意义上的函数“类型”和“值”的分离，为传递函数型参数铺平了道路。</p>
+<hr>
+<p>参考资料</p>
+<ul>
+<li><p><a target="_blank" rel="noopener" href="https://www.yijiecc.com/public/spec/49">https://www.yijiecc.com/public/spec/49</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.yijiecc.com/public/spec/47">https://www.yijiecc.com/public/spec/47</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://juejin.cn/post/6991378217701474334">https://juejin.cn/post/6991378217701474334</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://doc.rust-lang.org/reference/types/function-item.html">https://doc.rust-lang.org/reference/types/function-item.html</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://doc.rust-lang.org/std/primitive.fn.html">https://doc.rust-lang.org/std/primitive.fn.html</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://doc.rust-lang.org/reference/types/function-pointer.html">https://doc.rust-lang.org/reference/types/function-pointer.html</a></p>
+</li>
+</ul>
+<hr>
+<p>[^1]: 可能最接近的一种形式是 <code>let plus_one: &amp;dyn Fn(i32) -&gt; i32 = &amp;|x| x + 1</code> ，但对于 Rust 来说这是一种很扭曲的函数书写形式，关键 Rust 并不是用我们所说的函数式的风格来处理这段代码的，这也是为什么说它是“扭曲”的原因。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>一团乱麻？带你厘清 Rust 中的函数指针、函数项、fn 类型、Fn Trait</p><p><a href="https://laurence.enlightgram.com/rust/rust-fn-pointers-items-and-traits/">https://laurence.enlightgram.com/rust/rust-fn-pointers-items-and-traits/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-08-10</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Rust/">Rust</a><a class="link-muted mr-2" rel="tag" href="/tags/Fn-Trait/">Fn Trait</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%87%BD%E6%95%B0%E6%8C%87%E9%92%88/">函数指针</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/others/windows-11-context-menu/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Windows 11 右键菜单大作战：添加、删除、排序</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/gpui/gpui-ownership-and-data-flow/"><span class="level-item">Zed 官方博客：GPUI 的所有权与数据流（注释精讲版）</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-知识图谱"><span class="level-left"><span class="level-item">1. 知识图谱</span></span></a></li><li><a class="level is-mobile" href="#2-什么是函数“类型”和“值”的分离？"><span class="level-left"><span class="level-item">2. 什么是函数“类型”和“值”的分离？</span></span></a></li><li><a class="level is-mobile" href="#3-函数指针与-fn-类型"><span class="level-left"><span class="level-item">3. 函数指针与 fn 类型</span></span></a></li><li><a class="level is-mobile" href="#4-函数项及其类型"><span class="level-left"><span class="level-item">4. 函数项及其类型</span></span></a></li><li><a class="level is-mobile" href="#5-闭包及其类型"><span class="level-left"><span class="level-item">5. 闭包及其类型</span></span></a></li><li><a class="level is-mobile" href="#6-函数类型大一统：Fn-FnMut-FnOnce"><span class="level-left"><span class="level-item">6. 函数类型大一统：Fn / FnMut / FnOnce</span></span></a></li><li><a class="level is-mobile" href="#7-重新思考：Rust-如何实现了函数“类型”和“值”的分离？"><span class="level-left"><span class="level-item">7. 重新思考：Rust 如何实现了函数“类型”和“值”的分离？</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

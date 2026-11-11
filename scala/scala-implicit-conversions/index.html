@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Scala之隐式转换 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="概述 简单说，隐式转换就是：当Scala编译器进行类型匹配时，如果找不到合适的候选，那么隐式转化提供了另外一种途径来告诉编译器如何将当前的类型转换成预期类型。本文原文出处: http:// blog .csdn.net/bluishglc/article/details/50866314 严禁任何形式的转载，否则将委托CSDN官方维护权益！ 隐式转换有四种常见的使用场景： 将某一类型转换成预期类型"><meta property="og:type" content="article"><meta property="og:title" content="Scala之隐式转换"><meta property="og:url" content="https://laurence.enlightgram.com/scala/scala-implicit-conversions/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="概述 简单说，隐式转换就是：当Scala编译器进行类型匹配时，如果找不到合适的候选，那么隐式转化提供了另外一种途径来告诉编译器如何将当前的类型转换成预期类型。本文原文出处: http:// blog .csdn.net/bluishglc/article/details/50866314 严禁任何形式的转载，否则将委托CSDN官方维护权益！ 隐式转换有四种常见的使用场景： 将某一类型转换成预期类型"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/scala/scala-implicit-conversions/2.png"><meta property="article:published_time" content="2016-03-13T00:53:41.000Z"><meta property="article:modified_time" content="2026-11-06T07:54:03.131Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Scala"><meta property="article:tag" content="隐式转换"><meta property="article:tag" content="类型类"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/scala/scala-implicit-conversions/2.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/scala/scala-implicit-conversions/"},"headline":"Scala之隐式转换","image":["https://laurence.enlightgram.com/images/scala/scala-implicit-conversions/2.png"],"datePublished":"2016-03-13T00:53:41.000Z","dateModified":"2026-11-06T07:54:03.131Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"概述 简单说，隐式转换就是：当Scala编译器进行类型匹配时，如果找不到合适的候选，那么隐式转化提供了另外一种途径来告诉编译器如何将当前的类型转换成预期类型。本文原文出处: http:// blog .csdn.net/bluishglc/article/details/50866314 严禁任何形式的转载，否则将委托CSDN官方维护权益！ 隐式转换有四种常见的使用场景： 将某一类型转换成预期类型"}</script><link rel="canonical" href="https://laurence.enlightgram.com/scala/scala-implicit-conversions/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Scala之隐式转换</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Scala/">Scala</a></span><span class="level-item">发表于：<time dateTime="2016-03-13T00:53:41.000Z" title="2016-03-12 16:53:41">2016-03-12</time></span><span class="level-item">阅读用时：13 分钟 (约 1973 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p>简单说，隐式转换就是：当Scala编译器进行类型匹配时，如果找不到合适的候选，那么隐式转化提供了另外一种途径来告诉编译器如何将当前的类型转换成预期类型。本文原文出处: http:&#x2F;&#x2F; blog .csdn.net&#x2F;bluishglc&#x2F;article&#x2F;details&#x2F;50866314 严禁任何形式的转载，否则将委托CSDN官方维护权益！</p>
+<p>隐式转换有四种常见的使用场景：</p>
+<ol>
+<li><p>将某一类型转换成预期类型</p>
+</li>
+<li><p>类型增强与扩展</p>
+</li>
+<li><p>模拟新的语法</p>
+</li>
+<li><p>类型类</p>
+</li>
+</ol>
+<h2 id="语法"><a href="#语法" class="headerlink" title="语法"></a>语法</h2><p>隐式转换有新旧两种定义方法，旧的定义方法指是的“implict def”形式，这是Scala 2.10版本之前的写法，在Scala 2.10版本之后，Scala推出了“隐式类”用来替换旧的隐式转换语法，因为“隐式类”是一种更加安全的方式，对被转换的类型来说，它的作用域更加清晰可控。</p>
+<p>接下来我们通过实例来了解这两种隐式转换的写法。前文提到，隐式转换最为基本的使用场景是：将某一类型转换成预期类型，所以我们下面的例子就以最这种最简单的场景来演示，它们都实现了：将一个String类型的变量隐式转换为Int类型：</p>
+<h3 id="“implict-def”形式的隐式转换"><a href="#“implict-def”形式的隐式转换" class="headerlink" title="“implict def”形式的隐式转换"></a>“implict def”形式的隐式转换</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">package com.github.scala.myimplicit</span><br><span class="line"></span><br><span class="line">/**</span><br><span class="line">  * A demo about scala implicit type conversion.</span><br><span class="line">  * @author Laurence Geng</span><br><span class="line">  */</span><br><span class="line">object ImplicitDefDemo &#123;</span><br><span class="line"></span><br><span class="line">    object MyImplicitTypeConversion &#123;</span><br><span class="line">        implicit def strToInt(str: String) = str.toInt</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    def main(args: Array[String]) &#123;</span><br><span class="line">        //compile error!</span><br><span class="line">        //val max = math.max(&quot;1&quot;, 2);</span><br><span class="line">        import MyImplicitTypeConversion.strToInt</span><br><span class="line">        val max = math.max(&quot;1&quot;, 2);</span><br><span class="line">        println(max)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="“隐式类”形式的隐式转换"><a href="#“隐式类”形式的隐式转换" class="headerlink" title="“隐式类”形式的隐式转换"></a>“隐式类”形式的隐式转换</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">package com.github.scala.myimplicit</span><br><span class="line"></span><br><span class="line">/**</span><br><span class="line">  * A demo about scala implicit type conversion.</span><br><span class="line">  * @author Laurence Geng</span><br><span class="line">  */</span><br><span class="line">object ImplicitClassDemo &#123;</span><br><span class="line"></span><br><span class="line">    implicit class MyImplicitTypeConversion(val str: String)&#123;</span><br><span class="line">         def strToInt = str.toInt</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    def main(args: Array[String]) &#123;</span><br><span class="line">        //compile error!</span><br><span class="line">        //val max = math.max(&quot;1&quot;, 2);</span><br><span class="line">        import com.github.scala.myimplicit.ImplicitDefDemo.MyImplicitTypeConversion._</span><br><span class="line">        val max = math.max(&quot;1&quot;, 2);</span><br><span class="line">        println(max)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>隐式类有如下几个限制：</p>
+<ol>
+<li><p>They must be defined inside of another trait&#x2F;class&#x2F;object.</p>
+</li>
+<li><p>They may only take one non-implicit argument in their constructor.</p>
+</li>
+<li><p>There may not be any method, member or object in scope with the same name as the implicit class.<br>Note: This means an implicit class cannot be a case class.</p>
+</li>
+</ol>
+<p>隐式类与旧的隐式转换的语法（implicit def）是有细微的不同的，隐式类的运作方式是：隐式类的主构造函数只能有一个参数（有两个以上并不会报错，但是这个隐式类永远不会被编译器作为隐式类在隐式转化中使用），且这个参数的类型就是将要被转换的目标类型。从语义上这很自然：这个隐式转换类将包裹目标类型，隐式类的所有方法都会自动“附加”到目标类型上。</p>
+<h2 id="应用场景"><a href="#应用场景" class="headerlink" title="应用场景"></a>应用场景</h2><h3 id="转换成预期类型"><a href="#转换成预期类型" class="headerlink" title="转换成预期类型"></a>转换成预期类型</h3><p>对于这种使用场景实际上并不多见，实际意义也没有那么大。前文的代码就是这样这一场景的一个示例。</p>
+<h3 id="类型增强与扩展"><a href="#类型增强与扩展" class="headerlink" title="类型增强与扩展"></a>类型增强与扩展</h3><p>真正让隐式转换大放异彩的是“类型增强”。这方面的示例是非常多的。</p>
+<h4 id="案例一：ArrayOps对Array的类型增强"><a href="#案例一：ArrayOps对Array的类型增强" class="headerlink" title="案例一：ArrayOps对Array的类型增强"></a>案例一：ArrayOps对Array的类型增强</h4><p>一个典型案例是：Scala对Array对象进行的隐式转换。我们知道，Scala通过Predef声明了针对Array类型的两个隐式转换：一个是到ArrayOps的隐式转化，另一个是到WrappedArray的隐式转换。以前者为例，它为Array对象“添加”了大量的操作，这是通过隐式转换来”通明“的对一个类进行增强的典型案例！以下是Scala API文档中对这一技术细节的说明：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Two implicit conversions exist in scala.Predef that are frequently applied to arrays: a conversion to scala.collection.mutable.ArrayOps (shown on line 4 of the example above) and a conversion to scala.collection.mutable.WrappedArray (a subtype of scala.collection.Seq). Both types make available many of the standard operations found in the Scala collections API. The conversion to ArrayOps is temporary, as all operations defined on ArrayOps return an Array, while the conversion to WrappedArray is permanent as all operations return a WrappedArray.</span><br></pre></td></tr></table></figure>
+
+<p>###案例二：Spark中PairRDDFunctions对RDD的类型增强</p>
+<p>如果你看一下Spark中的RDD以及它的子类是没有groupByKey, reduceByKey以及join这一类基于key-value元组的操作的，但是在你使用RDD时，这些操作是实实在在存在的，Spark正是通过隐式转换将一个RDD转换成了PairRDDFunctions， 这个动作是这样发生的：</p>
+<p>首先在RDD的伴随对象中声明了从RDD到PairRDDFunctions的隐式转换：</p>
+<p> <img src="/../../images/scala/scala-implicit-conversions/2.png"></p>
+<p>然后在SparkContext中import了RDD的所有东西，使隐式转换生效。</p>
+<h3 id="模拟新的语法"><a href="#模拟新的语法" class="headerlink" title="模拟新的语法"></a>模拟新的语法</h3><p>这也是非常酷的一种应用场景。一个典型的应用场景就是Map中用于创建key-value元组的-&gt;符号，它就是一个隐式转换的产物。-&gt;不是 scala 本身的语法，而是类型 ArrowAssoc 的一个方法。这个类型定义在包 Scala.Predef 对象中。 Scala.Predef 自动引入到当前作用域，在这个对象中，同时定义了一个从类型 Any 到 ArrowAssoc 的隐含转换。因此当使用 1 -&gt; “One”时，编译器自动插入从 1 转换到 ArrowAsso c转换。</p>
+<p> <img src="/../../images/scala/scala-implicit-conversions/3.png"></p>
+<h3 id="类型类"><a href="#类型类" class="headerlink" title="类型类"></a>类型类</h3><p>类型类是一种非常灵活的 设计模式 ，可以把类型的定义和行为进行分离，让扩展类行为变得非常方便。或者说如果我们想创建跨越类型的功能（即功能实现独立于类型去演变），那么这样的“功能”不是适合也不应该在主类型的层次结构上进行演变的，这时是使用类型类的绝佳场所。因为类型类是一个比较独立的语法，虽然它的实现需要使用到类型类，但是在本文中为了不止于失去焦点，我们不打算在这里详细介绍，而在接下来的一篇文章中进行专门的介绍。</p>
+<h2 id="隐式解析的搜索范围"><a href="#隐式解析的搜索范围" class="headerlink" title="隐式解析的搜索范围"></a>隐式解析的搜索范围</h2><p>这一部分的规则有些复杂，根据《Scala In Depth 》所描述的，顶层的搜索逻辑是：</p>
+<ul>
+<li><p>在当前作用域下查找。这种情形又分两种情况，一个是在当前作用域显示声明的implicit元素，另一个通过import导入的implicit元素。</p>
+</li>
+<li><p>如果第一种方式没有找到，则编译器会继续在隐式参数类型的 <strong>隐式作用域</strong> 里查找。</p>
+</li>
+</ul>
+<p>真正复杂的地方是什么叫一个类型的 <strong>隐式作用域</strong> ？一个类型的隐式作用域指的是“与该类型相关联的类型”的所有的 <strong>伴生对象</strong> 。</p>
+<p>OK，那什么叫作“与一个类型相关联的类型”？ 定义如下：</p>
+<ul>
+<li><p>假如T是这样定义的：T with A with B with C，那么A, B, C的伴生对象都是T的搜索区域。</p>
+</li>
+<li><p>如果T是类型参数，那么参数类型和基础类型都是T的搜索部分。比如对于类型List[Foo]，List和Foo都是搜索区域</p>
+</li>
+<li><p>如果T是一个单例类型p.T，那么p和T都是搜索区域</p>
+</li>
+<li><p>如果T是类型注入p#T，那么p和T都是搜索区域。</p>
+</li>
+</ul>
+<h2 id="隐式参数"><a href="#隐式参数" class="headerlink" title="隐式参数"></a>隐式参数</h2><p>为什么把隐式参数单独拿出来放到最后讲是因为从用意上讲，隐式参数与我们前面讲述的隐式类型转化有很大的差异，虽然它涉及到了关键字implict，但是它做的是另外一件事情。隐含参数有点类似缺省参数，如果在调用方法时没有提供某个参数，编译器会在当前作用域查找是否有符合条件的 implicit 对象可以作为参数传入，不同于缺省参数，隐式参数的值可以在方法调用的前的上下文中指定，这是隐式参数更加灵活的地方。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">ImplicitParamDemo</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">object</span> <span class="title">Greeter</span></span>&#123;</span><br><span class="line">        <span class="function"><span class="keyword">def</span> <span class="title">greet</span></span>(name:<span class="type">String</span>)(<span class="keyword">implicit</span> prompt: <span class="type">String</span>) &#123;</span><br><span class="line">            println(<span class="string">&quot;Welcome, &quot;</span> + name + <span class="string">&quot;. The System is ready.&quot;</span>)</span><br><span class="line">            println(prompt)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">main</span></span>(args: <span class="type">Array</span>[<span class="type">String</span>]) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">implicit</span> <span class="keyword">val</span> prompt = <span class="string">&quot;&gt;&quot;</span></span><br><span class="line"></span><br><span class="line">        <span class="type">Greeter</span>.greet(<span class="string">&quot;admin&quot;</span>)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</div><div class="article-licensing box"><div class="licensing-title"><p>Scala之隐式转换</p><p><a href="https://laurence.enlightgram.com/scala/scala-implicit-conversions/">https://laurence.enlightgram.com/scala/scala-implicit-conversions/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2016-03-12</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Scala/">Scala</a><a class="link-muted mr-2" rel="tag" href="/tags/%E9%9A%90%E5%BC%8F%E8%BD%AC%E6%8D%A2/">隐式转换</a><a class="link-muted mr-2" rel="tag" href="/tags/%E7%B1%BB%E5%9E%8B%E7%B1%BB/">类型类</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/scala/type-class-vs-bridge-pattern/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">类型类 V.S. 桥接模式：撞衫不可怕，谁丑谁尴尬</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/linux/linux-read-only-file-system/"><span class="level-item">Linux出现Read-only file system错误的解决方法</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#概述"><span class="level-left"><span class="level-item">概述</span></span></a></li><li><a class="level is-mobile" href="#语法"><span class="level-left"><span class="level-item">语法</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#“implict-def”形式的隐式转换"><span class="level-left"><span class="level-item">“implict def”形式的隐式转换</span></span></a></li><li><a class="level is-mobile" href="#“隐式类”形式的隐式转换"><span class="level-left"><span class="level-item">“隐式类”形式的隐式转换</span></span></a></li></ul></li><li><a class="level is-mobile" href="#应用场景"><span class="level-left"><span class="level-item">应用场景</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#转换成预期类型"><span class="level-left"><span class="level-item">转换成预期类型</span></span></a></li><li><a class="level is-mobile" href="#类型增强与扩展"><span class="level-left"><span class="level-item">类型增强与扩展</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#案例一：ArrayOps对Array的类型增强"><span class="level-left"><span class="level-item">案例一：ArrayOps对Array的类型增强</span></span></a></li></ul></li><li><a class="level is-mobile" href="#模拟新的语法"><span class="level-left"><span class="level-item">模拟新的语法</span></span></a></li><li><a class="level is-mobile" href="#类型类"><span class="level-left"><span class="level-item">类型类</span></span></a></li></ul></li><li><a class="level is-mobile" href="#隐式解析的搜索范围"><span class="level-left"><span class="level-item">隐式解析的搜索范围</span></span></a></li><li><a class="level is-mobile" href="#隐式参数"><span class="level-left"><span class="level-item">隐式参数</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

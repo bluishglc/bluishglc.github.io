@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>领域驱动设计：理念，架构和若干重要细节（draft） - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="绪论: 三点:软件开发的方法论,讨论系统分层的必要性,提出构建领域模型的重要性;讨论OO技术是构建领域模型的主角; 争论： 面向对象 还是面向数据？一个 企业级应用的 系统架构 是应该面向对象还是面向数据的争论由来已久，并且从未停止过．这是一个非常尖锐且很难抉择的问题．产生这一问题的根源就在于当前企业级应用所依赖的数据库几乎无一例外的都是关系型数据库，关系型数据已经盛行了很多年，它也确实．．．．但"><meta property="og:type" content="article"><meta property="og:title" content="领域驱动设计：理念，架构和若干重要细节（draft）"><meta property="og:url" content="https://laurence.enlightgram.com/architecture/ddd-concepts-and-architecture-draft/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="绪论: 三点:软件开发的方法论,讨论系统分层的必要性,提出构建领域模型的重要性;讨论OO技术是构建领域模型的主角; 争论： 面向对象 还是面向数据？一个 企业级应用的 系统架构 是应该面向对象还是面向数据的争论由来已久，并且从未停止过．这是一个非常尖锐且很难抉择的问题．产生这一问题的根源就在于当前企业级应用所依赖的数据库几乎无一例外的都是关系型数据库，关系型数据已经盛行了很多年，它也确实．．．．但"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/profile/thumbnail.png"><meta property="article:published_time" content="2009-10-17T06:28:00.000Z"><meta property="article:modified_time" content="2026-11-06T02:21:32.586Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Hibernate"><meta property="article:tag" content="领域模型"><meta property="article:tag" content="IoC"><meta property="article:tag" content="数据库"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/profile/thumbnail.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/architecture/ddd-concepts-and-architecture-draft/"},"headline":"领域驱动设计：理念，架构和若干重要细节（draft）","image":["https://laurence.enlightgram.com/images/profile/thumbnail.png"],"datePublished":"2009-10-17T06:28:00.000Z","dateModified":"2026-11-06T02:21:32.586Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"绪论: 三点:软件开发的方法论,讨论系统分层的必要性,提出构建领域模型的重要性;讨论OO技术是构建领域模型的主角; 争论： 面向对象 还是面向数据？一个 企业级应用的 系统架构 是应该面向对象还是面向数据的争论由来已久，并且从未停止过．这是一个非常尖锐且很难抉择的问题．产生这一问题的根源就在于当前企业级应用所依赖的数据库几乎无一例外的都是关系型数据库，关系型数据已经盛行了很多年，它也确实．．．．但"}</script><link rel="canonical" href="https://laurence.enlightgram.com/architecture/ddd-concepts-and-architecture-draft/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">领域驱动设计：理念，架构和若干重要细节（draft）</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Architecture/">Architecture</a></span><span class="level-item">发表于：<time dateTime="2009-10-17T06:28:00.000Z" title="2009-10-16 23:28:00">2009-10-16</time></span><span class="level-item">阅读用时：18 分钟 (约 2644 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>绪论:</p>
+<p>三点:软件开发的方法论,讨论系统分层的必要性,提出构建领域模型的重要性;讨论OO技术是构建领域模型的主角;</p>
+<p>争论： 面向对象 还是面向数据？一个</p>
+<p>企业级应用的 系统架构 是应该面向对象还是面向数据的争论由来已久，并且从未停止过．这是一个非常尖锐且很难抉择的问题．产生这一问题的根源就在于当前企业级应用所依赖的数据库几乎无一例外的都是关系型数据库，关系型数据已经盛行了很多年，它也确实．．．．但是后来随着面向对象技术的兴起，人们意识到面向对象技术在解决复杂业务问题上有着无可比拟的优势．这又驱使人们试图通过oo技术构建一个领域模型来处理业务逻辑．然后面向对象的领域模型和面向关系的数据模型天生存在着巨大的差异，这种差异使得企业级应用中构建领域模型变得</p>
+<p>在基于企业级应用必须依赖于关系数据库的前提下，人们并没有放弃通过OO技术构建领域模型的尝试，随着这方面的理论不断地成熟，具有实际可操作性的设计模式被总结并加以应用，人们逐渐地总结出了一整套将对象模型映射成关系模型的理论和方法，并产生了很多优秀的 ORM 框架，从而在关系模型和领域模型之间构建起一座桥梁，让开发人员得以通过OO技术来解决复杂的领域问题．</p>
+<p>客观地讲，当今的企业级应用的主流依然是以面向数据为主．</p>
+<p>我们无意要在这里比较孰优孰略，但是一般而言，对于那些数据量巨大，性能要求较高的系统，面向数据的架构要更好一些，而对于业务逻辑复杂，需求变动频繁的系统，面向领域的架构会更加适合．当然，正所谓技高人胆大，想要做到鱼和熊掌兼得，也不是不可能的．如何权衡整体的得失做出全局性的决策，让系统的综合性能达到最高，是一名架构师安身立命的核心技能之一．</p>
+<p>1.领域模型:重中之重</p>
+<p>从mvc谈起,涉及CC中关于软件复杂度管理的论述.</p>
+<p>若干处来,MVC之所以成为一种广泛应的经久不衰的架构模式,根本原因在于它对一个软件系统做了合理的划分</p>
+<p>自…以来,人 类 之所以能够完成各种宏大的工程,无不在应用这样一条放之四海而皆准的原则:将复杂任务分解为多个简单的子任务!也就是”关住点分离”.MVC便是这一恩想下的典型架构</p>
+<p>2.领域模型中的重要元素：</p>
+<p><em><strong>Entities</strong></em> </p>
+<p><em><strong>Value Objects</strong></em> </p>
+<p><em><strong>Aggregates</strong></em> </p>
+<p><em><strong>Domain Events</strong></em> </p>
+<p>2.ORM不能回避的现实问题</p>
+<p>在构建领域模型时，ORM确实是非常非常重要的一环．而且这一环也非常复杂，包括类继承体系与数据库的映射，抓取策略和缓存管理在内的一系列问题都是非常棘手的．即使我们现在已经有了像Hibernate这样优秀成熟的ORM框架，开发人员依然必须对ORM的原理和内部机制有深入地了解才能完成这一工作．否则领域模型很可能会受到数据库关系模型的＂污染＂进而被＂同化＂，或者更常见的情况是因为糟糕的映射导致系统性能严重下降．讲到这里想说句题外话．笔者认识很多从事企业级应用开发的朋友，他们中有很多学习和使用Hibernate已经有三四年了，但是自觉依然不得要领，他们在项目中总是固定使用Hibernate中的＂一小部分＂功能，对一些所谓的＂高级＂机制从为涉及过，而且也找不适用的场合．这说明他们过去参与过的项目并没有构建过直正的领域模型．如果我们从领域模型的角度出发去思考对象应该如何从数据库中重建出来，我们就会发现我们会面临很多＂必须＂面对的问题，当你带着这些问题去学习一个ORM框架时，你会惊奇地发现，你所想到过的这些问题框架都给出了解决方案．学习ORM框架，必须要有面向对象方面的设计思想作为背景，总是从领域模型出发思考如何映射到数据库，如何从数据库中加载出对象才能领悟ORM框架的真实用意．</p>
+<p>阻抗失配</p>
+<p>关于性能的考量;可选方案.</p>
+<p>3.IOC&amp;AOP:重要的补充</p>
+<p>虽然人们将IOC视为一种设计模式,但由于IOC所解决的问题几乎是所有OO系统都会遇到的,也可以说是OO技术本身在对象创建方面的缺失或者说是天生不足,这才导致IOC变得如此必须.,显然,IOC有着超越一般设计模式的重要地位,</p>
+<p>如同rod jonason所赞叹:”再怎么赞扬IOC的好处都不为过!”,IOC对于OO来说,就如同</p>
+<p>4.团队管理和工作流程</p>
+<p>5.应用领域驱动设计的面临的巨大挑战</p>
+<p>面向数据还是面向领域?这是个问题!</p>
+<p>为什么有如此之多的系统是面向数据而不是面向领域的?</p>
+<p>DDD一书中引入的独创性概念中，Aggregation是非常重要的一个．这个概念在此之前从末被提出过，它对进一步合理细分领域模型提供了非常好的理论依据．划分Aggregation是对领域模型的进一步深化，Aggregation能阐释领域模型内部对象之间的深层关联．对Aggregation的划分会直接映射到程序结构上．比如：ＤＤＤ推荐按Aggregation设计model的子包．每个Aggregation配备一个Repository.Aggregation内部的非root对象是通过导航获得的．等等．</p>
+<p>若干重要细节：</p>
+<p>1.如何建立完整，自封闭的领域模型。举例：user.subscribe()和user.post(Message reply)</p>
+<p>所有的外部请求到达应用层后，应用层知道如何把外部请求转换成驱动模型运转的指令，模型根据指令运转到达结果状态，外部视图选取模型中用户关心的部分呈现出来。</p>
+<p>2.如何建模领域服务。</p>
+<p>3.关于领域对象的依赖注入</p>
+<p>参考：AspectJ in Action</p>
+<p><a target="_blank" rel="noopener" href="http://www.infoq.com/news/2008/02/ddd-di-aop">http://www.infoq.com/news/2008/02/ddd-di-aop</a> </p>
+<p>Spring 参考文档：6.8.1. Using AspectJ to dependency inject domain objects with Spring</p>
+<p>4.Repository VS. DAO</p>
+<p>Repository：位于领域层，面向Aggregation Root。</p>
+<p>DAO:是面向数据访问的，不再需要。在领域领域驱动的项目中，去除DAO，淡化数据访问的概念，使用更加OO的Repository来替代。</p>
+<p>5.关于领域对象和领域服务以及Repository之间的互相依赖问题。</p>
+<p>当领域对象所需要的数据需要通过查询得到时应该怎么办？</p>
+<p>1.通过为领域对象注入Repository来实现。</p>
+<p>2.通过异步消息机制+Domain Event的形式来实现</p>
+<p>考虑核心问题：领域对象可不可以依赖Repository?</p>
+<p>一种声音：有个感觉是无论是DAO或者是Resposity，都是domain logic里的噪声。如果Domain logic也能透明的调用DAO或Respoisty，这样的domain模型会更完美，而且更关注业务。</p>
+<p>这么说来repository只用来取root？从概念上讲不错，可是要知道往往一个root下面会有成百上千个node，这么巨大的一坨关系树我们用repository取出来然后在“关系之间游走”…是否有点滑稽？呃…或许我们能想到引入延迟加载，取出来的root下的二级node都用stub来占位；不过这又为污染我们纯洁的领域模型创造了良机…</p>
+<p>我们常说的“领域模型”是一个分析模型，是对领域问题的整体表述，决不是编程的实现模型，一个领域概念不一定会隐射成一个类，有可能要映射很多的类。同样，我们的实现模型也有很多领域模型不设计或不关心的东西，像领域对象的crud，等。这对我们是一个启示，在从领域模型到实现模型的隐射过程中，我们要明白它们各自的本质。这对实现模型的组织结构也有一定的借鉴意义。</p>
+<p>“领域模型”是一个针对业务逻辑抽象的模型，是一组概念的集合，和软件编程并无关系。</p>
+<p>Repository的角色和Factory有些类似，它是一种编程层面上的Artifact，并无业务意义。对于它在架构中的位置，可能放在Model里会好些。就像是Factory总是伴随它的产品在一起一样。</p>
+<p>架构：</p>
+<p>1.包结构：</p>
+<p>领域层应该按业务逻辑相关性（即aggregation）来组织。</p>
+<p>应用层面向外部应用，不应该使用领域层的分割模式。展现层同样如此。</p>
+<p>关于领域层的各对象：</p>
+<p>领域对象和领域服务是领域模型的主体，地位相当，应等同对待。</p>
+<p>Repository和Factory一样，属于设计和实现层面的衍生产物，在领域模型中没无对应概念，但是确实应该置于领域层！</p>
+<p>DDDSample中把一些依赖具体框架的实现类划分到infrastructure包的做法，并不是一个好的做法。这分法试图突出领域层的“纯粹性”，但是，我们要明确，领域模型并不是领域层，领域层是领域模型的编程实现，既然是“实现”，那些具体类是不可避免的。它们是“实现模型”的重要组成部分！如果隔离到nfrastructure包，反而在包结构上让它与它们的实现类产生较大的距离，这种包结构好不到哪里去。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>领域驱动设计：理念，架构和若干重要细节（draft）</p><p><a href="https://laurence.enlightgram.com/architecture/ddd-concepts-and-architecture-draft/">https://laurence.enlightgram.com/architecture/ddd-concepts-and-architecture-draft/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2009-10-16</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Hibernate/">Hibernate</a><a class="link-muted mr-2" rel="tag" href="/tags/%E9%A2%86%E5%9F%9F%E6%A8%A1%E5%9E%8B/">领域模型</a><a class="link-muted mr-2" rel="tag" href="/tags/IoC/">IoC</a><a class="link-muted mr-2" rel="tag" href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/architecture/are-repositories-domain-model-objects/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Are Repositories Domain Model Objects?</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/architecture/note-architecture-and-oo/"><span class="level-item">NOTE:Architecture and OO</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><!--!--></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

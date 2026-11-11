@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>C++ 共享指针“循环依赖”问题深度剖析 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="C++ 共享指针的循环依赖是一个众所周知的问题，但是很少文章会细致地解释发生循环依赖的原因，以及引入弱指针可以解锁循环依赖的原因。本文会把问题发生和解决的全过程介绍清楚。阅读本文需要对 C++ 的堆、栈运行方式、对象创建与析构有全面和深入的了解，如有需要可先阅读 《编程底层概念回顾：虚拟内存、栈、栈帧、堆》 和 《C++ 对象和嵌套对象的创建与销毁》 两篇文章。 循环依赖是如何发生的? 下图是一个"><meta property="og:type" content="article"><meta property="og:title" content="C++ 共享指针“循环依赖”问题深度剖析"><meta property="og:url" content="https://laurence.enlightgram.com/cpp/cpp-shared-ptr-cycles/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="C++ 共享指针的循环依赖是一个众所周知的问题，但是很少文章会细致地解释发生循环依赖的原因，以及引入弱指针可以解锁循环依赖的原因。本文会把问题发生和解决的全过程介绍清楚。阅读本文需要对 C++ 的堆、栈运行方式、对象创建与析构有全面和深入的了解，如有需要可先阅读 《编程底层概念回顾：虚拟内存、栈、栈帧、堆》 和 《C++ 对象和嵌套对象的创建与销毁》 两篇文章。 循环依赖是如何发生的? 下图是一个"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/cpp/cpp-shared-ptr-cycles/1.jpeg"><meta property="article:published_time" content="2026-08-28T20:21:52.000Z"><meta property="article:modified_time" content="2026-11-11T02:50:16.299Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="C++"><meta property="article:tag" content="共享指针"><meta property="article:tag" content="循环引用"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/cpp/cpp-shared-ptr-cycles/1.jpeg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/cpp/cpp-shared-ptr-cycles/"},"headline":"C++ 共享指针“循环依赖”问题深度剖析","image":["https://laurence.enlightgram.com/images/cpp/cpp-shared-ptr-cycles/1.jpeg"],"datePublished":"2026-08-28T20:21:52.000Z","dateModified":"2026-11-11T02:50:16.299Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"C++ 共享指针的循环依赖是一个众所周知的问题，但是很少文章会细致地解释发生循环依赖的原因，以及引入弱指针可以解锁循环依赖的原因。本文会把问题发生和解决的全过程介绍清楚。阅读本文需要对 C++ 的堆、栈运行方式、对象创建与析构有全面和深入的了解，如有需要可先阅读 《编程底层概念回顾：虚拟内存、栈、栈帧、堆》 和 《C++ 对象和嵌套对象的创建与销毁》 两篇文章。 循环依赖是如何发生的? 下图是一个"}</script><link rel="canonical" href="https://laurence.enlightgram.com/cpp/cpp-shared-ptr-cycles/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">C++ 共享指针“循环依赖”问题深度剖析</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/cpp/">C++</a></span><span class="level-item">发表于：<time dateTime="2026-08-28T20:21:52.000Z" title="2026-08-28 13:21:52">2026-08-28</time></span><span class="level-item">阅读用时：25 分钟 (约 3745 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/cpp/cpp-shared-ptr-cycles/1.jpeg" alt="C++ 共享指针“循环依赖”问题深度剖析" fetchpriority="high"></figure><div class="content"><p>C++ 共享指针的循环依赖是一个众所周知的问题，但是很少文章会细致地解释发生循环依赖的原因，以及引入弱指针可以解锁循环依赖的原因。本文会把问题发生和解决的全过程介绍清楚。阅读本文需要对 C++ 的堆、栈运行方式、对象创建与析构有全面和深入的了解，如有需要可先阅读 <a href="/cpp/virtual-memory-stack-frame-heap/">《编程底层概念回顾：虚拟内存、栈、栈帧、堆》</a> 和 <a href="/cpp/cpp-nested-object-lifecycle/">《C++ 对象和嵌套对象的创建与销毁》</a> 两篇文章。</p>
+<h2 id="1-循环依赖是如何发生的"><a href="#1-循环依赖是如何发生的" class="headerlink" title="1. 循环依赖是如何发生的?"></a>1. 循环依赖是如何发生的?</h2><p>下图是一个循环依赖发生时的“现场”，它有很强的代表性。但我们现在不会立即解释它。我们先看一段 示例代码 ，然后分析代码中的每一步操作，中途就会遇到下面的状况，我们会在那里详细解释。</p>
+<p> <img src="/../../images/cpp/cpp-shared-ptr-cycles/2.png"></p>
+<p>下面是将要讲解的示例代码：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;memory&gt;</span>  <span class="comment">// 包含shared_ptr/weak_ptr头文件</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> std;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 前向声明：A需要知道B的存在，B需要知道A的存在</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">B</span>;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">A</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">A</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="type">int</span> v;</span><br><span class="line">    shared_ptr&lt;B&gt; b;  <span class="comment">// A持有B的shared_ptr</span></span><br><span class="line">    <span class="built_in">A</span>(<span class="type">int</span> val) : <span class="built_in">v</span>(val) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;A 构造函数：堆上创建A对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">A</span>() &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;A 析构函数：堆上销毁A对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">B</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="type">int</span> v;</span><br><span class="line">    shared_ptr&lt;A&gt; a;  <span class="comment">// B持有A的shared_ptr</span></span><br><span class="line">    <span class="built_in">B</span>(<span class="type">int</span> val) : <span class="built_in">v</span>(val) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;B 构造函数：堆上创建B对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">B</span>() &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;B 析构函数：堆上销毁B对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 栈上创建两个shared_ptr智能指针对象，指向堆上的A、B实例</span></span><br><span class="line">    shared_ptr&lt;A&gt; ptrA = <span class="built_in">make_shared</span>&lt;A&gt;(<span class="number">10</span>);</span><br><span class="line">    shared_ptr&lt;B&gt; ptrB = <span class="built_in">make_shared</span>&lt;B&gt;(<span class="number">20</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 建立循环引用：A的b指向B，B的a指向A</span></span><br><span class="line">    ptrA-&gt;b = ptrB;</span><br><span class="line">    ptrB-&gt;a = ptrA;</span><br><span class="line"></span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;main函数结束前：ptrA引用计数 = &quot;</span> &lt;&lt; ptrA.<span class="built_in">use_count</span>() &lt;&lt; endl;</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;main函数结束前：ptrB引用计数 = &quot;</span> &lt;&lt; ptrB.<span class="built_in">use_count</span>() &lt;&lt; endl;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们来细致的分析一下为什么上面的代码会出现“循环依赖”，这个分析过程并不浅显易懂，需要提前储备好堆、栈以及 C++ 对象创建与销毁的知识。在拆解详细步骤前，我们一定要保持头脑情形，有一个大的逻辑框架不可以混淆： <strong>程序将要创建的 <code>A(10)</code> 和 <code>shared_ptr&lt;A&gt; ptrA</code> 是两个“对象”， <code>A(10)</code> 创建在堆上， <code>ptrA</code> 则是创建在栈上的</strong> 。 <code>A(10)</code> 是一个普通对象，与智能指针的任何机制无关，也感知不到智能指针的存在，是 <code>shared_ptr&lt;A&gt; ptrA</code> 这个“智能指针对象（实例）”负责维护一个指向 <code>A(10)</code> 的指针，并创建控制块，再维持一个指向控制块的指针。下面是 main 方法的执行细节：</p>
+<p><strong>步骤 (1)：执行 <code>shared_ptr&lt;A&gt; ptrA</code> （第36行）</strong> </p>
+<p>先声明变量 ptrA （不是初始化），在栈上为 ptrA 这个 shared_ptr 对象本身分配 内存 ，大小是 2 个指针：一个指向 A 对象的裸指针，一个指向控制块的裸指针，此时 ptrA 是 “空的”，它内部两个指针均为 nullptr，无任何堆内存关联</p>
+<p><strong>步骤 (2)：执行 <code>shared_ptr&lt;B&gt; ptrB</code> （第37行）</strong> </p>
+<p>继续声明变量 ptrB，动作同上。注意：ptrB 的声明（在栈上分配内存空间）是先于 <code>make_shared&lt;A&gt;(10)</code> 的，因为： <strong>C++ 语言规则要求：变量的内存分配（声明）必须先于对它的任何赋值 &#x2F; 初始化操作</strong> </p>
+<p><strong>步骤 (3)：执行 <code>...(10)</code> （第36行）</strong> </p>
+<p>准备 <code>make_shared&lt;A&gt;(10)</code> 的入参 <code>10</code> ，在栈上创建一个临时的 int 变量，值为 10，该临时变量会被传递给 make_shared 内部调用的 A 构造函数，构造完成后立即销毁（无副作用）。入参的临时存储是栈上行为，属于 make_shared 调用的前置准备。</p>
+<p><strong>步骤 (4)：执行 <code>make_shared&lt;A&gt;(10)</code> （第36行）</strong> </p>
+<p>make_shared 是一个模板函数，内部完成 “堆内存分配 + 对象构造 + 临时智能指针创建”，有6个子步骤：</p>
+<ol>
+<li><p><strong>计算总内存大小</strong> </p>
+<ul>
+<li>计算需要分配的堆内存总大小 &#x3D; <code>sizeof(A)</code> （A对象自身：int v + shared_ptr <strong>b） + <code>sizeof(ControlBlock)</code> （控制块）。</strong></li>
+</ul>
+</li>
+<li><p><strong>分配连续堆内存</strong> </p>
+<ul>
+<li><p>内存位置：堆上；</p>
+</li>
+<li><p>调用 <code>operator new</code> 分配一块连续的堆内存（大小&#x3D;子步骤1的总大小），返回这块内存的起始裸指针。</p>
+</li>
+</ul>
+</li>
+<li><p><strong>构造 A 对象</strong> </p>
+<ul>
+<li><p>内存位置：堆上（连续内存的前半段）；</p>
+</li>
+<li><p>调用 new（ <code>new (堆内存起始地址) A(10)</code> ）：</p>
+<ul>
+<li><p>将“步骤 3”的临时参数 <code>10</code> 传给 <code>A</code> 的构造函数；</p>
+</li>
+<li><p>初始化 A 对象的成员： <code>v=10</code> ， <code>shared_ptr&lt;B&gt; b</code> 为空（默认构造）；</p>
+</li>
+<li><p>输出 “A 构造函数”（如果构造函数有打印逻辑）。</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>初始化控制块</strong> </p>
+<ul>
+<li><p>内存位置：堆上（连续内存的后半段）；</p>
+</li>
+<li><p>在 A 对象内存的后续地址，构造控制块：</p>
+<ul>
+<li><p>引用计数 <code>ref_count</code> 初始化为 1；</p>
+</li>
+<li><p>弱引用计数 <code>weak_ref_count</code> 初始化为 0；</p>
+</li>
+<li><p>绑定 A 对象的析构器（用于后续释放 A 对象）。</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>创建临时 shared_ptr</strong> </p>
+<ul>
+<li><p>内存位置：栈上（make_shared 函数栈帧内）；</p>
+</li>
+<li><p>在 <code>make_shared</code> 函数的栈帧内，创建一个临时的 <code>shared_ptr&lt;A&gt;</code> 对象：</p>
+<ul>
+<li><p>临时对象的“指向A对象的指针” &#x3D; 堆上A对象的起始地址；</p>
+</li>
+<li><p>临时对象的“指向控制块的指针” &#x3D; 堆上控制块的起始地址。</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>返回临时对象</strong> </p>
+<ul>
+<li><code>make_shared</code> 函数执行完毕，将临时的 <code>shared_ptr&lt;A&gt;</code> 对象返回给外层（用于赋值给 ptrA）。</li>
+</ul>
+</li>
+</ol>
+<p>备注：在上述操作中，若共享指针是使用构造函数创建的（ <code>shared_ptr&lt;A&gt; ptrA(new A(10))</code> )，则控制块的内存分配和初始化工作是在它的构造函数中完成的。</p>
+<p><strong>步骤 (5)：执行 <code>... = ...</code> （第36行）</strong> </p>
+<p>将 <code>make_shared</code> 返回的临时 <code>shared_ptr&lt;A&gt;</code> 对象赋值给 ptrA（栈上指针拷贝）：</p>
+<ul>
+<li><p>make_shared 返回的临时 <code>shared_ptr&lt;A&gt;</code> 对象，将其内部的两个指针（指向 A 对象、指向控制块）拷贝到步骤 1 创建的 ptrA 栈内存中；</p>
+</li>
+<li><p>拷贝完成后，make_shared 内部的临时 <code>shared_ptr&lt;A&gt;</code> 对象析构（但引用计数会先 + 1 再 - 1，最终仍为 1）；</p>
+</li>
+</ul>
+<p><strong>步骤 (6)：执行 <code>shared_ptr&lt;B&gt; ptrB = make_shared&lt;B&gt;(20)</code> （第37行）</strong> </p>
+<p>重复 步骤 (3) 和 步骤 (4)，得到 ptrB。</p>
+<p><strong>※ 当前堆栈分析 ※</strong> </p>
+<p>在进入循环依赖前，我们看一下堆和栈上的情况以及引用关系：</p>
+<p> <img src="/../../images/cpp/cpp-shared-ptr-cycles/3.png"></p>
+<p>其中实线箭头是智能指针对目标对象的指向关系，虚线箭头是智能指针对控制块的指向关系</p>
+<p><strong>步骤 (7)：执行 <code>ptrA-&gt;b = ptrB</code> （第40行）</strong> </p>
+<p>将 <code>ptrB</code> 赋给 <code>A(10)</code> 对象的成员变量 <code>b</code> ，注意：这里是很容易搞混的地方： <strong><code>b</code> 是 <code>A</code> 对象的成员变量，不是 <code>ptrA</code> 的</strong> ，是 <code>shared_ptr</code> 重写了成员访问运算符 <code>-&gt;</code> 把访问行为“重定向”到它所指的对象上。第二个要注意的地方是这个赋值操作，它使用的不是 编译器 自动生成的赋值运算符，而是 shared_ptr 自己实现的赋值运算符，它除了会复制 shared_ptr 内部两个分别指向目标对象和控制块的成员指针，还有 <strong>一个关键性动作：要将 A 控制块中的引用计数 <code>+1</code></strong> 。</p>
+<p><strong>步骤 (8)：执行 <code>ptrB-&gt;a = ptrA</code> （第41行）</strong> </p>
+<p>动作内容同上。至此，循环依赖已形成。</p>
+<p><strong>※ 当前堆栈分析 ※</strong> </p>
+<p>我们来看一下现在的堆栈状况：</p>
+<p> <img src="/../../images/cpp/cpp-shared-ptr-cycles/2.png"></p>
+<p><strong>步骤 (9)：离开 main 函数（第47行）</strong> </p>
+<p>在 main 函数返回前，会自动销毁栈上的局部变量，也就是 <code>ptrA</code> 和 <code>ptrB</code> ，由于它们是分配在栈上的“对象”，C++ 会保证在销毁时自动调用它们的析构函数， <strong><code>shared_ptr</code> 的析构函数有两项关键操作：</strong> </p>
+<ul>
+<li><p><strong>先将引用计数 -1，确保一个智能指针的实例被销毁前，引用计数得到相应的更新。</strong></p>
+</li>
+<li><p><strong>再检查 -1 后的引用计数是否已归 <code>0</code> ，如果是，表明当前的智能指针实例是最后一个指向目标对象的实例了，这时会调用其目标对象（这里是 <code>A(10)</code> ) 的析构函数，然后再 delete 掉目标对象，完成目标对象的销毁操作。但这没有在 <code>ptrB</code> 的析构函数中发生，因为当 <code>B(20)</code> 对象的引用计数 -1 后从 <code>2</code> 变成了 <code>1</code> ，还有 <code>A(10)</code> 对象中的智能指针 <code>b</code> 在指向着 <code>B(20)</code> 对象</strong></p>
+</li>
+</ul>
+<p>同样的事情也会发生在 <code>ptrA</code> 析构时发生，当 A(10) 对象的引用计数 -1 后从 <code>2</code> 变成了 <code>1</code> ，还有 B(20) 对象中的智能指针 <code>a</code> 在指向着 <code>A(10)</code> 对象**。</p>
+<p><strong>※ 当前堆栈分析 ※</strong> </p>
+<p>在 main 函数返回前，销毁了栈上的 <code>ptrA</code> 和 <code>ptrB</code> 后，当前的堆栈情况如下：</p>
+<p> <img src="/../../images/cpp/cpp-shared-ptr-cycles/4.png"></p>
+<p>这是 <strong>循环依赖发生后的必然结果：内存泄漏</strong> ：A 对象、A 控制块、B 对象、B 控制块都伴随着栈上 <code>ptrA</code> 和 <code>ptrB</code> 的销毁，而再也没有“活”的指针指向它们了，它们在堆上成了“黑户”。循环引用下，A&#x2F;B 互相持有对方的 shared_ptr，导致引用计数无法降到 0，堆对象析构函数得不到执行，引发内存泄漏。</p>
+<p>最后，我们再用简化的语言描述一下循环依赖发生的过程：</p>
+<ul>
+<li><p><code>ptrA</code> 销毁 🠚 试图销毁 <code>A(10)</code> 🠚 <code>A(10)</code> 被 <code>B(20)</code> 里面的另一个智能指针指向着 🠚 <strong>不能销毁</strong> <code>A(10)</code></p>
+</li>
+<li><p><code>ptrB</code> 销毁 🠚 试图销毁 <code>B(20)</code> 🠚 <code>B(20)</code> 被 <code>A(10)</code> 里面的另一个智能指针指向着 🠚 <strong>不能销毁</strong> <code>B(20)</code></p>
+</li>
+<li><p><code>ptrA</code> 和 <code>ptrB</code> 没能销毁它们各自指向的对象，但它们自己因离开了作用域被自动销毁，再无指向 <code>A(10)</code> 和 <code>B(20)</code> 指针，它们永远地错过了最后一次销毁的机会。</p>
+</li>
+</ul>
+<p>上述表述所说的 <strong>不能销毁目标对象是在智能指针运作机制下的“不能”，就是因为“引用计数无法归 0”而导致的“不能”！不是什么物理上的限制，而是在智能指针设计的“逻辑框架”下发生的“逻辑死锁”</strong> 。</p>
+<h2 id="2-循环依赖是如何被打破的"><a href="#2-循环依赖是如何被打破的" class="headerlink" title="2. 循环依赖是如何被打破的?"></a>2. 循环依赖是如何被打破的?</h2><p>如刚刚所说，我们的问题是“在智能指针的运作机制下”暴露的，也还得是“在智能指针的运作机制下”去解决，既然循环依赖的根本原因是“引用计数无法归 0”，那我们要想的应对措施应该是：在建立 A&#x2F;B 两个对象通过智能指针相互指向对方的过程中“弱化”其中一方的“所有权”，避免其中一方的引用计数加 +1，这样就不会发生“逻辑死锁”了。这就是弱指针 weak_ptr 的“特性”，我们还是通过例子来解释。我们把前面的循环依赖示例用弱指针改写一下，看看循环依赖是怎么被“打破”的：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;memory&gt;</span>  </span></span><br><span class="line"></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> std;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 前向声明：A需要知道B的存在，B需要知道A的存在</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">B</span>;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">A</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">A</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="type">int</span> v;</span><br><span class="line">    shared_ptr&lt;B&gt; b;  <span class="comment">// A仍持有B的强引用（也可反过来改，选其一即可）</span></span><br><span class="line">    <span class="built_in">A</span>(<span class="type">int</span> val) : <span class="built_in">v</span>(val) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;A 构造函数：堆上创建A对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">A</span>() &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;A 析构函数：堆上销毁A对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">B</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="type">int</span> v;</span><br><span class="line">    weak_ptr&lt;A&gt; a;  <span class="comment">// 关键修改：将shared_ptr&lt;A&gt;改为weak_ptr&lt;A&gt;</span></span><br><span class="line">    <span class="built_in">B</span>(<span class="type">int</span> val) : <span class="built_in">v</span>(val) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;B 构造函数：堆上创建B对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">B</span>() &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;B 析构函数：堆上销毁B对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 栈上创建两个shared_ptr智能指针对象，指向堆上的A、B实例</span></span><br><span class="line">    shared_ptr&lt;A&gt; ptrA = <span class="built_in">make_shared</span>&lt;A&gt;(<span class="number">10</span>);</span><br><span class="line">    shared_ptr&lt;B&gt; ptrB = <span class="built_in">make_shared</span>&lt;B&gt;(<span class="number">20</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 建立引用：A的b指向B（强引用），B的a指向A（弱引用）</span></span><br><span class="line">    ptrA-&gt;b = ptrB;</span><br><span class="line">    ptrB-&gt;a = ptrA;</span><br><span class="line"></span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;main函数结束前：ptrA强引用计数 = &quot;</span> &lt;&lt; ptrA.<span class="built_in">use_count</span>() &lt;&lt; endl;</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;main函数结束前：ptrB强引用计数 = &quot;</span> &lt;&lt; ptrB.<span class="built_in">use_count</span>() &lt;&lt; endl;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>第一阶段：建立双向指向关系</strong> </p>
+<p>在 main 函数执行完 41 行 <code>ptrB-&gt;a = ptrA</code> 时，前面发生的事情与第一节描述的步骤 (1) - (6) 基本上是一样的，除了使用 weak_ptr 带来一些差异，基本流程没有大的差别，下面是完成了 A&#x2F;B 对象通过智能指针相互引用对方后，在栈和堆上状况：</p>
+<p> <img src="/../../images/cpp/cpp-shared-ptr-cycles/5.png"></p>
+<p>由于我们在 B 对象中使用了弱指针 <code>weak_ptr&lt;A&gt; a</code> 来指向 A 对象，这使用 A 控制块与第一节 发生循环依赖时的状态有明细的“差别”：A 对象当前的强引用只是 <code>1</code> ，是栈上的 ptrA 在指向它，而 A 对象当前的弱引用也是 <code>1</code> ，是 B 对象中的 <code>a</code> 在指向它。</p>
+<p><strong>第二阶段：销毁其中一个智能指针</strong> </p>
+<p>然后我们看 main 函数执行完准备返回时的操作，此时需要按变量声明次序的逆序逐一销毁栈上的变量，所以是 <code>ptrB</code> 首先销毁，在它销毁时 C++ 会自动调用它的析构函数，在执行它的析构函数时会 B 控制块的强引用计数 -1，从 2 变成了 1（图中紫色部分）， <strong>此时，由于强引用计数尚未归 0，所以 B 对象还不会被销毁</strong> 。</p>
+<p> <img src="/../../images/cpp/cpp-shared-ptr-cycles/6.png"></p>
+<p><strong>第三阶段：销毁第二个智能指针</strong> </p>
+<p>销毁完 <code>ptrB</code> 就轮到 <code>ptrA</code> 了，同样地， C++ 会自动调用 <code>ptrA</code> 的析构函数，它的析构函数时会把 A 控制块的强引用计数从 1 减为 0，此时，A 对象的强引用计数已归 0（图中①），它的析构函数会进一步执行 delete 操作，销毁 A 对象，在 delete A 对象时，先执行 A 对象的析构函数，这又会让 C++ 进一步执行其对象成员（嵌套对象） <code>shared_ptr&lt;B&gt; b</code> 的析构函数（ <em>这里补充一个基础知识：一个堆上的对象如果含有一个对象成员（对象嵌套，非指针），当该对象被析构时，C++ 会保证一并执行对象成员（嵌套对象）的析构函数</em> ），执行 <code>b</code> 的析构函数就会将 B 控制块的“强引用计数”从上一阶段的 <code>1</code> 减为了 <code>0</code> ，此时，B 对象的强引用计数也已归 0（图中②），而这就又触发了 B 对象的 delete 操作，在 delete B 对象时，先执行 B 对象的析构函数，这又会让 C++ 进一步执行其对象成员（嵌套对象） <code>weak_ptr&lt;A&gt; a</code> 的析构函数，从而将 A 控制块中的弱引用计数从 1 减为了 0，此时，A 对象的弱引用计数已归 0（图中③），然后， <code>weak_ptr&lt;A&gt; a</code> 的析构完成，返回 🠚 对象 B 析构完成，释放内存，销毁完成（B 控制块也同步销毁），返回（图中 ④） 🠚 <code>shared_ptr&lt;B&gt; b</code> 析构完成 🠚 对象 A 析构完成，释放内存，销毁完成（A 控制块也同步销毁），返回（图中 ⑤）</p>
+<p> <img src="/../../images/cpp/cpp-shared-ptr-cycles/7.png"></p>
+<p>上述销毁逻辑并不复杂，只是嵌套的层级有一点深，梳理的时候要保持头脑清晰。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>C++ 共享指针“循环依赖”问题深度剖析</p><p><a href="https://laurence.enlightgram.com/cpp/cpp-shared-ptr-cycles/">https://laurence.enlightgram.com/cpp/cpp-shared-ptr-cycles/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-08-28</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/cpp/">C++</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%85%B1%E4%BA%AB%E6%8C%87%E9%92%88/">共享指针</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%BE%AA%E7%8E%AF%E5%BC%95%E7%94%A8/">循环引用</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/cpp/virtual-memory-stack-frame-heap/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">编程底层概念回顾：虚拟内存、栈、栈帧、堆</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/rust/rust-concurrency/"><span class="level-item">Rust 语言特性：多线程和并发编程</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-循环依赖是如何发生的"><span class="level-left"><span class="level-item">1. 循环依赖是如何发生的?</span></span></a></li><li><a class="level is-mobile" href="#2-循环依赖是如何被打破的"><span class="level-left"><span class="level-item">2. 循环依赖是如何被打破的?</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

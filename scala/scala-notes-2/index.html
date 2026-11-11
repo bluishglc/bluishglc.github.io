@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>SCALA学习笔记（二） - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="SCALA学习笔记（二） --- 泛型在继承中的 类 型变化 scala中的 Type Variance指的是一个类型参数（泛型）在父类和子类之间的转换！比如方法重载时！ Invariant 默认情况下类型是Invariant的，即类型参数是不允许向上或向下转型！请看下面的例子： 对于Item中的类型参数A,它是Invariant的，从Car到子类Volov的向下转型是不允许的！ Covarian"><meta property="og:type" content="article"><meta property="og:title" content="SCALA学习笔记（二）"><meta property="og:url" content="https://laurence.enlightgram.com/scala/scala-notes-2/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="SCALA学习笔记（二） --- 泛型在继承中的 类 型变化 scala中的 Type Variance指的是一个类型参数（泛型）在父类和子类之间的转换！比如方法重载时！ Invariant 默认情况下类型是Invariant的，即类型参数是不允许向上或向下转型！请看下面的例子： 对于Item中的类型参数A,它是Invariant的，从Car到子类Volov的向下转型是不允许的！ Covarian"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/scala/scala-notes-2/1.jpg"><meta property="article:published_time" content="2015-03-30T14:55:47.000Z"><meta property="article:modified_time" content="2026-11-06T02:21:33.226Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="集合"><meta property="article:tag" content="泛型"><meta property="article:tag" content="闭包"><meta property="article:tag" content="Scala"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/scala/scala-notes-2/1.jpg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/scala/scala-notes-2/"},"headline":"SCALA学习笔记（二）","image":["https://laurence.enlightgram.com/images/scala/scala-notes-2/1.jpg"],"datePublished":"2015-03-30T14:55:47.000Z","dateModified":"2026-11-06T02:21:33.226Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"SCALA学习笔记（二） --- 泛型在继承中的 类 型变化 scala中的 Type Variance指的是一个类型参数（泛型）在父类和子类之间的转换！比如方法重载时！ Invariant 默认情况下类型是Invariant的，即类型参数是不允许向上或向下转型！请看下面的例子： 对于Item中的类型参数A,它是Invariant的，从Car到子类Volov的向下转型是不允许的！ Covarian"}</script><link rel="canonical" href="https://laurence.enlightgram.com/scala/scala-notes-2/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">SCALA学习笔记（二）</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Scala/">Scala</a></span><span class="level-item">发表于：<time dateTime="2015-03-30T14:55:47.000Z" title="2015-03-30 07:55:47">2015-03-30</time></span><span class="level-item">阅读用时：23 分钟 (约 3432 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><h2 id="SCALA学习笔记（二）"><a href="#SCALA学习笔记（二）" class="headerlink" title="SCALA学习笔记（二）"></a>SCALA学习笔记（二）</h2><hr>
+<h3 id="泛型在继承中的-类-型变化"><a href="#泛型在继承中的-类-型变化" class="headerlink" title="泛型在继承中的 类 型变化"></a>泛型在继承中的 类 型变化</h3><p>scala中的 Type Variance指的是一个类型参数（泛型）在父类和子类之间的转换！比如方法重载时！</p>
+<h4 id="Invariant"><a href="#Invariant" class="headerlink" title="Invariant"></a>Invariant</h4><p>默认情况下类型是Invariant的，即类型参数是不允许向上或向下转型！请看下面的例子：</p>
+<figure class="highlight markdown"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; case class Item[<span class="string">A</span>](<span class="link">a: A</span>) &#123; def get: A = a &#125;</span><br><span class="line">defined class Item</span><br><span class="line">scala&gt; val c: Item[<span class="string">Car</span>] = new Item[<span class="string">Volvo</span>](<span class="link">new Volvo</span>)</span><br><span class="line"><span class="language-xml"><span class="tag">&lt;<span class="name">console</span>&gt;</span></span>:12: error: type mismatch;</span><br><span class="line">found : Item[Volvo]</span><br><span class="line">required: Item[Car]</span><br><span class="line">Note: Volvo &lt;: Car, but class Item is invariant in type A.</span><br><span class="line">You may wish to define A as +A instead. (SLS 4.5)</span><br><span class="line">val c: Item[<span class="string">Car</span>] = new Item[<span class="string">Volvo</span>](<span class="link">new Volvo</span>)</span><br></pre></td></tr></table></figure>
+
+<p>对于Item中的类型参数A,它是Invariant的，从Car到子类Volov的向下转型是不允许的！</p>
+<h4 id="Covariance"><a href="#Covariance" class="headerlink" title="Covariance"></a>Covariance</h4><p>允许类型参数向上转型！请看下面的例子:</p>
+<figure class="highlight markdown"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; case class Item[<span class="string">+A</span>](<span class="link">a: A</span>) &#123; def get: A = a &#125;</span><br><span class="line">defined class Item</span><br><span class="line">scala&gt; val c: Item[<span class="string">Car</span>] = new Item[<span class="string">Volvo</span>](<span class="link">new Volvo</span>)</span><br><span class="line">c: Item[Car] = Item(Volvo())</span><br><span class="line">scala&gt; val auto = c.get</span><br><span class="line">auto: Car = Volvo()</span><br></pre></td></tr></table></figure>
+
+<p>Item中的类型参数+A表示类型参数A是Covariant的，允许类型参数向上转型！所以 <code>val c: Item[Car] = new Item[Volvo](new Volvo)</code> 是合法的！</p>
+<p>注意：Scala是不允许一个Covariance类型作为方法的输入参数的！</p>
+<h4 id="Contravariance"><a href="#Contravariance" class="headerlink" title="Contravariance"></a>Contravariance</h4><p>允许类型参数向下转型！请看下面的例子:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; <span class="class"><span class="keyword">class</span> <span class="title">Car</span></span>; <span class="class"><span class="keyword">class</span> <span class="title">Volvo</span> <span class="keyword">extends</span> <span class="title">Car</span></span>; <span class="class"><span class="keyword">class</span> <span class="title">VolvoWagon</span> <span class="keyword">extends</span> <span class="title">Volvo</span></span></span><br><span class="line">defined <span class="class"><span class="keyword">class</span> <span class="title">Car</span></span></span><br><span class="line">defined <span class="class"><span class="keyword">class</span> <span class="title">Volvo</span></span></span><br><span class="line">defined <span class="class"><span class="keyword">class</span> <span class="title">VolvoWagon</span></span></span><br><span class="line">scala&gt; <span class="class"><span class="keyword">class</span> <span class="title">Item</span>[+<span class="type">A</span>](<span class="params">a: <span class="type">A</span></span>) </span>&#123; <span class="function"><span class="keyword">def</span> <span class="title">get</span></span>: <span class="type">A</span> = a &#125;</span><br><span class="line">defined <span class="class"><span class="keyword">class</span> <span class="title">Item</span></span></span><br><span class="line">scala&gt; <span class="class"><span class="keyword">class</span> <span class="title">Check</span>[-<span class="type">A</span>] </span>&#123; <span class="function"><span class="keyword">def</span> <span class="title">check</span></span>(a: <span class="type">A</span>) = &#123;&#125; &#125;</span><br><span class="line">defined <span class="class"><span class="keyword">class</span> <span class="title">Check</span></span></span><br><span class="line"><span class="comment">//在调用v.get的时候，Volvo的实例发生了向上转型为Car的动作</span></span><br><span class="line">scala&gt; <span class="function"><span class="keyword">def</span> <span class="title">item</span></span>(v: <span class="type">Item</span>[<span class="type">Volvo</span>]) &#123; <span class="keyword">val</span> c: <span class="type">Car</span> = v.get &#125;</span><br><span class="line">item: (v: <span class="type">Item</span>[<span class="type">Volvo</span>])<span class="type">Unit</span></span><br><span class="line"><span class="comment">//在调用v.check的时候，声明接受的应该是Volvo类型</span></span><br><span class="line"><span class="comment">//但传递的是它的一个子类VolvoWagon，由于声明是-A，意味着允许类型向下转型，所以这个传递也是允许的。</span></span><br><span class="line">scala&gt; <span class="function"><span class="keyword">def</span> <span class="title">check</span></span>(v: <span class="type">Check</span>[<span class="type">Volvo</span>]) &#123; v.check(<span class="keyword">new</span> <span class="type">VolvoWagon</span>()) &#125;</span><br><span class="line">check: (v: <span class="type">Check</span>[<span class="type">Volvo</span>])<span class="type">Unit</span></span><br></pre></td></tr></table></figure>
+
+<p>注意：同样的，Scala是不允许一个Contravariance类型作为方法的返回值的！</p>
+<p>所以总结上面的例子，我们可以简单地说：</p>
+<h3 id="Covariance-1"><a href="#Covariance-1" class="headerlink" title="Covariance"></a>Covariance</h3><p><strong>在类的继承过程中，泛型从一个笼统的类型到一个具体类型的转变过程</strong> </p>
+<p>Covariance allows subclasses to override and use narrower types than their superclass in covariant positions such as the return value.</p>
+<p>类型参数协变（covariance)是对通过在类型参数上添加一个加号来标识的！</p>
+<p>举例：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">sealed</span> <span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">Maybe</span>[+<span class="type">A</span>] </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">isEmpty</span></span>: <span class="type">Boolean</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">get</span></span>: <span class="type">A</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">final</span> <span class="keyword">case</span> <span class="class"><span class="keyword">class</span> <span class="title">Just</span>[<span class="type">A</span>](<span class="params">value: <span class="type">A</span></span>) <span class="keyword">extends</span> <span class="title">Maybe</span>[<span class="type">A</span>] </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">isEmpty</span> </span>= <span class="literal">false</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">get</span> </span>= value</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">case</span> <span class="class"><span class="keyword">object</span> <span class="title">Nil</span> <span class="keyword">extends</span> <span class="title">Maybe</span>[<span class="type">Nothing</span>] </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">isEmpty</span> </span>= <span class="literal">true</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">get</span> </span>= <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">NoSuchElementException</span>(<span class="string">&quot;Nil.get&quot;</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上面的例子中，抽象基类Maybe的类型参数A前面添加的+，标识A是可协变的，则这意味着它的子类可以重写这个类型，或者说是更具体化这个类型。比如Nil,它就将Maybe的A具体化到了Nothing!这是允许的！</p>
+<h3 id="Contravariance-1"><a href="#Contravariance-1" class="headerlink" title="Contravariance"></a>Contravariance</h3><p><strong>在类的继承过程中，泛型从一个具体的类型到一个笼统类型的转变过程</strong> </p>
+<p>Scala uses the minus sign (-) to denote contravariance and the plus sign (+) for covariance.</p>
+<p>a contravariant allows you to go from a narrower type to a more generic type.</p>
+<h3 id="Call-By—Name"><a href="#Call-By—Name" class="headerlink" title="Call-By—Name"></a>Call-By—Name</h3><p>当一个参数是“按名称调用”时，它的值是不会在传入时就进行计算的，而是推迟到方法体内第一次使用它时再进行计算，这里有一个很好事例：</p>
+<figure class="highlight lasso"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//一个简单的打印日志的函数</span></span><br><span class="line">def <span class="keyword">log</span>(m: <span class="built_in">String</span>) = <span class="keyword">if</span>(logEnabled) println(m)</span><br><span class="line"></span><br><span class="line">def popErrorMessage = &#123; popMessageFromASlowQueue() &#125;</span><br><span class="line"><span class="comment">//在这里，不管logEnabled是true还是false，在传入参数时</span></span><br><span class="line"><span class="comment">//popErrorMessage函数已经执行并返回了值与前面的字符串拼接在一起了</span></span><br><span class="line"><span class="comment">//所以在java里为了避免这种情况，都是在这一行外面包裹上 if(logEnabled)</span></span><br><span class="line"><span class="keyword">log</span>(<span class="string">&quot;The error message is &quot;</span> + popErrorMessage).</span><br><span class="line"></span><br><span class="line"><span class="comment">//如果是按名称调用呢？</span></span><br><span class="line">def <span class="keyword">log</span>(m: =&gt; <span class="built_in">String</span>) = <span class="keyword">if</span>(logEnabled) println(m)</span><br><span class="line"><span class="comment">//这样参数（&quot;The error message is &quot; + popErrorMessage）在传入时是不会</span></span><br><span class="line"><span class="comment">//被计算的，直到遇到println方法时popErrorMessage方法才会被调用！但是在这之前，如果logEnabled是false，则popErrorMessage方法永远不会被执行！</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="Currying（柯里化）初探"><a href="#Currying（柯里化）初探" class="headerlink" title="Currying（柯里化）初探"></a>Currying（柯里化）初探</h3><p>这是第一次设计Currying，先做初步的理解，后续会再深入地探究。Currying allows you to chain functions one after another with a single parameter.柯里化的目的或者说效果就是可以把所有的函数参数一个接着一个地串联起来变成一个单一的参数。 <strong>柯里化（Currying）是把接受多个参数的函数变换成接受一个单一参数(最初函数的第一个参数)的函数，并且返回接受余下的参数且返回结果的新函数的技术。</strong> 举个例子：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">flatten</span>[B](xss: <span class="type">List</span>[<span class="type">List</span>[B]]): <span class="type">List</span>[B] = &#123;</span><br><span class="line">    xss <span class="keyword">match</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> <span class="type">List</span>() =&gt; Nil</span><br><span class="line">        <span class="keyword">case</span> head :: tail =&gt; head ::: flatten(tail)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">def</span> <span class="title function_">flatMap</span>[A, B](xs: <span class="type">List</span>[A])(f: A =&gt; <span class="type">List</span>[B]) : <span class="type">List</span>[B] = &#123;</span><br><span class="line">    flatten(<span class="built_in">map</span>(xs, f))</span><br><span class="line">&#125;</span><br><span class="line">scala&gt; flatMap(<span class="type">List</span>(<span class="string">&quot;one&quot;</span>, <span class="string">&quot;two&quot;</span>, <span class="string">&quot;three&quot;</span>)) &#123; _.toList &#125;</span><br><span class="line">res9: <span class="type">List</span>[Char] = <span class="type">List</span>(o, n, e, t, w, o, t, h, r, e, e)</span><br></pre></td></tr></table></figure>
+
+<p>注意函数flatMap的声明，它需要两个参数，但是这两个参数并不是使用逗号分割的，而是分别独立使用小括号包裹的，这就是进行了”柯里化”处理，这种处理表现到方法调用上就变成了 <code>flatMap(List(&quot;one&quot;, &quot;two&quot;, &quot;three&quot;)) { _.toList }</code> 这样的形式，这种方式的实质是:flatMap的第二个参数是以一个闭包{_.toList }传递的。</p>
+<h3 id="lambda和closure的区别"><a href="#lambda和closure的区别" class="headerlink" title="lambda和closure的区别"></a>lambda和closure的区别</h3><p>举个例子：</p>
+<figure class="highlight mathematica"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">scala</span><span class="operator">&gt;</span> <span class="built_in">List</span><span class="punctuation">(</span><span class="number">100</span><span class="operator">,</span> <span class="number">200</span><span class="operator">,</span> <span class="number">300</span><span class="punctuation">)</span> <span class="variable">map</span> <span class="punctuation">&#123;</span> <span class="type">_</span> <span class="operator">*</span> <span class="number">10</span><span class="operator">/</span><span class="number">100</span> <span class="punctuation">&#125;</span></span><br><span class="line"><span class="variable">res34</span><span class="operator">:</span> <span class="built_in">List</span><span class="punctuation">[</span><span class="variable">Int</span><span class="punctuation">]</span> <span class="operator">=</span> <span class="built_in">List</span><span class="punctuation">(</span><span class="number">10</span><span class="operator">,</span> <span class="number">20</span><span class="operator">,</span> <span class="number">30</span><span class="punctuation">)</span></span><br></pre></td></tr></table></figure>
+
+<p>在这个例子中，传递给map函数的函数字面量 <code>_ * 10/100</code> 就是一个landba!</p>
+<p>而下面的例子中,</p>
+<figure class="highlight coffeescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; var percentage = <span class="number">10</span></span><br><span class="line">percentage: Int = <span class="number">10</span></span><br><span class="line">scala&gt; val applyPercentage = <span class="function"><span class="params">(amount: Int)</span> =&gt;</span></span><br><span class="line">amount * percentage/<span class="number">100</span></span><br><span class="line">applyPercentage: <span class="function"><span class="params">(Int)</span> =&gt;</span> Int = &lt;function1&gt;</span><br><span class="line"></span><br><span class="line">scala&gt; percentage = <span class="number">20</span></span><br><span class="line">percentage: Int = <span class="number">20</span></span><br><span class="line">scala&gt; List(<span class="number">100</span>, <span class="number">200</span>, <span class="number">300</span>) map applyPercentage</span><br><span class="line">res33: List[Int] = List(<span class="number">20</span>, <span class="number">40</span>, <span class="number">60</span>)</span><br></pre></td></tr></table></figure>
+
+<p>applyPercentage则是一个闭包！其根本特征在于：它会持续追踪创建以及使用它的那个外部环境（或者说上下文）（it keeps track of the environment in which it’s created）比如这个示例中的变量percentage！</p>
+<h3 id="集合二维运算"><a href="#集合二维运算" class="headerlink" title="集合二维运算"></a>集合二维运算</h3><p>下面列表中提到的right-associative operator是指：操作符右侧必须是集合类型！</p>
+<p> <img src="/../../images/scala/scala-notes-2/1.jpg"></p>
+<h3 id="foldLeft-foldRight"><a href="#foldLeft-foldRight" class="headerlink" title="foldLeft &amp; foldRight"></a>foldLeft &amp; foldRight</h3><figure class="highlight haskell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="type">List</span>[+<span class="type">A</span>] &#123;</span></span><br><span class="line"><span class="class">    def foldLeft[<span class="type">B</span>](<span class="title">z</span>: <span class="type">B</span>)(<span class="title">f</span>: (<span class="type">B</span>, <span class="type">A</span>) =&gt; <span class="type">B</span>): <span class="type">B</span></span></span><br><span class="line"><span class="class">    def foldRight[<span class="type">B</span>](<span class="title">z</span>: <span class="type">B</span>)(<span class="title">f</span>: (<span class="type">A</span>, <span class="type">B</span>) =&gt; <span class="type">B</span>): <span class="type">B</span></span></span><br><span class="line"><span class="class">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>让我们看下面这个例子！</p>
+<figure class="highlight coffeescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; def pl(a:<span class="built_in">String</span>,b:Int):<span class="built_in">String</span>=&#123;println(a+<span class="string">&quot;:&quot;</span>+b);a+b&#125;</span><br><span class="line">p: (a: <span class="built_in">String</span>, b: Int)<span class="built_in">String</span></span><br><span class="line"></span><br><span class="line">scala&gt; List(<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>).foldLeft(<span class="string">&quot;0&quot;</span>)&#123;pl(_,_)&#125;</span><br><span class="line"><span class="number">0</span>:<span class="number">1</span></span><br><span class="line"><span class="number">01</span>:<span class="number">2</span></span><br><span class="line"><span class="number">012</span>:<span class="number">3</span></span><br><span class="line">res3: <span class="built_in">String</span> = <span class="number">0123</span></span><br><span class="line"></span><br><span class="line">scala&gt; def pr(a:Int,b:<span class="built_in">String</span>):<span class="built_in">String</span>=&#123;println(a+<span class="string">&quot;:&quot;</span>+b);a+b&#125;</span><br><span class="line">pr: (a: Int, b: <span class="built_in">String</span>)<span class="built_in">String</span></span><br><span class="line"></span><br><span class="line">scala&gt; List(<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>).foldRight(<span class="string">&quot;4&quot;</span>)&#123;pr(_,_)&#125;</span><br><span class="line"><span class="number">3</span>:<span class="number">4</span></span><br><span class="line"><span class="number">2</span>:<span class="number">34</span></span><br><span class="line"><span class="number">1</span>:<span class="number">234</span></span><br><span class="line">res4: <span class="built_in">String</span> = <span class="number">1234</span></span><br><span class="line"></span><br><span class="line">//上述代码也可以以匿名函数的方式简写为这样：</span><br><span class="line">scala&gt; List(<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>).foldLeft(<span class="string">&quot;0&quot;</span>)&#123;(a:<span class="built_in">String</span>,b:Int)=&gt;&#123;println(a+<span class="string">&quot;:&quot;</span>+b);a+b&#125;&#125;</span><br><span class="line">scala&gt; List(<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>).foldRight(<span class="string">&quot;4&quot;</span>)&#123;(a:Int,b:<span class="built_in">String</span>)=&gt;&#123;println(a+<span class="string">&quot;:&quot;</span>+b);a+b&#125;&#125;</span><br><span class="line"></span><br><span class="line"><span class="regexp">//</span>实际上，对于匿名函数，它的返回值我们没有定义，而是使用了类型推断，完整的写法是：</span><br><span class="line">scala&gt; List(<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>).foldRight(<span class="string">&quot;4&quot;</span>)&#123;(a:Int,b:<span class="built_in">String</span>)=&gt;&#123;println(a+<span class="string">&quot;:&quot;</span>+b);a+b&#125;:<span class="built_in">String</span>&#125;</span><br><span class="line"></span><br><span class="line"><span class="regexp">//</span>事实上也确实是上面的样子，因为我们可以通过显示修改函数返回值来实验一下</span><br><span class="line">scala&gt; List(<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>).foldRight(<span class="string">&quot;4&quot;</span>)&#123;(a:Int,b:<span class="built_in">String</span>)=&gt;&#123;println(a+<span class="string">&quot;:&quot;</span>+b);a+b&#125;:Int&#125;</span><br><span class="line">&lt;console&gt;:<span class="number">8</span>: error: type mismatch;</span><br><span class="line"> found   : <span class="built_in">String</span></span><br><span class="line"> required: Int</span><br><span class="line">              List(<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>).foldRight(<span class="string">&quot;4&quot;</span>)&#123;(a:Int,b:<span class="built_in">String</span>)=&gt;&#123;println(a+<span class="string">&quot;:&quot;</span>+b);a+b&#125;:Int&#125;</span><br><span class="line">                                                                              ^</span><br><span class="line">&lt;console&gt;:<span class="number">8</span>: error: type mismatch;</span><br><span class="line"> found   : Int</span><br><span class="line"> required: <span class="built_in">String</span></span><br><span class="line">              List(<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>).foldRight(<span class="string">&quot;4&quot;</span>)&#123;(a:Int,b:<span class="built_in">String</span>)=&gt;&#123;println(a+<span class="string">&quot;:&quot;</span>+b);a+b&#125;:Int&#125;</span><br><span class="line">                                                                                 ^</span><br><span class="line"><span class="regexp">//</span>上面报的类型不不配是根据foldLeft/Right对二远操作函数的定义</span><br><span class="line"><span class="regexp">//</span>判断出来的！对于f: <span class="function"><span class="params">(B, A)</span> =&gt;</span> B，很显然，如果我们编写的匿名函数返回的是</span><br><span class="line"><span class="regexp">//</span>第三种类型，那就不是foldLeft/Right要求的二元函数了！</span><br><span class="line"></span><br><span class="line"><span class="regexp">//</span>而最简单的写法是下面的样子，全部使用类型推断！</span><br><span class="line">scala&gt; List(<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>).foldRight(<span class="string">&quot;4&quot;</span>)&#123;(a,b)=&gt;&#123;println(a+<span class="string">&quot;:&quot;</span>+b);a+b&#125;&#125;</span><br></pre></td></tr></table></figure>
+
+<p>所以上面的例子清晰地说明了两个方法的行为：</p>
+<ul>
+<li><p>foldLeft从左向右迭代集合，二元操作函数的第一个参数是给定的初始值,第二个参数是集合的当前元素！二元函数的返回值将作为下次调用时的第一参数！再简单一些解释就是：把给定的初始元素放在最右边，然后从右向左，把元素</p>
+</li>
+<li><p>foldRight从右向左迭代集合，二元操作函数的第一个参数是集合的当前元素！第二个参数是给定的初始值！二无函数的返回值将作为下次调用时的第二参数！</p>
+</li>
+</ul>
+<h3 id="Function-Object"><a href="#Function-Object" class="headerlink" title="Function Object"></a>Function Object</h3><p>这并不是什么特殊的机制，Function Object实际上指的是像使用函数一样使用一个object!这我们来看一下例子：</p>
+<figure class="highlight coffeescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">object foldl &#123;</span><br><span class="line">    def apply[A, B](xs: Traversable[A], defaultValue: B)(op: <span class="function"><span class="params">(B, A)</span> =&gt;</span> B) =</span><br><span class="line">    (defaultValue /: xs)(op)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上面的代码无非是把foldLeft封装到了一个object的apply方法里，这样一来，我们再想调用这个方法时，就可以这样写了：</p>
+<figure class="highlight mathematica"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">scala</span><span class="operator">&gt;</span> <span class="variable">foldl</span><span class="punctuation">(</span><span class="built_in">List</span><span class="punctuation">(</span><span class="string">&quot;1&quot;</span><span class="operator">,</span> <span class="string">&quot;2&quot;</span><span class="operator">,</span> <span class="string">&quot;3&quot;</span><span class="punctuation">)</span><span class="operator">,</span> <span class="string">&quot;0&quot;</span><span class="punctuation">)</span> <span class="punctuation">&#123;</span> <span class="type">_</span> <span class="operator">+</span> <span class="type">_</span> <span class="punctuation">&#125;</span></span><br><span class="line"><span class="variable">res0</span><span class="operator">:</span> <span class="variable">java</span><span class="operator">.</span><span class="variable">lang</span><span class="operator">.</span><span class="built_in">String</span> <span class="operator">=</span> <span class="number">0123</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="Partial-Functions"><a href="#Partial-Functions" class="headerlink" title="Partial Functions"></a>Partial Functions</h3><p>Partial Functions: only accepts a partial amount of all possible input values.</p>
+<p>Partially Applied Function:is a regular function that has been partially invoked, and remains to be fully invoked (if ever) in the future.</p>
+<h3 id="Function-Object-1"><a href="#Function-Object-1" class="headerlink" title="Function Object"></a>Function Object</h3><p>Function Ojbect是一个object ,但是你又可以像使用一个函数那样去使用它。什么意思呢？这我们来看一个例子,我现在有这样一个函数：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">hof</span>(<span class="params"><span class="built_in">list</span>:<span class="type">List</span>[Int],f:(<span class="params">Int</span>)=&gt;Int</span>):<span class="type">List</span>[Int]=&#123;</span><br><span class="line">    <span class="built_in">list</span> <span class="keyword">match</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> <span class="type">List</span>() =&gt; Nil</span><br><span class="line">        <span class="keyword">case</span> head :: tail =&gt; f(head) :: hof(tail, f)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>通常这样的方法定义是存在于类的内部。有些时候，我们想定义一些全局静态方法的集合类，也就是像让一些方法变成全集可调用的一些utilities方法，这个时候我们就需要使用Funtion Object了！让我们来看一下如何把这个function改造成function object!</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">object</span> fo &#123;</span><br><span class="line">    def <span class="title function_ invoke__">apply</span>(<span class="attr">list</span>:List[Int])(<span class="attr">f</span>:Int=&gt;Int):List[Int]=&#123;</span><br><span class="line">    <span class="keyword">list</span> <span class="keyword">match</span> &#123;</span><br><span class="line">            <span class="keyword">case</span> <span class="title function_ invoke__">List</span>() =&gt; Nil</span><br><span class="line">            <span class="keyword">case</span> head :: tail =&gt; <span class="title function_ invoke__">f</span>(head) :: <span class="title function_ invoke__">apply</span>(tail)&#123;f&#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">scala&gt; <span class="title function_ invoke__">fo</span>(<span class="title function_ invoke__">List</span>(<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>))&#123;_+<span class="number">1</span>&#125;</span><br><span class="line">res0: List[Int] = <span class="title function_ invoke__">List</span>(<span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>)</span><br></pre></td></tr></table></figure>
+
+<p>我们可以看到这种处理的实质是要把一个函数包裹或着说改造成一个对象！就像是把函数变成了“全局静态”的，也就是意味着我们可以更方便的去调用一些非对象内的函数，也是过去被声明为public static的方法。</p>
+<h3 id="Function-Trait"><a href="#Function-Trait" class="headerlink" title="Function Trait"></a>Function Trait</h3><p>继续上面的话题，我们知道，在scala里，()是一个语法糖，它实际上形式是.apply().所以说，在使用Function Object的时候，apply这个方法名是固定的，也不能写错，实际上这种约束不是严格的，开发者会容易拼写等错误而让调用失败，所以这个时候，如果我们有一种类似“接口”的约束和规范机制，那会好的很多。 在scala里，Function trait就是做这个用的。 我们来看一个：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">Function1</span>[-<span class="type">T1</span>, +<span class="type">R</span>] <span class="keyword">extends</span> <span class="title">AnyRef</span> </span>&#123;</span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">apply</span></span>(v: <span class="type">T1</span>): <span class="type">R</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>1标示只有一个参数的函数。它硬性定义了抽象方法apply，这意味着它的子类必须重写这个apply方法。</p>
+<p>让我们来看一个例子：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">++</span> <span class="keyword">extends</span> <span class="title">Function1</span>[<span class="type">Int</span>, <span class="type">Int</span>]</span>&#123;</span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">apply</span></span>(p: <span class="type">Int</span>): <span class="type">Int</span> = p + <span class="number">1</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这个函数”++”如果直接写就是这个样子：</p>
+<figure class="highlight coffeescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">val ++ = <span class="function"><span class="params">(x: Int)</span> =&gt;</span> x + <span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<p>但是我们这里还有一种看上去更加奇怪的写法：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">++</span> <span class="keyword">extends</span> (<span class="params"><span class="type">Int</span> =&gt; <span class="type">Int</span></span>) </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">apply</span></span>(p: <span class="type">Int</span>): <span class="type">Int</span> = p + <span class="number">1</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们为解释一下： 实际上，这里的 <code>Int =&gt; Int</code> 是 <code>Function1[Int, Int]</code> 的简化写法！</p>
+<p>最后，让我们来使用一下这个++函数对象！</p>
+<figure class="highlight mathematica"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">scala</span><span class="operator">&gt;</span> <span class="built_in">List</span><span class="punctuation">(</span><span class="number">1</span><span class="operator">,</span><span class="number">2</span><span class="operator">,</span><span class="number">3</span><span class="punctuation">)</span><span class="operator">.</span><span class="variable">map</span><span class="punctuation">(</span><span class="operator">++</span><span class="punctuation">)</span></span><br><span class="line"><span class="variable">res1</span><span class="operator">:</span> <span class="built_in">List</span><span class="punctuation">[</span><span class="variable">Int</span><span class="punctuation">]</span> <span class="operator">=</span> <span class="built_in">List</span><span class="punctuation">(</span><span class="number">2</span><span class="operator">,</span> <span class="number">3</span><span class="operator">,</span> <span class="number">4</span><span class="punctuation">)</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="Scala集合类的Hierarchy"><a href="#Scala集合类的Hierarchy" class="headerlink" title="Scala集合类的Hierarchy"></a>Scala集合类的Hierarchy</h3><p> <img src="/../../images/scala/scala-notes-2/2.jpg"></p>
+<h4 id="Collection包的类层次结构"><a href="#Collection包的类层次结构" class="headerlink" title="Collection包的类层次结构"></a><a target="_blank" rel="noopener" href="http://www.scala-lang.org/api/current/scala/collection/package.html">Collection包的类层次结构</a></h4><h4 id="Immutable包的类层次结构"><a href="#Immutable包的类层次结构" class="headerlink" title="Immutable包的类层次结构"></a><a target="_blank" rel="noopener" href="http://www.scala-lang.org/api/current/index.html#scala.collection.immutable.package">Immutable包的类层次结构</a></h4><h4 id="Mutable包的类层次结构"><a href="#Mutable包的类层次结构" class="headerlink" title="Mutable包的类层次结构"></a><a target="_blank" rel="noopener" href="http://www.scala-lang.org/api/current/index.html#scala.collection.mutable.package">Mutable包的类层次结构</a></h4><h4 id="可变与不可变集合元素"><a href="#可变与不可变集合元素" class="headerlink" title="可变与不可变集合元素"></a>可变与不可变集合元素</h4><h4 id="Traversable的主要方法"><a href="#Traversable的主要方法" class="headerlink" title="Traversable的主要方法"></a>Traversable的主要方法</h4><p> <img src="/../../images/scala/scala-notes-2/3.jpg"></p>
+<p>关于&#x2F;:和:可以这样记忆：冒号所在在那一则是集合，另一侧就是计算的初始值。初始值在左侧就是foldLeft(计算都是从初始值开始的）；初始值在右侧就是foldRight</p>
+<h4 id="Mutable和Immutable之分"><a href="#Mutable和Immutable之分" class="headerlink" title="Mutable和Immutable之分"></a>Mutable和Immutable之分</h4><p>scala中的集合类一个比较大的差别是Mutable和Immutable的区别。通常对于同一个集合接口会提供两个版本的实现。比如 <code>scala.collection.Map[A, +B]</code> 就同时是 <code>collection.mutable.Map[A, B]</code> 和 <code>collection.immutable.Map[A, +B]</code> 两个实现类的父类。</p>
+<h3 id="null，nil和Option"><a href="#null，nil和Option" class="headerlink" title="null，nil和Option"></a>null，nil和Option</h3><p>null or nil (in the case of Ruby) in code. In Ruby, things are a little better<br>in the sense that Nil is a singleton object, and you can invoke methods on Nil. But<br>in Java if a variable reference is null, you get a NullPointerException. To avoid the<br>issue many programmers clutter their codebase with null checks and make the code<br>difficult to read.</p>
+<p>null是java里的，表示一个空值。nil来自于ruby,它是一个单态对象，这意味着你可以在nil上调用方法。null一个不太好地方是当一个对象被赋予null里，如果引用这个对象调用它的方法时会常常地抛空指针错误，所以代码里会出现大量的判空语。</p>
+<p>scala使用的是Option！Option是一个抽象类，它有两个子类，是Some和None</p>
+<h3 id="var-a-A-的含义"><a href="#var-a-A-的含义" class="headerlink" title="var a: A &#x3D; _的含义"></a>var a: A &#x3D; _的含义</h3><p><code>var a: A = _</code> (是var不是val，如果是val会编译报错). 这种写法的意思是使用默认值去初始化变量。对于不同的类型，它们的默认值如下：】</p>
+<figure class="highlight vbnet"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">0</span> <span class="keyword">if</span> T <span class="built_in">is</span> Int <span class="built_in">or</span> one <span class="keyword">of</span> its subrange types,</span><br><span class="line"><span class="number">0L</span> <span class="keyword">if</span> T <span class="built_in">is</span> <span class="type">Long</span>,</span><br><span class="line"><span class="number">0.0f</span> <span class="keyword">if</span> T <span class="built_in">is</span> Float,</span><br><span class="line"><span class="number">0.0d</span> <span class="keyword">if</span> T <span class="built_in">is</span> <span class="type">Double</span>,</span><br><span class="line"><span class="literal">false</span> <span class="keyword">if</span> T <span class="built_in">is</span> <span class="type">Boolean</span>,</span><br><span class="line">() <span class="keyword">if</span> T <span class="built_in">is</span> Unit,</span><br><span class="line">null <span class="keyword">for</span> all other types T.</span><br></pre></td></tr></table></figure>
+
+<p>那么对于一些类类型来说，这样写的效果是就是 <code>var a: A = null</code> </p>
+<h3 id="copy方法"><a href="#copy方法" class="headerlink" title="copy方法"></a>copy方法</h3><p>copy方法会基于当前实例的所有字段值复制一个新的实例并返回， 你也可以在通过给copy方法传递参数来重新设定某一个或几个字段的值，这是通过命名参数实现（named parameters）实现的。举个例子：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; println(op)</span><br><span class="line">BinOp(+,Number(1.0),Var(x))</span><br><span class="line">scala&gt; op.copy(operator = <span class="string">&quot;-&quot;</span>)</span><br><span class="line">res4: BinOp = BinOp(-,Number(1.0),Var(x))</span><br></pre></td></tr></table></figure>
+
+<p>BinOp是一个case class, op是一个实例，第3行我们调用它的copy方法，同时指定了operator 字段的值是一个减号，那么copy出来的实例它的operator字段的值就是减号，所有其他的字段都和原实例是一样的。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>SCALA学习笔记（二）</p><p><a href="https://laurence.enlightgram.com/scala/scala-notes-2/">https://laurence.enlightgram.com/scala/scala-notes-2/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2015-03-30</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E9%9B%86%E5%90%88/">集合</a><a class="link-muted mr-2" rel="tag" href="/tags/%E6%B3%9B%E5%9E%8B/">泛型</a><a class="link-muted mr-2" rel="tag" href="/tags/%E9%97%AD%E5%8C%85/">闭包</a><a class="link-muted mr-2" rel="tag" href="/tags/Scala/">Scala</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/scala/function-literals-and-fp/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">从函数字面量发现函数式编程</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/linux/shell-small-issues/"><span class="level-item">Shell细小问题汇总</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#SCALA学习笔记（二）"><span class="level-left"><span class="level-item">SCALA学习笔记（二）</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#泛型在继承中的-类-型变化"><span class="level-left"><span class="level-item">泛型在继承中的 类 型变化</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#Invariant"><span class="level-left"><span class="level-item">Invariant</span></span></a></li><li><a class="level is-mobile" href="#Covariance"><span class="level-left"><span class="level-item">Covariance</span></span></a></li><li><a class="level is-mobile" href="#Contravariance"><span class="level-left"><span class="level-item">Contravariance</span></span></a></li></ul></li><li><a class="level is-mobile" href="#Covariance-1"><span class="level-left"><span class="level-item">Covariance</span></span></a></li><li><a class="level is-mobile" href="#Contravariance-1"><span class="level-left"><span class="level-item">Contravariance</span></span></a></li><li><a class="level is-mobile" href="#Call-By—Name"><span class="level-left"><span class="level-item">Call-By—Name</span></span></a></li><li><a class="level is-mobile" href="#Currying（柯里化）初探"><span class="level-left"><span class="level-item">Currying（柯里化）初探</span></span></a></li><li><a class="level is-mobile" href="#lambda和closure的区别"><span class="level-left"><span class="level-item">lambda和closure的区别</span></span></a></li><li><a class="level is-mobile" href="#集合二维运算"><span class="level-left"><span class="level-item">集合二维运算</span></span></a></li><li><a class="level is-mobile" href="#foldLeft-foldRight"><span class="level-left"><span class="level-item">foldLeft &amp; foldRight</span></span></a></li><li><a class="level is-mobile" href="#Function-Object"><span class="level-left"><span class="level-item">Function Object</span></span></a></li><li><a class="level is-mobile" href="#Partial-Functions"><span class="level-left"><span class="level-item">Partial Functions</span></span></a></li><li><a class="level is-mobile" href="#Function-Object-1"><span class="level-left"><span class="level-item">Function Object</span></span></a></li><li><a class="level is-mobile" href="#Function-Trait"><span class="level-left"><span class="level-item">Function Trait</span></span></a></li><li><a class="level is-mobile" href="#Scala集合类的Hierarchy"><span class="level-left"><span class="level-item">Scala集合类的Hierarchy</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#Collection包的类层次结构"><span class="level-left"><span class="level-item">Collection包的类层次结构</span></span></a></li><li><a class="level is-mobile" href="#Immutable包的类层次结构"><span class="level-left"><span class="level-item">Immutable包的类层次结构</span></span></a></li><li><a class="level is-mobile" href="#Mutable包的类层次结构"><span class="level-left"><span class="level-item">Mutable包的类层次结构</span></span></a></li><li><a class="level is-mobile" href="#可变与不可变集合元素"><span class="level-left"><span class="level-item">可变与不可变集合元素</span></span></a></li><li><a class="level is-mobile" href="#Traversable的主要方法"><span class="level-left"><span class="level-item">Traversable的主要方法</span></span></a></li><li><a class="level is-mobile" href="#Mutable和Immutable之分"><span class="level-left"><span class="level-item">Mutable和Immutable之分</span></span></a></li></ul></li><li><a class="level is-mobile" href="#null，nil和Option"><span class="level-left"><span class="level-item">null，nil和Option</span></span></a></li><li><a class="level is-mobile" href="#var-a-A-的含义"><span class="level-left"><span class="level-item">var a: A = _的含义</span></span></a></li><li><a class="level is-mobile" href="#copy方法"><span class="level-left"><span class="level-item">copy方法</span></span></a></li></ul></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

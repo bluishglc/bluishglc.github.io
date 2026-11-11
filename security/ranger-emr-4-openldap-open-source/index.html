@@ -1,0 +1,969 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Apache Ranger 与 AWS EMR 自动化安装与集成 (4)：OpenLDAP + Open-Source Ranger - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="In previous 2 articles, we introduced emr-native ranger integration solution with OpenLDAP and Window AD, from this article, we turn to introduce open-source ranger integration. This article will disc"><meta property="og:type" content="article"><meta property="og:title" content="Apache Ranger 与 AWS EMR 自动化安装与集成 (4)：OpenLDAP + Open-Source Ranger"><meta property="og:url" content="https://laurence.enlightgram.com/security/ranger-emr-4-openldap-open-source/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="In previous 2 articles, we introduced emr-native ranger integration solution with OpenLDAP and Window AD, from this article, we turn to introduce open-source ranger integration. This article will disc"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/security/ranger-emr-4-openldap-open-source/1.jpeg"><meta property="article:published_time" content="2023-01-30T21:35:21.000Z"><meta property="article:modified_time" content="2026-11-11T03:37:39.394Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="AWS"><meta property="article:tag" content="EMR"><meta property="article:tag" content="Ranger"><meta property="article:tag" content="OpenLDAP"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/security/ranger-emr-4-openldap-open-source/1.jpeg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/security/ranger-emr-4-openldap-open-source/"},"headline":"Apache Ranger 与 AWS EMR 自动化安装与集成 (4)：OpenLDAP + Open-Source Ranger","image":["https://laurence.enlightgram.com/images/security/ranger-emr-4-openldap-open-source/1.jpeg"],"datePublished":"2023-01-30T21:35:21.000Z","dateModified":"2026-11-11T03:37:39.394Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"In previous 2 articles, we introduced emr-native ranger integration solution with OpenLDAP and Window AD, from this article, we turn to introduce open-source ranger integration. This article will disc"}</script><link rel="canonical" href="https://laurence.enlightgram.com/security/ranger-emr-4-openldap-open-source/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Apache Ranger 与 AWS EMR 自动化安装与集成 (4)：OpenLDAP + Open-Source Ranger</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Security/">Security</a></span><span class="level-item">发表于：<time dateTime="2023-01-30T21:35:21.000Z" title="2023-01-30 13:35:21">2023-01-30</time></span><span class="level-item">阅读用时：26 分钟 (约 3901 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>In previous 2 articles, we introduced emr-native ranger integration solution with OpenLDAP and Window AD, from this article, we turn to introduce open-source ranger integration. This article will discuss “OpenLDAP + Open-Source Ranger”. This article address is <a href="/security/ranger-emr-4-openldap-open-source/">https://laurence.enlightgram.com/security/ranger-emr-4-openldap-open-source/</a> , for reprint please indicate the source. This article was initally published at <a target="_blank" rel="noopener" href="https://dzone.com/articles/apache-ranger-aws-emr-automated-installation-4">DZone</a> .</p>
+<h2 id="1-OpenLDAP-Open-Source-Ranger-Solution-Overview"><a href="#1-OpenLDAP-Open-Source-Ranger-Solution-Overview" class="headerlink" title="1. OpenLDAP + Open-Source Ranger Solution Overview"></a>1. OpenLDAP + Open-Source Ranger Solution Overview</h2><h3 id="1-1-Solution-Architecture"><a href="#1-1-Solution-Architecture" class="headerlink" title="1.1 Solution Architecture"></a>1.1 Solution Architecture</h3><p> <img src="/../../images/security/ranger-emr-4-openldap-open-source/1.jpeg" alt="请添加图片描述"></p>
+<p>In this solution, OpenLDAP plays authentication provider, all user accounts data store on it, Ranger plays authorization controller, it will sync accounts data from OpenLDAP so as to grant privileges against user accounts from OpenLDAP, meanwhile, emr cluster need install a series of ranger plugins , these plugins will check with ranger server to assure if current user has permission to perform an action. And emr cluster will also sync accounts data from OpenLDAP via SSSD so as a user can login nodes of emr cluster and submit jobs. As end users, they can SSH login nodes of emr cluster with her&#x2F;his OpenLDAP account, and if Hue is available, they can also login Hue with this account.</p>
+<h3 id="1-2-Ranger-in-Detail"><a href="#1-2-Ranger-in-Detail" class="headerlink" title="1.2 Ranger in Detail"></a>1.2 Ranger in Detail</h3><p>Let’s deep dive into ranger for more details, its architecture looks as following:</p>
+<p> <img src="/../../images/security/ranger-emr-4-openldap-open-source/2.png" alt="请添加图片描述"></p>
+<p>The installer will finish following jobs:</p>
+<p>① Install MySQL as Policy DB for Ranger;<br>② Install Solr as Audit Store for Ranger;<br>③ Install Ranger Admin;<br>④ Install Ranger UserSync;<br>⑤ Install HDFS Ranger Plugin；<br>⑥ Install Hive Ranger Plugin；</p>
+<h2 id="2-Installation-Integration"><a href="#2-Installation-Integration" class="headerlink" title="2. Installation &amp; Integration"></a>2. Installation &amp; Integration</h2><p>Generally, the installation &amp; integration process can be divided into 3 stages: 1. Prerequisites -&gt; 2. All-In-One Install -&gt; 3. Create EMR Cluster, the following diagram illustrates the progress in detail:</p>
+<p> <img src="/../../images/security/ranger-emr-4-openldap-open-source/3.jpeg" alt="请添加图片描述"></p>
+<p>At stage 1, we need do some preparatory works; At stage 2, we start to install and integrate, here are 2 options at this stage: one is all-in-one installation driven by a command -line based workflow, the other is step-by-step installation. For most cases, all-in-one installation is always the best choice, however, sometimes, your installation workflow may be interrupted by unforeseen errors, if you want to continue installing from last failed step, please try step-by-step installation. Or sometimes, you want to re-try a step with different argument values to find the right one, step-by-step is also better choice; At stage 3, we need create an emr cluster. If you already have one, skip this job. In most cases, we need install ranger on an existing cluster not a new cluster, for emr-native ranger, it is impossible to install on an existing cluster (because emr-native ranger plugins can only be installed when creating cluster), but open-source ranger does NOT have this problem, you can be free to install on an existing or new emr cluster.</p>
+<p>There is a little bit overlapping on execution sequence between stage 2 and 3. At step 2.4, the installation progress will be pending, the installer will indicate users to create their own cluster and keep monitoring target cluster’s status, once the cluster is ready, the progress will resume and continue to perform rest actions.</p>
+<p>As a design principle, the installer does NOT include any actions to create an emr cluster, you should always create your cluster by yourself, because an emr cluster in practice could have any unpredictable settings, i.e., application-specific (hdfs, yarn, etc.) configuration, step scripts, bootstrap scripts and so on, it is unadvised to couple ranger’s installation with emr cluster’s creation.</p>
+<p>Notes：</p>
+<ol>
+<li><p>The installer will treat local host as ranger server to install everything of Ranger, for non-ranger operations, i.e., installing OpenLDAP, it will initiate remote operations via SSH. So, you can just stay on ranger server to execute command lines, no need to switch among multiple hosts.</p>
+</li>
+<li><p>Although it is not required, we suggest you always use FQDN as host address, Both IP and hostname without domain name are not recommended.</p>
+</li>
+</ol>
+<h3 id="2-1-Prerequisites"><a href="#2-1-Prerequisites" class="headerlink" title="2.1 Prerequisites"></a>2.1 Prerequisites</h3><h4 id="2-1-1-Create-EC2-Instances-as-Ranger-and-OpenLDAP-Server"><a href="#2-1-1-Create-EC2-Instances-as-Ranger-and-OpenLDAP-Server" class="headerlink" title="2.1.1 Create EC2 Instances as Ranger and OpenLDAP Server"></a>2.1.1 Create EC2 Instances as Ranger and OpenLDAP Server</h4><p>First, we need prepare 2 EC2 instances, one as the server of Ranger, the other as the server of OpenLDAP. When creating instances, please select <code>Amazon Linux 2</code> image and guarantee network connections among instances and the cluster to be created are reachable.</p>
+<p>As a best practice, it’s recommended to add ranger server into <code>ElasticMapReduce-master</code> security group, because Ranger is very close to emr cluster, it can be regarded as a non-emr-build-in master service. For OpenLDAP, we have to make sure its ports 389 is reachable from ranger and all nodes of emr cluster to be created, or to be simple, you also add OpenLDAP into <code>ElasticMapReduce-master</code> security group.</p>
+<h4 id="2-1-2-Download-Installer"><a href="#2-1-2-Download-Installer" class="headerlink" title="2.1.2 Download Installer"></a>2.1.2 Download Installer</h4><p>After EC2 instances are ready, pick the ranger server, login via ssh, run following commands to download installer package:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> yum -y install git</span><br><span class="line">git <span class="built_in">clone</span> https://github.com/bluishglc/ranger-emr-cli-installer.git</span><br></pre></td></tr></table></figure>
+
+<h4 id="2-1-3-Upload-SSH-Key-File"><a href="#2-1-3-Upload-SSH-Key-File" class="headerlink" title="2.1.3 Upload SSH Key File"></a>2.1.3 Upload SSH Key File</h4><p>As mentioned before, the installer is based on local host (ranger server), to perform remote installing actions on OpenLDAP or emr cluster, SSH private key is required, so we should upload it to ranger server, and make a note of the file path, it will be the value of variable <code>SSH_KEY</code> .</p>
+<h4 id="2-1-4-Export-Environment-Specific-Variables"><a href="#2-1-4-Export-Environment-Specific-Variables" class="headerlink" title="2.1.4 Export Environment-Specific Variables"></a>2.1.4 Export Environment-Specific Variables</h4><p>During installing, following environment-specific arguments will be passed more than once, it’s recommended to export them first, then all command lines just refer these variables instead of literals.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> REGION=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> ACCESS_KEY_ID=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SECRET_ACCESS_KEY=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SSH_KEY=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> OPENLDAP_HOST=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>The following is comments of above variables:</p>
+<ul>
+<li><p>REGION: Aws Region, i.e., cn-north-1, us-east-1 and so on.</p>
+</li>
+<li><p>ACCESS_KEY_ID: Aws access key id of your IAM account. Be sure your account has enough privileges, it’s better having admin permissions.</p>
+</li>
+<li><p>SECRET_ACCESS_KEY: Aws secret access key of your IAM account.</p>
+</li>
+<li><p>SSH_KEY: Ssh private key file path on local host you just uploaded</p>
+</li>
+<li><p>OPENLDAP_HOST: FQDN of OpenLDAP server</p>
+</li>
+</ul>
+<p>Please carefully replace above variables’ value according to your environment, and remember to use FQDN as hostname, i.e., OPENLDAP_HOST. The following is a copy of example:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> REGION=<span class="string">&#x27;cn-north-1&#x27;</span></span><br><span class="line"><span class="built_in">export</span> ACCESS_KEY_ID=<span class="string">&#x27;&lt;change-to-your-aws-access-key-id&gt;&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SECRET_ACCESS_KEY=<span class="string">&#x27;&lt;change-to-your-aws-secret-access-key&gt;&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SSH_KEY=<span class="string">&#x27;/home/ec2-user/key.pem&#x27;</span></span><br><span class="line"><span class="built_in">export</span> OPENLDAP_HOST=<span class="string">&#x27;ip-10-0-14-0.cn-north-1.compute.internal&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="2-2-All-In-One-Installation"><a href="#2-2-All-In-One-Installation" class="headerlink" title="2.2 All-In-One Installation"></a>2.2 All-In-One Installation</h3><h4 id="2-2-1-Quick-Start"><a href="#2-2-1-Quick-Start" class="headerlink" title="2.2.1 Quick Start"></a>2.2.1 Quick Start</h4><p>Now, let’s start an all-in-one installation, execute this command line:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;open-source&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-root-cn <span class="string">&#x27;admin&#x27;</span> \</span><br><span class="line">    --openldap-root-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --openldap-user-dn-pattern <span class="string">&#x27;uid=&#123;0&#125;,ou=users,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-group-search-filter <span class="string">&#x27;(member=uid=&#123;0&#125;,ou=users,dc=example,dc=com)&#x27;</span> \</span><br><span class="line">    --openldap-user-object-class <span class="string">&#x27;inetOrgPerson&#x27;</span> \</span><br><span class="line">    --example-users <span class="string">&#x27;example-user-1,example-user-2&#x27;</span> \</span><br><span class="line">    --ranger-plugins <span class="string">&#x27;open-source-hdfs,open-source-hive&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>For parameters specification of above command line, please refer to appendix. If everything goes well, the command line will execute step from 2.1 to 2.3 in workflow diagram, this may spend 10 minutes or more depending on the bandwidth of your network, then it will suspend and indicate user to enter emr cluster id. If target cluster is existing, we can fill its id immediately, if not, we should switch to emr web console to create it. then, the command line asks users to confirm if let Hue integrate with LDAP or not. if yes, when cluster ready, the installer will update emr configuration with Hue specific settings (this action will overwrite emr existing configuration).</p>
+<p>Fill above 2 items, enter “y” to confirm all inputs, the installation process will resume and if target emr cluster is not ready yet, the command line will keep monitoring until it goes into “WAITING” status. The following is a snapshot for this moment of the command line:</p>
+<p> <img src="/../../images/security/ranger-emr-4-openldap-open-source/4.jpeg" alt="请添加图片描述"></p>
+<p>When cluster is ready (status is “WAITING”), the command line will continue to execute from steps 2.5 to 2.8 of workflow, and finally end with an “ALL DONE!!” message.</p>
+<h4 id="2-2-2-Customization"><a href="#2-2-2-Customization" class="headerlink" title="2.2.2 Customization"></a>2.2.2 Customization</h4><p>Now, all-in-one installation is done, next, we introduce more about customization. Generally, this installer follows the principle of “Convention over Configuration”, most parameters are preset by default values, an equivalent version with full parameter list of above command line is as following:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;open-source&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-root-cn <span class="string">&#x27;admin&#x27;</span> \</span><br><span class="line">    --openldap-root-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --openldap-user-dn-pattern <span class="string">&#x27;uid=&#123;0&#125;,ou=users,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-group-search-filter <span class="string">&#x27;(member=uid=&#123;0&#125;,ou=users,dc=example,dc=com)&#x27;</span> \</span><br><span class="line">    --openldap-user-object-class <span class="string">&#x27;inetOrgPerson&#x27;</span> \</span><br><span class="line">    --example-users <span class="string">&#x27;example-user-1,example-user-2&#x27;</span> \</span><br><span class="line">    --ranger-plugins <span class="string">&#x27;open-source-hdfs,open-source-hive&#x27;</span> \</span><br><span class="line">    --java-home <span class="string">&#x27;/usr/lib/jvm/java&#x27;</span> \</span><br><span class="line">    --skip-install-mysql <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --skip-install-solr <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --skip-install-openldap <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --skip-configure-hue <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --ranger-host $(hostname -f) \</span><br><span class="line">    --ranger-version <span class="string">&#x27;2.1.0&#x27;</span> \</span><br><span class="line">    --mysql-host $(hostname -f) \</span><br><span class="line">    --mysql-root-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --mysql-ranger-db-user-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --solr-host $(hostname -f) \</span><br><span class="line">    --ranger-bind-dn <span class="string">&#x27;cn=ranger,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ranger-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --hue-bind-dn <span class="string">&#x27;cn=hue,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --hue-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --sssd-bind-dn <span class="string">&#x27;cn=sssd,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --sssd-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --restart-interval 30</span><br></pre></td></tr></table></figure>
+
+<p>The full-parameters version gives us a complete perspective of all custom options. In following scenarios, you may change some options’ value:</p>
+<ol>
+<li><p>If you want to change default organization name <code>dc=example,dc=com</code> or default password <code>Admin1234!</code> , please run full-parameters version, and replace them with your own values.</p>
+</li>
+<li><p>If you need integrate with external facilities, i.e., a centralized OpenLDAP or an existing MySQL, Solr, please add corresponding <code>--skip-xxx-xxx</code> options and set it <code>true</code> .</p>
+</li>
+<li><p>If you have other pre-defined bind dn for hue, ranger and sssd, please add corresponding <code>--xxx-bind-dn</code> and <code>--xxx-bind-password</code> options to set them. Note that the bind dn for hue, ranger and sssd will be created automatically when installing OpenLDAP, but they are FIXED with naming pattern <code>cn=hue|ranger|sssd,ou=services,&lt;your-base-dn&gt;</code> not the given value of “–xxx-bind-dn” option, so if you assign other dn with “–xxx-bind-dn” option, you MUST create this dn by yourself in advance. The reason this install does NOT create the dn assigned by “–xxx-bind-dn” option is that a dn acutally is a tree path, to create it, we must create all nodes in the path, it is not cost-effective to implement such small but complicated function.</p>
+</li>
+</ol>
+<h3 id="2-3-Step-By-Step-Installation"><a href="#2-3-Step-By-Step-Installation" class="headerlink" title="2.3 Step-By-Step Installation"></a>2.3 Step-By-Step Installation</h3><p>As an alternative, you can also select step-by-step installation instead of all-in-one installation. we give the command line of each step, as for comments for each parameter, please refer to appendix.</p>
+<h4 id="2-3-1-Init-EC2"><a href="#2-3-1-Init-EC2" class="headerlink" title="2.3.1 Init EC2"></a>2.3.1 Init EC2</h4><p>This step will finish some fundamental jobs, i.e., install aws cli, jdk, and so on.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh init-ec2 \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="2-3-2-Install-OpenLDAP"><a href="#2-3-2-Install-OpenLDAP" class="headerlink" title="2.3.2 Install OpenLDAP"></a>2.3.2 Install OpenLDAP</h4><p>This step will install OpenLDAP on given OpenLDAP host, as mentioned above, although this action is performed on OpenLDAP server, you DON’T need to login OpenLDAP server, just run the command line on local host (the ranger server).</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install-openldap \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;open-source&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-root-cn <span class="string">&#x27;admin&#x27;</span> \</span><br><span class="line">    --openldap-root-password <span class="string">&#x27;Admin1234!&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="2-3-3-Install-Ranger"><a href="#2-3-3-Install-Ranger" class="headerlink" title="2.3.3 Install Ranger"></a>2.3.3 Install Ranger</h4><p>This step will install all server-side components of Ranger, including MySQL, Solr, Ranger Admin and Ranger UserSync.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install-ranger \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;open-source&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ranger-bind-dn <span class="string">&#x27;cn=ranger,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ranger-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --openldap-user-dn-pattern <span class="string">&#x27;uid=&#123;0&#125;,ou=users,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-group-search-filter <span class="string">&#x27;(member=uid=&#123;0&#125;,ou=users,dc=example,dc=com)&#x27;</span> \</span><br><span class="line">    --openldap-user-object-class <span class="string">&#x27;inetOrgPerson&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="2-3-4-Create-EMR-Cluster"><a href="#2-3-4-Create-EMR-Cluster" class="headerlink" title="2.3.4 Create EMR Cluster"></a>2.3.4 Create EMR Cluster</h4><p>For step-by-step installation, there is no interactive process for creating emr cluster, so just feel free to create cluster on emr web console. but we have to wait for the cluster is completely ready (in “WAITING” status), then export following environment-specific variables:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> EMR_CLUSTER_ID=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>The following is a copy of example:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> EMR_CLUSTER_ID=<span class="string">&#x27;j-2S04VJZ5YQHZ4&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="2-3-5-Install-Ranger-Plugins"><a href="#2-3-5-Install-Ranger-Plugins" class="headerlink" title="2.3.5 Install Ranger Plugins"></a>2.3.5 Install Ranger Plugins</h4><p>This step will install hdfs and hive plugins on ranger server side and agent side (EMR nodes). This is different from emr-native ranger solution, for emr-native ranger, EMR will install agent sides on each node automatically, for open-source ranger, we have to do this job by ourselves via this installer.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install-ranger-plugins \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;open-source&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span> \</span><br><span class="line">    --ranger-plugins <span class="string">&#x27;open-source-hdfs,open-source-hive&#x27;</span> \</span><br><span class="line">    --emr-cluster-id <span class="string">&quot;<span class="variable">$EMR_CLUSTER_ID</span>&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="2-3-6-Install-SSSD"><a href="#2-3-6-Install-SSSD" class="headerlink" title="2.3.6 Install SSSD"></a>2.3.6 Install SSSD</h4><p>This step will install and config SSSD on each node of emr cluster. The same to installing OpenLDAP, we should still keep in local host to run the command line, it will perform on remote nodes via SSH.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> ./ranger-emr-cli-installer/bin/setup.sh install-sssd \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --sssd-bind-dn <span class="string">&#x27;cn=sssd,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --sssd-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --emr-cluster-id <span class="string">&quot;<span class="variable">$EMR_CLUSTER_ID</span>&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="2-3-7-Configure-Hue"><a href="#2-3-7-Configure-Hue" class="headerlink" title="2.3.7 Configure Hue"></a>2.3.7 Configure Hue</h4><p>This step will update hue configuration of emr, as highlighted in all-in-one installation , if you have other customized emr configuration, please skip this step, but you can still manually merge generated json file for hue configuration by command line into your own json.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh configure-hue \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --hue-bind-dn <span class="string">&#x27;cn=hue,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --hue-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --openldap-user-object-class <span class="string">&#x27;inetOrgPerson&#x27;</span> \</span><br><span class="line">    --emr-cluster-id <span class="string">&quot;<span class="variable">$EMR_CLUSTER_ID</span>&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="2-3-8-Create-Example-Users"><a href="#2-3-8-Create-Example-Users" class="headerlink" title="2.3.8 Create Example Users"></a>2.3.8 Create Example Users</h4><p>This step will create 2 example users in order to facilitate following verification.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh add-example-users \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;open-source&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-root-cn <span class="string">&#x27;admin&#x27;</span> \</span><br><span class="line">    --openldap-root-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --example-users <span class="string">&#x27;example-user-1,example-user-2&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="3-Verification"><a href="#3-Verification" class="headerlink" title="3. Verification"></a>3. Verification</h2><p>After installation &amp; integration is completed, it’s time to check if ranger works or not. The verification jobs are divided into 2 parts which are against hdfs and hive. First, let us login OpenLDAP via a client, i.e., LdapAdmin or Apache Directory Studio, then check out all DN, it should look as following:</p>
+<p> <img src="/../../images/security/ranger-emr-4-openldap-open-source/5.jpeg" alt="请添加图片描述"></p>
+<p>Next, open ranger web console, the address is: <code>http://&lt;YOUR-RANGER-HOST&gt;:6080</code> , the default admin account&#x2F;password is: <code>admin/admin</code> . After login, we should open “Users&#x2F;Groups&#x2F;Roles” page first, check if example users on OpenLDAP are already synchronized to ranger as following:<br> <img src="/../../images/security/ranger-emr-4-openldap-open-source/6.jpeg" alt="请添加图片描述"></p>
+<p>And besides, login the master node of emr cluster, export cluster id, because subsequent command lines need this variable.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on master node of emr cluster</span></span><br><span class="line"><span class="built_in">export</span> EMR_CLUSTER_ID=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>The following is a copy of example:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on master node of emr cluster</span></span><br><span class="line"><span class="built_in">export</span> EMR_CLUSTER_ID=<span class="string">&#x27;j-2S04VJZ5YQHZ4&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="3-1-HDFS-Access-Control-Verification"><a href="#3-1-HDFS-Access-Control-Verification" class="headerlink" title="3.1 HDFS Access Control Verification"></a>3.1 HDFS Access Control Verification</h3><p>Usually, there are a set of pre-defined policies for hdfs plugin after installation as following:</p>
+<p> <img src="/../../images/security/ranger-emr-4-openldap-open-source/7.jpeg" alt="请添加图片描述"></p>
+<p>We do NOT configure any HDFS permissions for <code>example-user-1</code> , but if we login Hue with the account <code>example-user-1</code> , you will see it can browse most directories and files on HDFS, this is because most directories and files has <code>a+w</code> permission. Please keep in mind that HDFS <code>r/w/x</code> file mode attributes and ranger-based permissions always take effective at the same time.</p>
+<p>To verify if HDFS plugin works, we select “blacklist” mode to test. First, let’s create a directory named <code>/ranger-test</code> on hdfs, and set example-user-1 as its owner:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on master node of emr cluster</span></span><br><span class="line"><span class="built_in">sudo</span> -u hdfs hdfs dfs -<span class="built_in">mkdir</span> /ranger-test</span><br><span class="line"><span class="built_in">sudo</span> -u hdfs hdfs dfs -<span class="built_in">chown</span> example-user-1:example-group /ranger-test</span><br><span class="line"><span class="built_in">sudo</span> -u hdfs hdfs dfs -<span class="built_in">chmod</span> 700 /ranger-test</span><br></pre></td></tr></table></figure>
+
+<p>Next, let’s add a deny-policy which disable example-user-1 read and write ranger-test:</p>
+<p> <img src="/../../images/security/ranger-emr-4-openldap-open-source/8.png" alt="请添加图片描述"></p>
+<p>Any policy changes on ranger web console will sync to agent side (emr cluster nodes) within 30 seconds, we can run following commands on master node to check if local policy file is updated:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on master node of emr cluster</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> &#123;1..10&#125;; <span class="keyword">do</span></span><br><span class="line">    <span class="built_in">printf</span> <span class="string">&quot;\n%100s\n\n&quot;</span>|<span class="built_in">tr</span> <span class="string">&#x27; &#x27;</span> <span class="string">&#x27;=&#x27;</span></span><br><span class="line">    <span class="built_in">sudo</span> <span class="built_in">stat</span> /etc/ranger/HDFS_<span class="variable">$&#123;EMR_CLUSTER_ID&#125;</span>/policycache/hdfs_HDFS_<span class="variable">$&#123;EMR_CLUSTER_ID&#125;</span>.json</span><br><span class="line">    <span class="built_in">sleep</span> 3</span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
+
+<p>Once local policy file is up to date, the deny policy become effective, then login Hue with OpenLDAP account “example-user-1” created by installer, open “File Browser”, click root directory “&#x2F;”, then click “ranger-test” folder, we will get an error message: “Cannot access:&#x2F;ranger-test”:</p>
+<p> <img src="/../../images/security/ranger-emr-4-openldap-open-source/9.jpeg" alt="请添加图片描述"></p>
+<p>Even current user example-user-1 is the owner of this folder, it is still blocked by ranger hdfs plugin, this means hdfs access control is managed by ranger.</p>
+<p>Finally, remember to REMOVE the “ranger-test” policy so as example-user-1 has full privileges to access this folder, because following hive verification will re-use this folder.</p>
+<h3 id="3-2-Hive-Access-Control-Verification"><a href="#3-2-Hive-Access-Control-Verification" class="headerlink" title="3.2 Hive Access Control Verification"></a>3.2 Hive Access Control Verification</h3><p>Usually, there is a set of pre-defined policies for hive plugin after installation, to eliminate interference, keep verification simple, let’s REMOVE them first:</p>
+<p> <img src="/../../images/security/ranger-emr-4-openldap-open-source/10.jpeg" alt="请添加图片描述"></p>
+<p>Any policy changes on ranger web console will sync to agent side (emr cluster nodes) within 30 seconds, we can run following commands on master node to check if local policy file is updated:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on master node of emr cluster</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> &#123;1..10&#125;; <span class="keyword">do</span></span><br><span class="line">    <span class="built_in">printf</span> <span class="string">&quot;\n%100s\n\n&quot;</span>|<span class="built_in">tr</span> <span class="string">&#x27; &#x27;</span> <span class="string">&#x27;=&#x27;</span></span><br><span class="line">    <span class="built_in">sudo</span> <span class="built_in">stat</span> /etc/ranger/HIVE_<span class="variable">$&#123;EMR_CLUSTER_ID&#125;</span>/policycache/hiveServer2_HIVE_<span class="variable">$&#123;EMR_CLUSTER_ID&#125;</span>.json</span><br><span class="line">    <span class="built_in">sleep</span> 3</span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
+
+<p>Once local policy file is up to date, removing-all-policies action become effective, then login Hue with OpenLDAP account “example-user-1” created by installer, open hive editor, enter following sql (remember to replace “ranger-test” with your own bucket) to create a test table (change ‘ranger-test’ to your own bucket name):</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- run in hue hive editor</span></span><br><span class="line"><span class="keyword">create table</span> ranger_test (</span><br><span class="line">  id <span class="type">bigint</span></span><br><span class="line">)</span><br><span class="line"><span class="type">row</span> format delimited</span><br><span class="line">stored <span class="keyword">as</span> textfile location <span class="string">&#x27;/ranger-test&#x27;</span>;</span><br></pre></td></tr></table></figure>
+
+<p>then, run it and an error occurs:</p>
+<p> <img src="/../../images/security/ranger-emr-4-openldap-open-source/11.png" alt="请添加图片描述"></p>
+<p>It shows example-user-1 is blocked by database-related permissions, this proves hive plugin is working, then we go back to ranger, add a hive policy named “all - database, table, column” as following:</p>
+<p> <img src="/../../images/security/ranger-emr-4-openldap-open-source/12.jpeg" alt="请添加图片描述"></p>
+<p>It grants example-user-1 all privileges on all databases, tables and columns, then check policy file again on master node with previous command line, once updated, go back to Hue, re-run that sql, it will go well as following:</p>
+<p> <img src="/../../images/security/ranger-emr-4-openldap-open-source/13.png" alt="请添加图片描述"></p>
+<p>To double check if example-user-1 has full read &amp; write permissions on the table, we can run following sql:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">insert into</span> ranger_test(id) <span class="keyword">values</span>(<span class="number">1</span>);</span><br><span class="line"><span class="keyword">insert into</span> ranger_test(id) <span class="keyword">values</span>(<span class="number">2</span>);</span><br><span class="line"><span class="keyword">insert into</span> ranger_test(id) <span class="keyword">values</span>(<span class="number">3</span>);</span><br><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> ranger_test;</span><br></pre></td></tr></table></figure>
+
+<p>The execution result is:</p>
+<p> <img src="/../../images/security/ranger-emr-4-openldap-open-source/14.png" alt="请添加图片描述"></p>
+<p>By now, hive access control verifications are passed.</p>
+<h2 id="4-Appendix"><a href="#4-Appendix" class="headerlink" title="4. Appendix"></a>4. Appendix</h2><p>The following is parameter specification:</p>
+<table>
+<thead>
+<tr>
+<th align="left">Parameter</th>
+<th align="left">Comment</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">–region</td>
+<td align="left">the aws region.</td>
+</tr>
+<tr>
+<td align="left">–access-key-id</td>
+<td align="left">the aws access key id of your IAM account.</td>
+</tr>
+<tr>
+<td align="left">–secret-access-key</td>
+<td align="left">the aws secret access key of your IAM account.</td>
+</tr>
+<tr>
+<td align="left">–ssh-key</td>
+<td align="left">the ssh private key file path.</td>
+</tr>
+<tr>
+<td align="left">–solution</td>
+<td align="left">the solution name, accepted values ‘open-source’ or ‘emr-native’.</td>
+</tr>
+<tr>
+<td align="left">–auth-provider</td>
+<td align="left">the authentication provider, accepted values ‘ad’ or ‘openldap’.</td>
+</tr>
+<tr>
+<td align="left">–openldap-host</td>
+<td align="left">the FQDN of openldap host.</td>
+</tr>
+<tr>
+<td align="left">–openldap-base-dn</td>
+<td align="left">the base dn of openldap, for example: ‘dc&#x3D;example,dc&#x3D;com’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–openldap-root-cn</td>
+<td align="left">the cn of root account, for example: ‘admin’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–openldap-root-password</td>
+<td align="left">the password of root account, for example: ‘Admin1234!’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–ranger-bind-dn</td>
+<td align="left">the bind dn for ranger, for example: ‘cn&#x3D;ranger,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–ranger-bind-password</td>
+<td align="left">the password of ranger bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–openldap-user-dn-pattern</td>
+<td align="left">the dn pattern for ranger to search users on OpenLDAP, for example: ‘uid&#x3D;{0},ou&#x3D;users,dc&#x3D;example,dc&#x3D;com’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–openldap-group-search-filter</td>
+<td align="left">the filter for ranger to search groups on OpenLDAP, for example: ‘(member&#x3D;uid&#x3D;{0},ou&#x3D;users,dc&#x3D;example,dc&#x3D;com)’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–openldap-user-object-class</td>
+<td align="left">the user object class for ranger to search users, for example: ‘inetOrgPerson’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–hue-bind-dn</td>
+<td align="left">the bind dn for hue, for example: ‘cn&#x3D;hue,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–hue-bind-password</td>
+<td align="left">the password of hue bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–example-users</td>
+<td align="left">the example users to be created on OpenLDAP &amp; Kerberos so as to demo ranger’s feature, this parameter is optional, if omitted, no example users will be created.</td>
+</tr>
+<tr>
+<td align="left">–ranger-bind-dn</td>
+<td align="left">the bind dn for ranger, for example: ‘cn&#x3D;ranger,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–ranger-bind-password</td>
+<td align="left">the password of bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–hue-bind-dn</td>
+<td align="left">the bind dn for hue, for example: ‘cn&#x3D;hue,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–hue-bind-password</td>
+<td align="left">the password of hue bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–sssd-bind-dn</td>
+<td align="left">the bind dn for sssd, for example: ‘cn&#x3D;sssd,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–sssd-bind-password</td>
+<td align="left">the password of sssd bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–ranger-plugins</td>
+<td align="left">the ranger plugins to be installed, comma separated for multiple values. for example: ‘open-source-hdfs,open-source-hive’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–skip-configure-hue</td>
+<td align="left">skip to configure hue, accepted values ‘true’ or ‘false’, dafault value is ‘false’.</td>
+</tr>
+<tr>
+<td align="left">–skip-migrate-kerberos-db</td>
+<td align="left">skip to migrate kerberos database, accepted values ‘true’ or ‘false’, dafault value is ‘false’.</td>
+</tr>
+</tbody></table>
+<p>Related Reading:</p>
+<table>
+<thead>
+<tr>
+<th align="left">Apache Ranger and AWS EMR Automated Installation Series</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a href="/security/ranger-emr-1-overview/">Apache Ranger and AWS EMR Automated Installation Series (1): Solutions Overview</a></td>
+</tr>
+<tr>
+<td align="left"><a href="/security/ranger-emr-2-openldap-native/">Apache Ranger and AWS EMR Automated Installation Series (2): OpenLDAP + EMR-Native Ranger</a></td>
+</tr>
+<tr>
+<td align="left"><a href="/security/ranger-emr-3-ad-native/">Apache Ranger and AWS EMR Automated Installation Series (3): Windows AD + EMR-Native Ranger</a></td>
+</tr>
+<tr>
+<td align="left"><a href="/security/ranger-emr-4-openldap-open-source/">Apache Ranger and AWS EMR Automated Installation Series (4): OpenLDAP + Open-Source Ranger</a></td>
+</tr>
+<tr>
+<td align="left"><a href="/security/ranger-emr-5-ad-open-source/">Apache Ranger and AWS EMR Automated Installation Series (5): Windows AD + Open-Source Ranger</a></td>
+</tr>
+</tbody></table>
+</div><div class="article-licensing box"><div class="licensing-title"><p>Apache Ranger 与 AWS EMR 自动化安装与集成 (4)：OpenLDAP + Open-Source Ranger</p><p><a href="https://laurence.enlightgram.com/security/ranger-emr-4-openldap-open-source/">https://laurence.enlightgram.com/security/ranger-emr-4-openldap-open-source/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2023-01-30</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/AWS/">AWS</a><a class="link-muted mr-2" rel="tag" href="/tags/EMR/">EMR</a><a class="link-muted mr-2" rel="tag" href="/tags/Ranger/">Ranger</a><a class="link-muted mr-2" rel="tag" href="/tags/OpenLDAP/">OpenLDAP</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/security/ranger-emr-5-ad-open-source/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Apache Ranger 与 AWS EMR 自动化安装与集成 (5)：Windows AD + Open-Source Ranger</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/python/python-duck-typing/"><span class="level-item">Python笔记 · 鸭子类型 / Duck Typing</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-OpenLDAP-Open-Source-Ranger-Solution-Overview"><span class="level-left"><span class="level-item">1. OpenLDAP + Open-Source Ranger Solution Overview</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#1-1-Solution-Architecture"><span class="level-left"><span class="level-item">1.1 Solution Architecture</span></span></a></li><li><a class="level is-mobile" href="#1-2-Ranger-in-Detail"><span class="level-left"><span class="level-item">1.2 Ranger in Detail</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-Installation-Integration"><span class="level-left"><span class="level-item">2. Installation &amp; Integration</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-1-Prerequisites"><span class="level-left"><span class="level-item">2.1 Prerequisites</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-1-1-Create-EC2-Instances-as-Ranger-and-OpenLDAP-Server"><span class="level-left"><span class="level-item">2.1.1 Create EC2 Instances as Ranger and OpenLDAP Server</span></span></a></li><li><a class="level is-mobile" href="#2-1-2-Download-Installer"><span class="level-left"><span class="level-item">2.1.2 Download Installer</span></span></a></li><li><a class="level is-mobile" href="#2-1-3-Upload-SSH-Key-File"><span class="level-left"><span class="level-item">2.1.3 Upload SSH Key File</span></span></a></li><li><a class="level is-mobile" href="#2-1-4-Export-Environment-Specific-Variables"><span class="level-left"><span class="level-item">2.1.4 Export Environment-Specific Variables</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-2-All-In-One-Installation"><span class="level-left"><span class="level-item">2.2 All-In-One Installation</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-2-1-Quick-Start"><span class="level-left"><span class="level-item">2.2.1 Quick Start</span></span></a></li><li><a class="level is-mobile" href="#2-2-2-Customization"><span class="level-left"><span class="level-item">2.2.2 Customization</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-3-Step-By-Step-Installation"><span class="level-left"><span class="level-item">2.3 Step-By-Step Installation</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-3-1-Init-EC2"><span class="level-left"><span class="level-item">2.3.1 Init EC2</span></span></a></li><li><a class="level is-mobile" href="#2-3-2-Install-OpenLDAP"><span class="level-left"><span class="level-item">2.3.2 Install OpenLDAP</span></span></a></li><li><a class="level is-mobile" href="#2-3-3-Install-Ranger"><span class="level-left"><span class="level-item">2.3.3 Install Ranger</span></span></a></li><li><a class="level is-mobile" href="#2-3-4-Create-EMR-Cluster"><span class="level-left"><span class="level-item">2.3.4 Create EMR Cluster</span></span></a></li><li><a class="level is-mobile" href="#2-3-5-Install-Ranger-Plugins"><span class="level-left"><span class="level-item">2.3.5 Install Ranger Plugins</span></span></a></li><li><a class="level is-mobile" href="#2-3-6-Install-SSSD"><span class="level-left"><span class="level-item">2.3.6 Install SSSD</span></span></a></li><li><a class="level is-mobile" href="#2-3-7-Configure-Hue"><span class="level-left"><span class="level-item">2.3.7 Configure Hue</span></span></a></li><li><a class="level is-mobile" href="#2-3-8-Create-Example-Users"><span class="level-left"><span class="level-item">2.3.8 Create Example Users</span></span></a></li></ul></li></ul></li><li><a class="level is-mobile" href="#3-Verification"><span class="level-left"><span class="level-item">3. Verification</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#3-1-HDFS-Access-Control-Verification"><span class="level-left"><span class="level-item">3.1 HDFS Access Control Verification</span></span></a></li><li><a class="level is-mobile" href="#3-2-Hive-Access-Control-Verification"><span class="level-left"><span class="level-item">3.2 Hive Access Control Verification</span></span></a></li></ul></li><li><a class="level is-mobile" href="#4-Appendix"><span class="level-left"><span class="level-item">4. Appendix</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

@@ -8,8 +8,10 @@
                 // Lightboxes and share SDKs own their links, including SDK-generated local URLs.
                 elements: 'a[href]:not(.gallery-item):not(.a2a_kit a):not([data-share-provider] a):not(.sharethis-inline-share-buttons a), form[action]',
                 selectors: [
-                    // Stylesheets are switched with appearance: their number varies.
-                    '[data-pjax]:not(link)',
+                    // Stylesheets are switched with appearance: their number varies. Those in the columns
+                    // are switched, and their scripts run, with the columns: their number varies, as the
+                    // encrypted posts have scripts of their own, and PJAX does not keep the scripts it runs.
+                    '[data-pjax]:not(link):not(body > .section > .container > .columns [data-pjax])',
                     '.navbar-logo',
                     '.footer-logo',
                     '.pjax-reload',

@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>JMeter实用案例讲解：生成Mockup/Dummy JSON压测REST API - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="在实际工作中我们经常需要做一些性能测试，过去我基本上使用的都是JMeter，这么多年使用下来的一个感受是：JMeter并不太容易上手，但确实强大灵活，可以应对一些复杂的测试场景，一但掌握了，基本就不再需要其他工具了。所以这次专门写篇文章归纳总结一下。本文是一篇快速入门类的文章，将围绕最有代表性也是最常见的一类场景进行介绍，即：生成Mockup/Dummy JSON数据压测Restful API，同"><meta property="og:type" content="article"><meta property="og:title" content="JMeter实用案例讲解：生成Mockup/Dummy JSON压测REST API"><meta property="og:url" content="https://laurence.enlightgram.com/web/jmeter-mock-json-rest-api/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="在实际工作中我们经常需要做一些性能测试，过去我基本上使用的都是JMeter，这么多年使用下来的一个感受是：JMeter并不太容易上手，但确实强大灵活，可以应对一些复杂的测试场景，一但掌握了，基本就不再需要其他工具了。所以这次专门写篇文章归纳总结一下。本文是一篇快速入门类的文章，将围绕最有代表性也是最常见的一类场景进行介绍，即：生成Mockup/Dummy JSON数据压测Restful API，同"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/web/jmeter-mock-json-rest-api/1.png"><meta property="article:published_time" content="2020-09-04T16:34:13.000Z"><meta property="article:modified_time" content="2026-11-11T03:37:39.404Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="JSON"><meta property="article:tag" content="JMeter"><meta property="article:tag" content="REST"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/web/jmeter-mock-json-rest-api/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/web/jmeter-mock-json-rest-api/"},"headline":"JMeter实用案例讲解：生成Mockup/Dummy JSON压测REST API","image":["https://laurence.enlightgram.com/images/web/jmeter-mock-json-rest-api/1.png"],"datePublished":"2020-09-04T16:34:13.000Z","dateModified":"2026-11-11T03:37:39.404Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"在实际工作中我们经常需要做一些性能测试，过去我基本上使用的都是JMeter，这么多年使用下来的一个感受是：JMeter并不太容易上手，但确实强大灵活，可以应对一些复杂的测试场景，一但掌握了，基本就不再需要其他工具了。所以这次专门写篇文章归纳总结一下。本文是一篇快速入门类的文章，将围绕最有代表性也是最常见的一类场景进行介绍，即：生成Mockup/Dummy JSON数据压测Restful API，同"}</script><link rel="canonical" href="https://laurence.enlightgram.com/web/jmeter-mock-json-rest-api/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">JMeter实用案例讲解：生成Mockup/Dummy JSON压测REST API</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Web/">Web</a></span><span class="level-item">发表于：<time dateTime="2020-09-04T16:34:13.000Z" title="2020-09-04 09:34:13">2020-09-04</time></span><span class="level-item">阅读用时：27 分钟 (约 4039 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>在实际工作中我们经常需要做一些性能测试，过去我基本上使用的都是JMeter，这么多年使用下来的一个感受是：JMeter并不太容易上手，但确实强大灵活，可以应对一些复杂的测试场景，一但掌握了，基本就不再需要其他工具了。所以这次专门写篇文章归纳总结一下。本文是一篇快速入门类的文章，将围绕最有代表性也是最常见的一类场景进行介绍，即：生成Mockup&#x2F;Dummy JSON数据压测Restful API，同时配合讲解我还专门开发了一个JMeter Demo工程： <a target="_blank" rel="noopener" href="https://github.com/bluishglc/jmeter-demo.git">https://github.com/bluishglc/jmeter-demo.git</a> ，希望通过对实例的讲解能有助于大家学习和复用。</p>
+<h3 id="1-压力测试有哪些常见的需求？"><a href="#1-压力测试有哪些常见的需求？" class="headerlink" title="1. 压力测试有哪些常见的需求？"></a>1. 压力测试有哪些常见的需求？</h3><p>在开始对JMeter的讲解之前，我们先了解一下进行压力测试前需要做哪些事情：</p>
+<ul>
+<li><p>准备测试数据</p>
+</li>
+<li><p>多线程并发推送数据</p>
+</li>
+</ul>
+<p>对于所有的压测工具来说，第2点都是内置的基本功能，没有太大差别，差别往往体现在 <strong>是否能灵活便捷地生成测试数据</strong> 。一般来说，生成测试数据时往往有这样一些需求：</p>
+<ul>
+<li><p>为记录中的某些字段生成随机值</p>
+</li>
+<li><p>控制记录中的某些字段在一个限定的集合中取值</p>
+</li>
+</ul>
+<p>接下我们就进行JMeter的学习，看看它是如何实现这些需求的。</p>
+<h3 id="2-案例需求与JMeter-Demo工程"><a href="#2-案例需求与JMeter-Demo工程" class="headerlink" title="2. 案例需求与JMeter Demo工程"></a>2. 案例需求与JMeter Demo工程</h3><p>为了便于学习JMeter的特性，我们来虚拟一个压力测试场景:</p>
+<p>假设现在我们有这样一个Restful API需要进行压力测试：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">接口：POST /api/put</span><br><span class="line">消息格式：application/json</span><br><span class="line">消息样本：</span><br><span class="line"><span class="punctuation">[</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;metric&quot;</span><span class="punctuation">:</span> <span class="string">&quot;cpu.usage&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;timestamp&quot;</span><span class="punctuation">:</span> <span class="number">1598286113000</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;value&quot;</span><span class="punctuation">:</span> <span class="string">&quot;24&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;tags&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;app&quot;</span><span class="punctuation">:</span> <span class="string">&quot;app01&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;server&quot;</span><span class="punctuation">:</span> <span class="string">&quot;server01&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;metric&quot;</span><span class="punctuation">:</span> <span class="string">&quot;mem.used&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;timestamp&quot;</span><span class="punctuation">:</span> <span class="number">1598286113000</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;value&quot;</span><span class="punctuation">:</span> <span class="string">&quot;1234&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;tags&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;app&quot;</span><span class="punctuation">:</span> <span class="string">&quot;app01&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;server&quot;</span><span class="punctuation">:</span> <span class="string">&quot;server01&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">]</span></span><br></pre></td></tr></table></figure>
+
+<p>这是一个典型的向Restful API推送Json数据的压力测试，关于API接收的数据格式，有如下一些解释：</p>
+<ul>
+<li><p>数据描述的一些服务器运行的硬件运行指标（标准叫法是metric），例如数组中的第一个JSON是cpu利用率，第二个是已用内存（熟悉OpenTSDB的同学可能已经认出来了，没错，这是OpenTSDB的数据格式）。</p>
+</li>
+<li><p>每次推送的是一个JSON数组，数组内的JSON元素格式是一样的(tags类似于一个map，内部的KV对可以是不固定的），只是字段的取值会有所不同</p>
+</li>
+</ul>
+<p>接下来是对需要生成的Mockup&#x2F;Dummy JSON数据的 <strong>重要需求</strong> ：</p>
+<ol>
+<li><p>在单次推送的JSON中，所有metric数据的 <code>timestamp</code> 值是一样的，表示的是在同一个时间点采集的不同指标</p>
+</li>
+<li><p>但是在不同批次推送的JSON中， <code>timestamp</code> 的值是不一样的，需要在一个指定的时间区间内生成随机的时间戳</p>
+</li>
+<li><p><code>cpu.usage</code> 的 <code>value</code> 是一个0到100之间的随机值， <code>mem.used</code> 的 <code>value</code> 是一个0到1024之间的随机值</p>
+</li>
+<li><p><code>tags</code> 中的 <code>app</code> 和 <code>server</code> 既不可以完全随机，也不可以是固定的单一值，而是要按如下的取值组合生成数据：</p>
+</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">app01,server01</span><br><span class="line">app01,server02</span><br><span class="line">app02,server03</span><br><span class="line">app02,server04</span><br></pre></td></tr></table></figure>
+
+<p>很多时候，我们在生成数据时会通过不同的取值组合控制生成的的数据比例，从而可以测试在不同数据量下系统的性能表现，例如上面的场景，如果我们给app01再追加两台server，这样生成app01的数据量就是app02的两倍。介绍完样本数据的需求后，让我们看一下JMeter是如何实现这个测试的吧。</p>
+<h3 id="3-创建测试计划"><a href="#3-创建测试计划" class="headerlink" title="3. 创建测试计划"></a>3. 创建测试计划</h3><p>一个测试计划就是一个JMeter工程，通过菜单：“File” -&gt; “New”即可创建，本文我们以建好的jmeter-demo项目为例讲解。首先，检出项目： <code>git clone https://github.com/bluishglc/jmeter-demo.git</code> ，然后通过JMeter打开项目中的 <code>demo-testplan.jmx</code> 文件， 我们将会看到这样的界面：</p>
+<p><img src="/../../images/web/jmeter-mock-json-rest-api/1.png" alt="在这里插入图片描述"></p>
+<p>在左侧的工程目录中，Demo Test Plan是根目录，下面包含一个Demo Thread Group。一个Test Plan通常会包含多个Test Group, 一个Test Group相当于一个可独立执行的测试用例。对于Test Group来说，最重要的三个设置项是分别是：</p>
+<ul>
+<li><p>Number of Threads: 启动多少个并发线程</p>
+</li>
+<li><p>Loop Count：（每个线程的）执行次数</p>
+</li>
+<li><p>Ramp-up Period: 当启动多个线程时，在多长时间内完成全部线程的启动</p>
+</li>
+</ul>
+<p>对这个三个参数作两点简要说明：</p>
+<ul>
+<li><p>Number of Threads * Loop Count &#x3D; Total Count， 如果线程数是2，Loop Count是50， 则测试计划将总计将执行2 * 50 &#x3D; 100次</p>
+</li>
+<li><p>如果线程数是5，Ramp-up Period是50秒，则平均每10秒会启动一个新线程，直到5个线程全部起来。之所以会有这个ramp-up的时间是因为启动线程是一个比较耗费资源的动作，一般不太可能一下就初始化出这么多线程，给定一个ramp-up的周期是比较好的做法。</p>
+</li>
+</ul>
+<p>需要提醒大家注意的是，虽然最新的JMeter对于Thread Group中各个配置项的顺序并没有要求，但是为了便于管理和维护，还是建议大家按配置项起作用的顺序进行排序，把发送请求前需要完成的配置项放在前面，例如这里的HTTP Header Manager, Random Variable以及CSV Data Set Config；把请求发送的配置项放在中间，也就是这里的HTTP Request，发送之后的结果汇总放在最后，也就是View Results in Table, View Results Tree和Summary Report。</p>
+<h3 id="4-配置HTTP-Header"><a href="#4-配置HTTP-Header" class="headerlink" title="4. 配置HTTP Header"></a>4. 配置HTTP Header</h3><p>接下来， 我们先看Thread Goup中的第一个配置项： HTTP Header Manager：</p>
+<p><img src="/../../images/web/jmeter-mock-json-rest-api/2.png" alt="在这里插入图片描述"></p>
+<p>添加“HTTP Header Manager”的方法是在Thread Group上单击右键，在弹出的菜单中选择：“Add” -&gt; “Config Element” -&gt; “HTTP Header Manager” 。</p>
+<p>顾名思义，这是配置HTTP请求的Header信息的，在我们这个示例中，只有一个重要的Header信息，即 <code>Content-Type: application/json;charset=UTF-8</code> ，因为我们推送的是一个JSON数据。需要特别提醒的是：通常HTTP Header的配置在一个项目中是高度统一的，所以更多时候，HTTP Header Manager会放在Test Plan下面，而不是某一个Thread Group下，以便其全局有效。</p>
+<h3 id="5-设定随机变量"><a href="#5-设定随机变量" class="headerlink" title="5. 设定随机变量"></a>5. 设定随机变量</h3><p>接下来是Tread Group中的第二个配置项：Random Variable:</p>
+<p><img src="/../../images/web/jmeter-mock-json-rest-api/3.png" alt="在这里插入图片描述"></p>
+<p>添加“Random Variable”的方法是在Thread Group上单击右键，在弹出的菜单中选择：“Add” -&gt; “Config Element” -&gt; “Random Variable” 。</p>
+<p>这是用来配置随机变量的。前面我们对JSON数据提出的第2点需求：</p>
+<p><code>在不同批次推送的JSON中， timestamp的值必需是不一样的，需要在一个指定的时间区间内生成随机的时间戳</code> </p>
+<p>这里的Random Variable设置就是应这一需求而添加的。在右侧的面板中，我们需要做如下配置：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Variable Name：timestamp</span><br><span class="line">Minimum Value: 1590940800</span><br><span class="line">Maximum Vlaue: 1601481600</span><br></pre></td></tr></table></figure>
+
+<p>解释一下这三项配置，变量名我们取名为 <code>timestamp</code> ，这一变量名将在后面的JSON模板中引用，使用方式是 <code>${timestamp}</code> ，其值使用Unix Timestamp格式，Minimum Value是设定的最小取值，转换为日期是 <code>2020-06-01 00:00:00</code> ，Maximum Vlaue是最大值，转换为日期是 <code>2020-10-01 00:00:00</code> ，所以这个三个配置项合在一起就可以实现：生成 <code>2020-06-01 00:00:00</code> 到 <code>2020-10-01 00:00:00</code> 之间的随机 时间戳 。</p>
+<p>关于随机时间戳，我们必须要留意这样一个问题：如果我们指定的时间范围较小，而生成的数据量又比较大时，一定会产生大量的重复时间戳，假如这个时间戳字段在你测试的系统中不允许重复，或者时间戳重复的记录被自动覆盖（例如OpenTSDB），而压测完成后，沉淀在数据库里的数据条数会远远小于你的压测数据量，这一点大家务必要注意。</p>
+<p>关于Random Variable还要解释一点的是：在一次运行中只会有一个随机值，所有引用这个变量的地方在一次运行中其值是一样的，这正符合我们对timestamp时间戳的要求，因为我们需要： <code>在单次推送的JSON中，所有metric数据的timestamp值是一样的，表示的是在同一个时间点采集的不同的metric</code> 。</p>
+<p>如果我们想让同一批次推送的JSON中的某个多次出现的值不一样，则应该使用Random函数。在需求3中，我们要求 <code>cpu.usage的value每次都是一个0到100之间的随机值</code> ，所以value的值可以这样设定： <code>${__Random(0,100)}</code> ，我们会在后面的JSON模板中看到。</p>
+<p>JMeter中提供了大量强大而灵活的function，可以参考其官方文档： <a target="_blank" rel="noopener" href="https://jmeter.apache.org/usermanual/functions.html">https://jmeter.apache.org/usermanual/functions.html</a></p>
+<h3 id="6-基于限定的取值集合生成测试数据"><a href="#6-基于限定的取值集合生成测试数据" class="headerlink" title="6. 基于限定的取值集合生成测试数据"></a>6. 基于限定的取值集合生成测试数据</h3><p>我们再继续往下看CSV Data Set Config：</p>
+<p><img src="/../../images/web/jmeter-mock-json-rest-api/4.png" alt="在这里插入图片描述"></p>
+<p>添加“Random Variable”的方法是在Thread Group上单击右键，在弹出的菜单中选择：“Add” -&gt; “Config Element” -&gt; “CSV Data Set Config” 。</p>
+<p>CSV Data Set Config是为实现需求4：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">tags中的app和server既不可以完全随机，也不可以是固定的单一值，而是要按如下的取值组合生成数据：</span><br><span class="line">app01,server01</span><br><span class="line">app01,server02</span><br><span class="line">app02,server03</span><br><span class="line">app02,server04</span><br></pre></td></tr></table></figure>
+
+<p>而添加的。这是JMeter中非常强大的一项功能。简单地说，它的用处就是把测试需要的取值集合写到一个CSV文件中，每次执行时从CSV文件中读取一行数据替换请求中的相关变量。</p>
+<p>我们看一下它的具体实现，在右侧配置中，最重要的是两项配置：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">File Name：data-classifier.csv</span><br><span class="line">Varaiable Names: app,server</span><br></pre></td></tr></table></figure>
+
+<p>File Name用来指定取值集合CSV文件的位置，我们建议将CSV文件放置于项目文件*.jmx的同一目录下，这样可以使用相对路径，即只指定csv文件名即可，因为CSV文件和工程文件是在同一目录下，这做的好处不管工程拷贝到什么位置，都不需要修改这里的路径。</p>
+<p>同时，我们要给CSV提供的数据集合取一些变量名，只有有了变量名才能在后续的JSON模板中引用。CSV文件中的每一列数据都可以单独引用，所以这里的变量名相当于CSV文件的列名。我们来看一下 <code>data-classifier.csv</code> 文件就知道了：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">app01,server01</span><br><span class="line">app01,server02</span><br><span class="line">app02,server03</span><br><span class="line">app02,server04</span><br></pre></td></tr></table></figure>
+
+<p>我们给出的Varaiable Names是app,server，意思就是CSV中的第一列取名app, 第二列取名server，这样就可以在JSON模板中以 <code>${app}</code> 和 <code>${server}</code> 的形式引用CSV中的数据了，在第一次运行时，解析出的这两个变量的值分别是app01和server01，第二次运行时，解析出的值分别是app02和server02，依次类推，当第五次运行时，解析出的值又将回到app01和server01，如此一直循环下去。</p>
+<h3 id="7-配置HTTP请求和JSON模板"><a href="#7-配置HTTP请求和JSON模板" class="headerlink" title="7. 配置HTTP请求和JSON模板"></a>7. 配置HTTP请求和JSON模板</h3><p>在完成了所有的准备工作后，我们可以正式创建一个HTTP请求了。添加HTTP请求的方法是在Thread Group上单击右键，在弹出的菜单中选择：“Add” -&gt; “Sampler” -&gt; “HTTP Request” 。</p>
+<p>这里我们看一下demo工程中已经创建好的这个HTTP Request：</p>
+<p><img src="/../../images/web/jmeter-mock-json-rest-api/5.png" alt="在这里插入图片描述"></p>
+<p>在这个HTTP Request中有五个重要的配置项：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Server Name or IP: xxx.xxx.xxx.xxx //需要手动修改为你的API服务器的主机名或IP</span><br><span class="line">HTTP Request Method: POST //需要手动修改为你的API接受的Method</span><br><span class="line">HTTP Request Path: /api/put //需要手动修改为你的API接受的Path</span><br><span class="line">HTTP Port: 4242 //需要手动修改为你的API服务器的端口</span><br><span class="line">Boday Data: [&#123;&quot;metric&quot;: &quot;cpu.usage&quot;, ....&#125;] //需要手动修改为你的API接受的JSON格式</span><br></pre></td></tr></table></figure>
+
+<p>这些配置都与你实际测试的API密切相关，所以基本都需要手动修改一下。我们重点要关注的是Body Data里的这个JSON，它就是我们前面多次提到的 <strong>JSON模板</strong> ，我们前面配置的所有变量都在这个JSON模板中使用到了， 我们看一下它的具体内容：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">[</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;metric&quot;</span><span class="punctuation">:</span> <span class="string">&quot;cpu.usage&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;timestamp&quot;</span><span class="punctuation">:</span> $<span class="punctuation">&#123;</span>timestamp<span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;value&quot;</span><span class="punctuation">:</span> $<span class="punctuation">&#123;</span>__Random(<span class="number">0</span><span class="punctuation">,</span><span class="number">100</span>)<span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;tags&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;app&quot;</span><span class="punctuation">:</span> <span class="string">&quot;$&#123;app&#125;&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;server&quot;</span><span class="punctuation">:</span> <span class="string">&quot;$&#123;server&#125;&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;metric&quot;</span><span class="punctuation">:</span> <span class="string">&quot;mem.used&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;timestamp&quot;</span><span class="punctuation">:</span> $<span class="punctuation">&#123;</span>timestamp<span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;value&quot;</span><span class="punctuation">:</span> $<span class="punctuation">&#123;</span>__Random(<span class="number">0</span><span class="punctuation">,</span><span class="number">1024</span>)<span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;tags&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;app&quot;</span><span class="punctuation">:</span> <span class="string">&quot;$&#123;app&#125;&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;server&quot;</span><span class="punctuation">:</span> <span class="string">&quot;$&#123;server&#125;&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">]</span></span><br></pre></td></tr></table></figure>
+
+<p>这个JSON模板与前我们前面给出的那个JSON样本的区别在于部分字段的值被一些变量和函数替代了，从而使得每次执行时生成的JSON都是变化的。我们在前面的介绍中已经介绍过了所有的这些变量和函数，这里我们再从JSON模板的视角重新梳理一下：</p>
+<ul>
+<li><p><code>${timestamp}</code> ：是通过Random Variable定义的一个随机值，它的特点是在单次执行中其值是不变的，下次执行时才会改变。所以在本例中，每次生成的JSON里cpu.usage和mem.used两个metric的timestamp值是一样的。</p>
+</li>
+<li><p><code>${__Random(0,100)}</code> ：是一个随机函数，可以生成0到100之间的随机值，每次执行都是不一样的值。所以在本例中，每次生成的cpu.usage和mem.used两个metric的value大概率是不一样的（有一定几率生成相同的随机值）</p>
+</li>
+<li><p><code>${app}</code> 和 <code>${server}</code> ：是通过 <code>CSV Data Set Config</code> 定义的，其值分别来自于 <code>data-classifier.csv</code> 文件的第一列和第二列，每执行一次读取一行。</p>
+</li>
+</ul>
+<h3 id="8-通过命令行启动测试计划并设定并发数量和数据量"><a href="#8-通过命令行启动测试计划并设定并发数量和数据量" class="headerlink" title="8. 通过命令行启动测试计划并设定并发数量和数据量"></a>8. 通过命令行启动测试计划并设定并发数量和数据量</h3><p>在测试计划的开发阶段，我们可以通过JMeter的GUI直接启动少量的请求来验证测试计划是否配置正确，一旦开发完成准备进行正式测试时，就不建议在GUI上执行了，而是要将整个工程拷贝到一台测试服务器上，通过命令行的方式来启动测试计划，以下是命令行方式启动jmeter-demo的参考：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">nohup</span> /your-jmeter-cli-path/jmeter.sh -n -t /your-jmeter-demo-project-path/demo-testplan.jmx -l result.jtl &amp;</span><br><span class="line"><span class="built_in">tail</span> -f nohup.out</span><br></pre></td></tr></table></figure>
+
+<p>由于压力测试的执行时间一般都非常长，所以建议使用 <code>nohup...&amp;</code> 的形式在后台运行，然后使用 <code>tail -f nohup.out</code> 来查看执行状态。</p>
+<p>但是上述执行使用的并发数量和压测数据量是固化在demo-testplan.jmx工程文件中的，很多时候我们需要在执行时动态调整并发数和数据量，怎么做呢？我们可以在工程配置中将 <code>Number of Threads</code> 和 <code>Loop Count</code> 这两个配置项从固定值改为变量形式，然后在命令行中以参数形式给变量赋值。具体做法就是到Thread Group的配置页面，将 <code>Number of Threads</code> 和 <code>Loop Count</code> 配置项的值分别改为 <code>${__P(thread,)}</code> 和 <code>${__P(count,)}</code> ，如下图所示：</p>
+<p><img src="/../../images/web/jmeter-mock-json-rest-api/6.png" alt="在这里插入图片描述"></p>
+<p>然后，通过 <code>-J变量名=变量值</code> 的形式给这两个变量赋值。此时，如果我们想让这个测试启动2个线程，每个线程插入50条数据，则命令行为：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">nohup</span> /your-jmeter-cli-path/jmeter.sh -Jthread=2 -Jcount=50 -n -t /your-jmeter-demo-project-path/demo-testplan.jmx -l result.jtl &amp;</span><br><span class="line"><span class="built_in">tail</span> -f nohup.out</span><br></pre></td></tr></table></figure>
+
+<h3 id="9-查看执行结果"><a href="#9-查看执行结果" class="headerlink" title="9. 查看执行结果"></a>9. 查看执行结果</h3><p>JMeter提供了多种多样的结果报表，可以在Thread Group上单击右键，在弹出的菜单中选择：“Add” -&gt; “Listener”，然后选择你需要的即可，一般对于HTTP请求来说，常用的也就是我们Demo项目中配置的这些，我们简单看一下：</p>
+<ul>
+<li>View Results in Table</li>
+</ul>
+<p><img src="/../../images/web/jmeter-mock-json-rest-api/7.png" alt="在这里插入图片描述"></p>
+<ul>
+<li><p>View Results Tree</p>
+<p><img src="/../../images/web/jmeter-mock-json-rest-api/8.png" alt="在这里插入图片描述"></p>
+</li>
+<li><p>Summay Report</p>
+</li>
+</ul>
+<p><img src="/../../images/web/jmeter-mock-json-rest-api/9.png" alt="在这里插入图片描述"></p>
+<p>关于作者：耿立超，架构师，14年IT系统开发和架构经验，对大数据、企业级 应用架构 、SaaS、分布式存储和领域驱动设计有丰富的实践经验，热衷函数式编程。目前负责企业数据中台的架构设计和开发工作，对Hadoop&#x2F;Spark 生态系统有深入和广泛的了解，参与过Hadoop商业发行版的开发，曾带领团队建设过数个完备的企业数据平台，个人技术博客：<a href="https://laurence.enlightgram.com/">https://laurence.enlightgram.com/</a></p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>JMeter实用案例讲解：生成Mockup/Dummy JSON压测REST API</p><p><a href="https://laurence.enlightgram.com/web/jmeter-mock-json-rest-api/">https://laurence.enlightgram.com/web/jmeter-mock-json-rest-api/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2020-09-04</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/JSON/">JSON</a><a class="link-muted mr-2" rel="tag" href="/tags/JMeter/">JMeter</a><a class="link-muted mr-2" rel="tag" href="/tags/REST/">REST</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/aws/emr-client-node/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">如何制作一个AWS EMR客户端节点（ Client Node / Edge Node / Gateway Node )</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/bigdata/data-middle-platform-5-architecture-part2/"><span class="level-item">中台架构详解（下）| 建设数据中台系列（五）</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-压力测试有哪些常见的需求？"><span class="level-left"><span class="level-item">1. 压力测试有哪些常见的需求？</span></span></a></li><li><a class="level is-mobile" href="#2-案例需求与JMeter-Demo工程"><span class="level-left"><span class="level-item">2. 案例需求与JMeter Demo工程</span></span></a></li><li><a class="level is-mobile" href="#3-创建测试计划"><span class="level-left"><span class="level-item">3. 创建测试计划</span></span></a></li><li><a class="level is-mobile" href="#4-配置HTTP-Header"><span class="level-left"><span class="level-item">4. 配置HTTP Header</span></span></a></li><li><a class="level is-mobile" href="#5-设定随机变量"><span class="level-left"><span class="level-item">5. 设定随机变量</span></span></a></li><li><a class="level is-mobile" href="#6-基于限定的取值集合生成测试数据"><span class="level-left"><span class="level-item">6. 基于限定的取值集合生成测试数据</span></span></a></li><li><a class="level is-mobile" href="#7-配置HTTP请求和JSON模板"><span class="level-left"><span class="level-item">7. 配置HTTP请求和JSON模板</span></span></a></li><li><a class="level is-mobile" href="#8-通过命令行启动测试计划并设定并发数量和数据量"><span class="level-left"><span class="level-item">8. 通过命令行启动测试计划并设定并发数量和数据量</span></span></a></li><li><a class="level is-mobile" href="#9-查看执行结果"><span class="level-left"><span class="level-item">9. 查看执行结果</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

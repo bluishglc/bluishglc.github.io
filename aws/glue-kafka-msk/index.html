@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>AWS Glue集成Kafka/MSK - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="简单总结一下AWS Glue如何集成Kafka/MSK吧，因为当前（Glue 2.0）Glue对Kafka的集成和使用在我看来是比较“扭曲”的，并不能像原生Spark那样以spark.readStream的方式接入Kafka，所以暂时只做一下简单的归纳，后续根据新的进展再做补充。 在Glue中接入Kafka的消息需要先创建Glue Connection，只有通过Connection，Glue才能访"><meta property="og:type" content="article"><meta property="og:title" content="AWS Glue集成Kafka/MSK"><meta property="og:url" content="https://laurence.enlightgram.com/aws/glue-kafka-msk/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="简单总结一下AWS Glue如何集成Kafka/MSK吧，因为当前（Glue 2.0）Glue对Kafka的集成和使用在我看来是比较“扭曲”的，并不能像原生Spark那样以spark.readStream的方式接入Kafka，所以暂时只做一下简单的归纳，后续根据新的进展再做补充。 在Glue中接入Kafka的消息需要先创建Glue Connection，只有通过Connection，Glue才能访"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/aws/glue-kafka-msk/1.png"><meta property="article:published_time" content="2021-05-05T18:24:58.000Z"><meta property="article:modified_time" content="2026-11-11T03:24:07.825Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Glue"><meta property="article:tag" content="Kafka"><meta property="article:tag" content="MSK"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/aws/glue-kafka-msk/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/aws/glue-kafka-msk/"},"headline":"AWS Glue集成Kafka/MSK","image":["https://laurence.enlightgram.com/images/aws/glue-kafka-msk/1.png"],"datePublished":"2021-05-05T18:24:58.000Z","dateModified":"2026-11-11T03:24:07.825Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"简单总结一下AWS Glue如何集成Kafka/MSK吧，因为当前（Glue 2.0）Glue对Kafka的集成和使用在我看来是比较“扭曲”的，并不能像原生Spark那样以spark.readStream的方式接入Kafka，所以暂时只做一下简单的归纳，后续根据新的进展再做补充。 在Glue中接入Kafka的消息需要先创建Glue Connection，只有通过Connection，Glue才能访"}</script><link rel="canonical" href="https://laurence.enlightgram.com/aws/glue-kafka-msk/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">AWS Glue集成Kafka/MSK</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/AWS/">AWS</a></span><span class="level-item">发表于：<time dateTime="2021-05-05T18:24:58.000Z" title="2021-05-05 11:24:58">2021-05-05</time></span><span class="level-item">阅读用时：7 分钟 (约 1011 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>简单总结一下AWS Glue如何集成Kafka&#x2F;MSK吧，因为当前（Glue 2.0）Glue对Kafka的集成和使用在我看来是比较“扭曲”的，并不能像原生Spark那样以spark.readStream的方式接入Kafka，所以暂时只做一下简单的归纳，后续根据新的进展再做补充。</p>
+<p>在Glue中接入Kafka的消息需要先创建Glue Connection，只有通过Connection，Glue才能访问到外部Kakfa&#x2F;MSK集群，因为在配置Connection的过程中需要提供VPC信息，Glue会透明地给后台节点创建ENI（虚拟网卡）联通到指定的VPC上，注意这一操作是通明的，不可控的。</p>
+<p>有了Connection之后，还得建一张数据表（就是一张普通的Hive表），并在表的属性配置（TBLPROPERTIES）中设定所使用的Connection。以下是一个示例：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">EXTERNAL</span> <span class="keyword">TABLE</span> `default.user`(</span><br><span class="line">  `id` <span class="type">bigint</span> COMMENT <span class="string">&#x27;from deserializer&#x27;</span>,</span><br><span class="line">  `name` string COMMENT <span class="string">&#x27;from deserializer&#x27;</span>, </span><br><span class="line">  `age` <span class="type">int</span> COMMENT <span class="string">&#x27;from deserializer&#x27;</span>, </span><br><span class="line">  `updatedtime` <span class="type">bigint</span> COMMENT <span class="string">&#x27;from deserializer&#x27;</span>)</span><br><span class="line"><span class="type">ROW</span> FORMAT SERDE </span><br><span class="line">  <span class="string">&#x27;org.openx.data.jsonserde.JsonSerDe&#x27;</span> </span><br><span class="line"><span class="keyword">WITH</span> SERDEPROPERTIES ( </span><br><span class="line">  <span class="string">&#x27;paths&#x27;</span><span class="operator">=</span><span class="string">&#x27;&#x27;</span>) </span><br><span class="line">STORED <span class="keyword">AS</span> INPUTFORMAT </span><br><span class="line">  <span class="string">&#x27;org.apache.hadoop.mapred.TextInputFormat&#x27;</span> </span><br><span class="line">OUTPUTFORMAT </span><br><span class="line">  <span class="string">&#x27;org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat&#x27;</span></span><br><span class="line">LOCATION</span><br><span class="line">  <span class="string">&#x27;user&#x27;</span></span><br><span class="line">TBLPROPERTIES (</span><br><span class="line">  <span class="string">&#x27;classification&#x27;</span><span class="operator">=</span><span class="string">&#x27;json&#x27;</span>, </span><br><span class="line">  <span class="string">&#x27;connectionName&#x27;</span><span class="operator">=</span><span class="string">&#x27;MSK&#x27;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>在这个建表语句中，需要注意的是最后一行： <code>&#39;connectionName&#39;=&#39;MSK&#39;</code> ，这就是将connection配置给数据表的地方，这里的 <code>MSK</code> 是我创建的一个Connection的名字，稍后会给出这个Connection的具体信息。但这里要关注的重点在于：**Glue将对Kafka的接入“畸形”地映射成为了对一张Hive表的读取，这是很不好的。**这意味着，在Glue中, 像下面这种用标准Spark API读取Kafka消息的代码是跑不通的：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> stream = spark</span><br><span class="line">      .readStream</span><br><span class="line">      .format(<span class="string">&quot;kafka&quot;</span>)</span><br><span class="line">      .option(<span class="string">&quot;kafka.bootstrap.servers&quot;</span>, <span class="string">&quot;broker1:9092,broker2:9092&quot;</span>)</span><br><span class="line">      .option(<span class="string">&quot;subscribe&quot;</span>, <span class="string">&quot;user&quot;</span>)</span><br><span class="line">      .option(<span class="string">&quot;startingOffsets&quot;</span>, <span class="string">&quot;earliest&quot;</span>)</span><br><span class="line">      .load()</span><br></pre></td></tr></table></figure>
+
+<p>然后，看一下前面提到的名为MSK的Connection配置吧：</p>
+<p> <img src="/../../images/aws/glue-kafka-msk/1.png" alt="在这里插入图片描述"></p>
+<p>从这个Connection中可以看到，关键性的网络连接信息都是在Connection中配置的，Glue会基于这些信息在Glue作业节点上创建ENI（虚拟网卡），以便作业节点可以连接到Kafka的Broker。 <strong>这就是为什么在Glue中我们不能脱离开Connection直接使用 <code>option(&quot;kafka.bootstrap.servers&quot;, &quot;broker1:9092,broker2:9092&quot;)</code> 的形式连接Kafka的原因，因为Connection包含了网络相关的配置，而读取数据表生成Dataframe的过程会触发Connection的初始化，也就是打通网络，所以导致了Glue集成Kafka变成了一种类似”读表”的操作。</strong> </p>
+<p>作为一份参考，以下是一份自动生成的读取MSK的参考脚本：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> com.github.glueboot.core.job</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> com.amazonaws.services.glue.<span class="type">DynamicFrame</span></span><br><span class="line"><span class="keyword">import</span> com.amazonaws.services.glue.<span class="type">GlueContext</span></span><br><span class="line"><span class="keyword">import</span> com.amazonaws.services.glue.<span class="type">MappingSpec</span></span><br><span class="line"><span class="keyword">import</span> com.amazonaws.services.glue.errors.<span class="type">CallSite</span></span><br><span class="line"><span class="keyword">import</span> com.amazonaws.services.glue.util.<span class="type">GlueArgParser</span></span><br><span class="line"><span class="keyword">import</span> com.amazonaws.services.glue.util.<span class="type">Job</span></span><br><span class="line"><span class="keyword">import</span> com.amazonaws.services.glue.util.<span class="type">JsonOptions</span></span><br><span class="line"><span class="keyword">import</span> java.util.<span class="type">Calendar</span></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.<span class="type">SparkContext</span></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.<span class="type">Dataset</span></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.<span class="type">Row</span></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.<span class="type">SaveMode</span></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.streaming.<span class="type">Trigger</span></span><br><span class="line"><span class="keyword">import</span> scala.collection.<span class="type">JavaConverters</span>._</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">GlueApp</span> </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">main</span></span>(sysArgs: <span class="type">Array</span>[<span class="type">String</span>]) &#123;</span><br><span class="line">    <span class="keyword">val</span> spark: <span class="type">SparkContext</span> = <span class="keyword">new</span> <span class="type">SparkContext</span>()</span><br><span class="line">    <span class="keyword">val</span> glueContext: <span class="type">GlueContext</span> = <span class="keyword">new</span> <span class="type">GlueContext</span>(spark)</span><br><span class="line">    <span class="comment">// @params: [JOB_NAME]</span></span><br><span class="line">    <span class="keyword">val</span> args = <span class="type">GlueArgParser</span>.getResolvedOptions(sysArgs, <span class="type">Seq</span>(<span class="string">&quot;JOB_NAME&quot;</span>).toArray)</span><br><span class="line">    <span class="type">Job</span>.init(args(<span class="string">&quot;JOB_NAME&quot;</span>), glueContext, args.asJava)</span><br><span class="line">    <span class="comment">// @type: DataSource</span></span><br><span class="line">    <span class="comment">// @args: [stream_type = kafka, stream_batch_time = &quot;100 seconds&quot;, database = &quot;default&quot;, additionalOptions = &#123;&quot;startingOffsets&quot;: &quot;earliest&quot;, &quot;inferSchema&quot;: &quot;false&quot;&#125;, stream_checkpoint_location = &quot;s3://&lt;my-bucket&gt;/user/checkpoint/&quot;, table_name = &quot;user&quot;]</span></span><br><span class="line">    <span class="comment">// @return: datasource0</span></span><br><span class="line">    <span class="comment">// @inputs: []</span></span><br><span class="line">    <span class="keyword">val</span> data_frame_datasource0 = glueContext.getCatalogSource(database = <span class="string">&quot;default&quot;</span>, tableName = <span class="string">&quot;user&quot;</span>, redshiftTmpDir = <span class="string">&quot;&quot;</span>, transformationContext = <span class="string">&quot;datasource0&quot;</span>, additionalOptions = <span class="type">JsonOptions</span>(<span class="string">&quot;&quot;&quot;&#123;&quot;startingOffsets&quot;: &quot;earliest&quot;, &quot;inferSchema&quot;: &quot;false&quot;&#125;&quot;&quot;&quot;</span>)).getDataFrame()</span><br><span class="line">    glueContext.forEachBatch(data_frame_datasource0, (dataFrame: <span class="type">Dataset</span>[<span class="type">Row</span>], batchId: <span class="type">Long</span>) =&gt; &#123;</span><br><span class="line">      <span class="keyword">if</span> (dataFrame.count() &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">val</span> datasource0 = <span class="type">DynamicFrame</span>(dataFrame, glueContext)</span><br><span class="line">        <span class="comment">// @type: ApplyMapping</span></span><br><span class="line">        <span class="comment">// @args: [mapping = [(&quot;id&quot;, &quot;long&quot;, &quot;id&quot;, &quot;long&quot;), (&quot;name&quot;, &quot;string&quot;, &quot;name&quot;, &quot;string&quot;), (&quot;age&quot;, &quot;int&quot;, &quot;age&quot;, &quot;int&quot;), (&quot;updatedtime&quot;, &quot;long&quot;, &quot;updatedtime&quot;, &quot;long&quot;)], transformation_ctx = &quot;applymapping0&quot;]</span></span><br><span class="line">        <span class="comment">// @return: applymapping0</span></span><br><span class="line">        <span class="comment">// @inputs: [frame = datasource0]</span></span><br><span class="line">        <span class="keyword">val</span> applymapping0 = datasource0.applyMapping(mappings = <span class="type">Seq</span>((<span class="string">&quot;id&quot;</span>, <span class="string">&quot;long&quot;</span>, <span class="string">&quot;id&quot;</span>, <span class="string">&quot;long&quot;</span>), (<span class="string">&quot;name&quot;</span>, <span class="string">&quot;string&quot;</span>, <span class="string">&quot;name&quot;</span>, <span class="string">&quot;string&quot;</span>), (<span class="string">&quot;age&quot;</span>, <span class="string">&quot;int&quot;</span>, <span class="string">&quot;age&quot;</span>, <span class="string">&quot;int&quot;</span>), (<span class="string">&quot;updatedtime&quot;</span>, <span class="string">&quot;long&quot;</span>, <span class="string">&quot;updatedtime&quot;</span>, <span class="string">&quot;long&quot;</span>)), caseSensitive = <span class="literal">false</span>, transformationContext = <span class="string">&quot;applymapping0&quot;</span>)</span><br><span class="line">        <span class="comment">// @type: DataSink</span></span><br><span class="line">        <span class="comment">// @args: [stream_batch_time = &quot;100 seconds&quot;, stream_checkpoint_location = &quot;s3://&lt;my-bucket&gt;/user/checkpoint/&quot;, connection_type = &quot;s3&quot;, path = &quot;s3://&lt;my-bucket&gt;/user&quot;, format = &quot;csv&quot;, transformation_ctx = &quot;datasink1&quot;]</span></span><br><span class="line">        <span class="comment">// @return: datasink1</span></span><br><span class="line">        <span class="comment">// @inputs: [frame = applymapping0]</span></span><br><span class="line">        <span class="keyword">val</span> year: <span class="type">Int</span> = <span class="type">Calendar</span>.getInstance().get(<span class="type">Calendar</span>.<span class="type">YEAR</span>)</span><br><span class="line">        <span class="keyword">val</span> month: <span class="type">Int</span> = <span class="type">Calendar</span>.getInstance().get(<span class="type">Calendar</span>.<span class="type">MONTH</span>) + <span class="number">1</span></span><br><span class="line">        <span class="keyword">val</span> day: <span class="type">Int</span> = <span class="type">Calendar</span>.getInstance().get(<span class="type">Calendar</span>.<span class="type">DATE</span>)</span><br><span class="line">        <span class="keyword">val</span> hour: <span class="type">Int</span> = <span class="type">Calendar</span>.getInstance().get(<span class="type">Calendar</span>.<span class="type">HOUR_OF_DAY</span>)</span><br><span class="line">        <span class="keyword">val</span> minute: <span class="type">Int</span> = <span class="type">Calendar</span>.getInstance().get(<span class="type">Calendar</span>.<span class="type">MINUTE</span>)</span><br><span class="line">        <span class="keyword">val</span> path_datasink1 = <span class="string">&quot;s3://&lt;my-bucket&gt;/user&quot;</span> + <span class="string">&quot;/ingest_year=&quot;</span> + <span class="string">&quot;%04d&quot;</span>.format(year) + <span class="string">&quot;/ingest_month=&quot;</span> + <span class="string">&quot;%02d&quot;</span>.format(month) + <span class="string">&quot;/ingest_day=&quot;</span> + <span class="string">&quot;%02d&quot;</span>.format(day) + <span class="string">&quot;/ingest_hour=&quot;</span> + <span class="string">&quot;%02d&quot;</span>.format(hour) + <span class="string">&quot;/&quot;</span></span><br><span class="line">        <span class="keyword">val</span> datasink1 = glueContext.getSinkWithFormat(connectionType = <span class="string">&quot;s3&quot;</span>, options = <span class="type">JsonOptions</span>(<span class="string">s&quot;&quot;</span><span class="string">&quot;&#123;&quot;</span><span class="string">path&quot;: &quot;</span>$path_datasink1<span class="string">&quot;&#125;&quot;</span><span class="string">&quot;&quot;</span>), transformationContext = <span class="string">&quot;datasink1&quot;</span>, format = <span class="string">&quot;csv&quot;</span>).writeDynamicFrame(applymapping0)</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;, <span class="type">JsonOptions</span>(<span class="string">&quot;&quot;&quot;&#123;&quot;windowSize&quot; : &quot;100 seconds&quot;, &quot;checkpointLocation&quot; : &quot;s3://&lt;my-bucket&gt;/user/checkpoint/&quot;&#125;&quot;&quot;&quot;</span>))</span><br><span class="line">    <span class="type">Job</span>.commit()</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</div><div class="article-licensing box"><div class="licensing-title"><p>AWS Glue集成Kafka/MSK</p><p><a href="https://laurence.enlightgram.com/aws/glue-kafka-msk/">https://laurence.enlightgram.com/aws/glue-kafka-msk/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2021-05-05</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Glue/">Glue</a><a class="link-muted mr-2" rel="tag" href="/tags/Kafka/">Kafka</a><a class="link-muted mr-2" rel="tag" href="/tags/MSK/">MSK</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/aws/aws-vpc-peering/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">创建AWS VPC Peering</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/hudi/hudi-on-aws-glue/"><span class="level-item">在 AWS Glue 中使用 Apache Hudi</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><!--!--></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

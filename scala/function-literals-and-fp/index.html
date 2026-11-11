@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>从函数字面量发现函数式编程 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="版权声明：本文由本人撰写并发表于2015年3月下半月的《程序员》杂志，原文题目《从字面量发现函数式编程》，本文版权归《程序员》杂志所有，未经许可不得转载。 引言 我相信很多像我一样初次接触函数式编程的程序员来说，对于“函数字面量”这个概念会感到迷惑和不解。伴随着深入地学习，在清晰地理解了这个概念之后，我进行了一些梳理和回溯，作为函数式编程思想延伸到最基层的语言元素，我深刻地觉得“函数字面量”这个概"><meta property="og:type" content="article"><meta property="og:title" content="从函数字面量发现函数式编程"><meta property="og:url" content="https://laurence.enlightgram.com/scala/function-literals-and-fp/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="版权声明：本文由本人撰写并发表于2015年3月下半月的《程序员》杂志，原文题目《从字面量发现函数式编程》，本文版权归《程序员》杂志所有，未经许可不得转载。 引言 我相信很多像我一样初次接触函数式编程的程序员来说，对于“函数字面量”这个概念会感到迷惑和不解。伴随着深入地学习，在清晰地理解了这个概念之后，我进行了一些梳理和回溯，作为函数式编程思想延伸到最基层的语言元素，我深刻地觉得“函数字面量”这个概"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/scala/function-literals-and-fp/1.png"><meta property="article:published_time" content="2015-04-27T18:54:09.000Z"><meta property="article:modified_time" content="2026-11-11T03:24:07.920Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Scala"><meta property="article:tag" content="函数式编程"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/scala/function-literals-and-fp/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/scala/function-literals-and-fp/"},"headline":"从函数字面量发现函数式编程","image":["https://laurence.enlightgram.com/images/scala/function-literals-and-fp/1.png"],"datePublished":"2015-04-27T18:54:09.000Z","dateModified":"2026-11-11T03:24:07.920Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"版权声明：本文由本人撰写并发表于2015年3月下半月的《程序员》杂志，原文题目《从字面量发现函数式编程》，本文版权归《程序员》杂志所有，未经许可不得转载。 引言 我相信很多像我一样初次接触函数式编程的程序员来说，对于“函数字面量”这个概念会感到迷惑和不解。伴随着深入地学习，在清晰地理解了这个概念之后，我进行了一些梳理和回溯，作为函数式编程思想延伸到最基层的语言元素，我深刻地觉得“函数字面量”这个概"}</script><link rel="canonical" href="https://laurence.enlightgram.com/scala/function-literals-and-fp/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">从函数字面量发现函数式编程</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Scala/">Scala</a></span><span class="level-item">发表于：<time dateTime="2015-04-27T18:54:09.000Z" title="2015-04-27 11:54:09">2015-04-27</time></span><span class="level-item">阅读用时：24 分钟 (约 3640 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p><img src="/../../images/scala/function-literals-and-fp/1.png"></p>
+<p>版权声明：本文由本人撰写并发表于2015年3月下半月的《程序员》杂志，原文题目《从字面量发现函数式编程》，本文版权归《程序员》杂志所有，未经许可不得转载。</p>
+<h2 id="1-引言"><a href="#1-引言" class="headerlink" title="1. 引言"></a>1. 引言</h2><p>我相信很多像我一样初次接触函数式编程的程序员来说，对于“函数字面量”这个概念会感到迷惑和不解。伴随着深入地学习，在清晰地理解了这个概念之后，我进行了一些梳理和回溯，作为函数式编程思想延伸到最基层的语言元素，我深刻地觉得“函数字面量”这个概念的背后影射出的是函数式编程的核心用意和理念。所以我想以函数字面量作为一个切入点和观察视角来讨论一下它背后蕴含的函数式编程思想的动机和意图。</p>
+<h2 id="2-函数字面量：因何而生？"><a href="#2-函数字面量：因何而生？" class="headerlink" title="2. 函数字面量：因何而生？"></a>2. 函数字面量：因何而生？</h2><p>对于“函数字面量”这个概念，我个人倾向于这样解释：它是基于某类函数的“类型”声明，以内联（in-line)方式写成的对应该函数类型的一个“值”（或者称实例）！就像我们在 Scala 里定义一个普通变量“var num:Int&#x3D;1”一样，数字“1”就是一个Int型的“字面量”，它代表着一个Int类型的“值”。而对于定义里提到的“内联（in-line)”，我想也许用“就地”这个词形容会更为到位，它不是在普通函数定义时写就的，而是在需要提供一个函数的“值”（也就字面量）时随手写就的，就像我们重新给变量num赋一个新值“2”一样，数字“2”就是随手写就的。其实所有的“量”或者说“字面量”都是内联的，是随手写就的，这里之所以要强调“内联”是为了和传统的函数定义形式进行区分！这一点我们后面会再提到。</p>
+<p>追根溯源，是什么样的原因导致了函数字面量的产生？在过去传统的非函数式 编程语言 里，函数就是函数，是一种包含了函数名，参数列表，返回值和函数体的代码结构，这里不存在函数“类型”和“值”（字面量）的说法，因为这两者在传统的函数定义形式里是融合在一起的，函数的定义既是函数的“类型”描述又是函数的“值”！但是当我们进入到函数式编程语言的范畴之后，一些“实质性”的东西发生了变化，函数的地位被抬升到前所未有的高度，它变成了一类（first-class)的，变得和其他的数据类型在使用方式上完全一致了。一个典型的例子就是我们可以在函数式编程语言里像定义一个普通变量那样去定义一个函数（稍后我们会看到一个完整的示例），我们知道变量的定义都是由变量名，类型和值三部分组成，所以对于函数来讲，进行“类型”和“值”的切分是不可避免的。我们先不去考虑为什么一定要这样定义和使用函数，一个既成事实是，这种改变使得函数开始有“值”了，也就是所谓的“函数字面量”。</p>
+<h2 id="3-函数的“类型”和“值”：从何而来？"><a href="#3-函数的“类型”和“值”：从何而来？" class="headerlink" title="3. 函数的“类型”和“值”：从何而来？"></a>3. 函数的“类型”和“值”：从何而来？</h2><p>仅仅从概念上去理解“函数字面量”是比较困难的，如果我们能了解函数“类型”和“值”的产生方式，将有助于我们加深对这个概念的理解，同时也能更加准确地认识函数式编程里的“函数”。</p>
+<p>让我们先来讨论一下什么是函数的“类型”以及如何去描述它。老实说，这个问题并不难解决，因为函数的类型“特征”显然体现在它的参数和返回值的类型上，如果我们把这些类型从函数定义中提取出来，然后按照函数签名的形式排列好，我相信大多数人是可以很容易地理解并接受这种描述方法的，而在Scala里，也确实是这样做的。让我们来看一个用Scala编写的传统形式的函数定义：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">plusOne</span></span>(num:<span class="type">Int</span>):<span class="type">Int</span> = &#123;</span><br><span class="line">    num+<span class="number">1</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这个函数将传入的Int参数加1之后返回，按照我们前面提到的类型提取原则，这个函数的“类型”可以这样描述：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(<span class="type">Int</span>)=&gt;<span class="type">Int</span></span><br></pre></td></tr></table></figure>
+
+<p>整体上我们要尽量保留函数原始的形态，所以小括号依然存在，表示参数列表（在Scala里，当只有一个参数时，小括号是可以省略的），其内部包括的是各个参数的类型，多个参数类型之间还是使用逗号分隔，向右的箭头作为参数列表和返回值之间的分割，箭头右侧就是返回值的类型。这个“类型”描述了这样“一类”函数（记住，是一类函数而不是一个函数，这很重要，后面我们会再次讨论这有什么差别）：它们接受一个Int类型参数，返回一个Int类型的结果。这种描述方法看上去准确、形象，完全可以被接受，所以这正是Scala对函数类型的描述语法。</p>
+<p>接下来的问题是如何描述函数的“值”。我们前面提到，传统的函数定义形式是函数“类型”和“值”的混合体，如果说我们按照前面提取函数类型的做法从函数定义中剔除类型声明的部分，那么剩下的自然就是关于“值”的部分了。依然是前面给出的示例函数，按照这个思路，它的“值”应该是这样一段代码：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">(num)=&gt;&#123;</span><br><span class="line">    num+<span class="number">1</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们在这段代码里唯一做的一点调整就是把函数定义中的参数列表和函数体之间的“&#x3D;”换成了“&#x3D;&gt;”，是的，这是为了迎合Scala的语法要求，而这个形式也与前面的类型声明形式相呼应，所以函数“值”的描述方法可以就这样确定了。</p>
+<p>最后，让我们把函数的“类型”和“值”联合起来，看看一个函数是如何像一个普通的变量那样被定义出来的:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> plusOne:<span class="type">Int</span>=&gt;<span class="type">Int</span>=&#123;</span><br><span class="line">    (num)=&gt;num+<span class="number">1</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这个例子中，我们定义了一个变量（确切地说是一个不允许二次赋值的变量（single assignment variable））：plusOne，“Int&#x3D;&gt;Int”是这个变量的类型，很显然它指代的是一类函数，等号右侧是这个变量的值，也就是一个函数字面量。变量plusOne完全等同于前面定义的函数plusOne，从某种角度上说，变量plusOne的这种函数存在形态才是函数式编程语言对函数最本质的认知。这样的存在形态印证了函数式编程将函数视作一类（first-class)的信条，因为它从定义到使用都和其他的类型与值没有任何区别了。</p>
+<h2 id="4-像传值一样传递函数：一场“裂变”式的能量释放"><a href="#4-像传值一样传递函数：一场“裂变”式的能量释放" class="headerlink" title="4. 像传值一样传递函数：一场“裂变”式的能量释放"></a>4. 像传值一样传递函数：一场“裂变”式的能量释放</h2><p>但是我们的故事还远远没有结束，如果说这样的分离仅仅让我们像使用其他数据类型一样使用函数，那我实在看不出如此大费周章的价值在哪里。如果我们像在非函数式编程语言里那样把使用到的函数预先定义好，在用到它的时候调用它，那我们完全可以依赖这种方式在函数式编程语言里“安稳度日”。在某个需要声明函数的地方声明一个函数类型，在调用的时候传一个对应的函数字面量，这样“曲折”的做法究竟好在哪里？看上去，必须要有一个强有力的证据来揭示一些我们还没有意识到的东西，而我相信，最好的例证莫过于“高阶函数”了。</p>
+<p>“高阶函数”并不是一个高深的概念，一个接受其他函数作参数或着返回一个函数的函数就是高阶函数，我们来看一个简单的例子：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">hof</span></span>(list:<span class="type">List</span>[<span class="type">Int</span>],f:(<span class="type">Int</span>)=&gt;<span class="type">Int</span>):<span class="type">List</span>[<span class="type">Int</span>]=&#123;</span><br><span class="line">    list <span class="keyword">match</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> <span class="type">List</span>() =&gt; <span class="type">Nil</span></span><br><span class="line">        <span class="keyword">case</span> head :: tail =&gt; f(head) :: hof(tail, f)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code> hof</code> 是一个高阶函数，它接受一个 <code>List</code> 参数和一个函数参数，这个函数参数本身接受一个 <code>Int</code> 型参数并返回一个 <code>Int</code> 型的结果， <code>hof</code> 的工作就是取出 <code>list</code> 中的每个元素交给f处理， 将处理后的结果放入一个新的 <code>List</code> 并返回。实际上你大概已经看出来了，这个 <code> hof</code> 其实是 集合 类型里自带的 <code>map</code> 函数的一个简化版本，但是我们不会在这里讨论 <code>map</code> 函数，我们只是想借这个简化的例子帮我们发现我们正在寻找的东西。回头看我们前面刚刚定义过的函数变量 <code>plusOne</code> ，它正是 <code>hof</code> 可以接受的那类函数，所以我们把它传给 <code>hof</code> 看一下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; hof(<span class="type">List</span>(<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>),plusOne)</span><br><span class="line">res0: <span class="type">List</span>[<span class="type">Int</span>] = <span class="type">List</span>(<span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>)</span><br></pre></td></tr></table></figure>
+
+<p>一个新的List返回了，每一个元素都加了１。回到我们前面质疑的地方，如果我们不让hof接受一个函数参数，而是直接在函数实现里去调用 <code>plusOne</code> 这个函数，那么我们会得到一个非高阶函数的实现： <code>nonHof</code> ，它会是这个样子:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">nonHof</span></span>(list:<span class="type">List</span>[<span class="type">Int</span>]):<span class="type">List</span>[<span class="type">Int</span>]=&#123;</span><br><span class="line">    list <span class="keyword">match</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> <span class="type">List</span>() =&gt; <span class="type">Nil</span></span><br><span class="line">        <span class="keyword">case</span> head :: tail =&gt; plusOne(head) :: nonHof(tail)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>OK，这也没有什么问题，返回的结果都是一样的，那么差别在哪里？ <code>hof</code> 之于 <code>nonHof</code> 到底有什么优势？我想我们的讨论已经无限接近这篇文章将要触及的最核心的部分了，那么，让我们再引入一个函数吧，关键的角色要登场了：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> double:<span class="type">Int</span>=&gt;<span class="type">Int</span>=&#123;</span><br><span class="line">    (num)=&gt;num*<span class="number">2</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>新函数 <code>double</code> ,它把输入的Int参数乘以2并返回，看看它的参数类型 <code>Int=&gt;Int</code> ，和 <code>plusOne</code> 是同一类型的，同时也是高阶函数hof接受的第二参数类型，这是否意味着 <code>double</code> 也可以传给 <code>hof</code> 呢？让我们试试看：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; hof(<span class="type">List</span>(<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>),double)</span><br><span class="line">res1: <span class="type">List</span>[<span class="type">Int</span>] = <span class="type">List</span>(<span class="number">2</span>, <span class="number">4</span>, <span class="number">6</span>)</span><br></pre></td></tr></table></figure>
+
+<p>是的，确实可以！对于没有接触过函数式编程的人来说这多少有些让人吃惊，我们没有对 <code>hof</code> 进行任何的改动，但它现在看起来却像“变了个人一样”，它有了新的“玩法”，它的处理逻辑发生了明显的变化，虽然整体的处理流程没有改变，也就是依次迭代每一个元素进行处理，但是在局部，它对每一个元素的处理方式已经彻底改变了。你有没有看到函数hof蕴含的巨大潜力？它规定了对一个集合的框架性处理流程，却不指明对个体元素的处理方法，而是改由调用方基于自身的需要在调用时动态传入。这意味着函数hof的每一次调用，不只是处理的数据可能不同，连处理的逻辑也会发生变化，甚至相同的数据也可以按不同的方法去处理。</p>
+<p>反观函数 <code>nonHof</code> ，在同样的场景下，它具有和 <code>hof</code> 一样对局部处理逻辑进行“ 切换 ”和“插拔”的能力吗？显然不行！由于它在函数体内调用的是“一个”具体的函数实现，这就等同于把这个函数的实现代码以硬编码的方式嵌入到了函数体内。从更高的抽象层次看，在一个函数里直接调用另一个已定义的函数实际上是完全“固化”了产生和处理这个中间（局部）值的逻辑和算法，这个中间（局部）值不可能再通过另外一套不同逻辑和算法来产生了，在这种情况下，开发者要么修改现有的 <code>nonHof</code> ，要么针对 <code>double</code> 需求提供另外一个版本的nonHof实现。</p>
+<p>或许具有深厚 OO 背景且目 光 敏锐的程序员会立即反应过来，如果在 OO 语言里，这是一个典型的可以使用“模板方法+策略”模式进行重构的场景，最终一样可以实现对局部算法的动态“切换”和“插拔”，但是如果我们把 <code>hof</code> 和经过 OO 优化设计的方案相比较，你会发现后者显得太笨重了，而且针对每一种策略的实现也都是预定义的，这与在函数式编程语言里随手就可以写好的一个函数字面量比起来，灵活性和开发效率上都相差甚远。但是请不要误解，我们并不是在比较 OO 与函数式编程孰优孰劣，它们有着各自的优势和擅长领域，这是另外一个话题。在这里，我们只想通过 <code>hof</code> 和 <code>nonHof</code> 的对比来揭示函数式编程的一项重要特性以及由此带来的深远影响：</p>
+<p>函数“类型”和“值”的分离，使得函数可以作为一个值（函数字面量）传递给其他的高阶函数，高阶函数的行为会因为传入函数的不同而表现地高度灵活和多变，也可以说具有了某种“动态”特性；另一方面，由于变化的部分都剥离给了外部传入的函数，高阶函数自身就变得高度可复用，所有这些都是函数式编程天然的优势，是在语言层面上直接支持的，你甚至不需要精心设计你的程序就可以轻易获取这些优势。</p>
+<h2 id="5-结语"><a href="#5-结语" class="headerlink" title="5. 结语"></a>5. 结语</h2><p>“类型”归类型，“值”归值，“类型”与“值”的分离是函数跻身一等公民的必然结果，而这样的切分使函数可以按“类型”声明，按“值”传递，彻底解放了函数的使用方式，在高阶函数里，函数的这个特性被发挥到了极致，从而彻底改变了编程的思维和模式，造就了今天的函数式编程。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>从函数字面量发现函数式编程</p><p><a href="https://laurence.enlightgram.com/scala/function-literals-and-fp/">https://laurence.enlightgram.com/scala/function-literals-and-fp/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2015-04-27</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Scala/">Scala</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B/">函数式编程</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/hadoop/hue-oozie-editor-connect-error/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Hue - Oozie Editor: Retrying connect to server: localhost/127.0.0.1:8050 的错误解决方法</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/scala/scala-notes-2/"><span class="level-item">SCALA学习笔记（二）</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-引言"><span class="level-left"><span class="level-item">1. 引言</span></span></a></li><li><a class="level is-mobile" href="#2-函数字面量：因何而生？"><span class="level-left"><span class="level-item">2. 函数字面量：因何而生？</span></span></a></li><li><a class="level is-mobile" href="#3-函数的“类型”和“值”：从何而来？"><span class="level-left"><span class="level-item">3. 函数的“类型”和“值”：从何而来？</span></span></a></li><li><a class="level is-mobile" href="#4-像传值一样传递函数：一场“裂变”式的能量释放"><span class="level-left"><span class="level-item">4. 像传值一样传递函数：一场“裂变”式的能量释放</span></span></a></li><li><a class="level is-mobile" href="#5-结语"><span class="level-left"><span class="level-item">5. 结语</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

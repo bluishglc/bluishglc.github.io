@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Flink 读取 Kafka 消息写入 Hudi 表无报错但没有写入任何记录的解决方法 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="本问题发生的场景是：使用 Kafka Connect 的 Debezium MySQL Source Connector 将 MySQL 的 CDC 数据 （Confluent Avro 格式）接入到 Kafka 之后，通过 Flink 读取并解析这些 CDC 数据，然后写入到 Hudi 表中。在测试过程中发现：启动写入作业后，Hudi 表中迟迟没有数据写入，而 Flink 作业也没有报错。实际上"><meta property="og:type" content="article"><meta property="og:title" content="Flink 读取 Kafka 消息写入 Hudi 表无报错但没有写入任何记录的解决方法"><meta property="og:url" content="https://laurence.enlightgram.com/hudi/flink-kafka-to-hudi-no-records/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="本问题发生的场景是：使用 Kafka Connect 的 Debezium MySQL Source Connector 将 MySQL 的 CDC 数据 （Confluent Avro 格式）接入到 Kafka 之后，通过 Flink 读取并解析这些 CDC 数据，然后写入到 Hudi 表中。在测试过程中发现：启动写入作业后，Hudi 表中迟迟没有数据写入，而 Flink 作业也没有报错。实际上"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/hudi/flink-kafka-to-hudi-no-records/2.png"><meta property="article:published_time" content="2024-01-31T20:21:14.000Z"><meta property="article:modified_time" content="2026-11-11T02:50:16.349Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Kafka"><meta property="article:tag" content="Flink"><meta property="article:tag" content="Hudi"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/hudi/flink-kafka-to-hudi-no-records/2.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/hudi/flink-kafka-to-hudi-no-records/"},"headline":"Flink 读取 Kafka 消息写入 Hudi 表无报错但没有写入任何记录的解决方法","image":["https://laurence.enlightgram.com/images/hudi/flink-kafka-to-hudi-no-records/2.png"],"datePublished":"2024-01-31T20:21:14.000Z","dateModified":"2026-11-11T02:50:16.349Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"本问题发生的场景是：使用 Kafka Connect 的 Debezium MySQL Source Connector 将 MySQL 的 CDC 数据 （Confluent Avro 格式）接入到 Kafka 之后，通过 Flink 读取并解析这些 CDC 数据，然后写入到 Hudi 表中。在测试过程中发现：启动写入作业后，Hudi 表中迟迟没有数据写入，而 Flink 作业也没有报错。实际上"}</script><link rel="canonical" href="https://laurence.enlightgram.com/hudi/flink-kafka-to-hudi-no-records/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Flink 读取 Kafka 消息写入 Hudi 表无报错但没有写入任何记录的解决方法</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item article-label">付费</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Hudi/">Hudi</a></span><span class="level-item">发表于：<time dateTime="2024-01-31T20:21:14.000Z" title="2024-01-31 12:21:14">2024-01-31</time></span><span class="level-item">阅读用时：7 分钟 (约 1041 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><div class="hbe hbe-container" id="hexo-blog-encrypt"
+     data-hbe-format="4"
+     data-wpm="密码错误, 请重新输入."
+     data-whm="密码错误, 请重新输入."
+     data-salt="d99481ade0033f1206d13aefcd106be01bfa9949d8e44f68ba4d56c1f4dbb861"
+     data-nonce="9c3d43fd655daa33edd2569a"
+     data-kdf-iterations="250000"
+     data-auto-save="true">
+  <script id="hbeData" type="hbeData">
+    0d080560b18db86846431cfc186a3a986cac0d3ddb2a126f3b0752a3576a38573b73cb50f65bddd91c5582ea2cd58f6b94780e2fe86ffd934590a856dd6da206c11a42428cbd40bccee938fb766ab1059be1285cbdf378fa6d4186bbeb980504bebeb91d2d9efc0a55cc3e9ba5d928f9010805df56df85f5b2f9510d1dc5c7cf97a7468087174304cd2df3add25b3aba24bbbf581ad19bcba426436c719140f52ea46bfc5ffd0cdbef8015c837e011a69052473ad11c9e59be5794c8ed0659aa14b9346dd57af7b98f57e2479a970d2a4e8a7a48979925c496a006860413c37e849d3c4b51d8a9a47ab5af40432b341d0fd518231332092d4d4310077b468a1d878105aa836888e86acf4a8c449052ae15355c6ad0666dec23d8d1dfdece25b1b8b540f025b2c89461111f8f25ba2b1762d2d280373d94b1b49e9a1e95220fccc52f3dadfa26340acd69a9204241ec4bc1f91a78863333bb4c55d001c191f8e100088f5af9231b8f540f5f336a25d53ff4facb2e709072b3ca842b0563c7d40f0a3e399d1333ab9598437259616f13e872f942a7a144aa442a2bb2a51ffce0e41f71c8e77ba2546625c8cc95dab930128e4a71dbd4d25f70c3afde44a8ca80c4414a2ff4050977c61bbf5e353fce92650de7b4f6dc58aa97b943b1ff5c4b579a4b0bfba8c4190ae623fd085b42e8c537103b6f27716ce2f8074cd897909032703e418c8e0147fe687bfc63910b7423aaeff82bef0a0f3b65101eb943ac6d240972570dad94bf55bb3c7a090fa94710bb5129ef4f94be1720d08c083b248002d6f7105049ae224f1fab2faba2b55b3e5d81b71486f20c5f257a5da2ebfea983540aa7ae38a36c46663c5fbf6c4c89bb494a83d016d578fab0383821d075bcd582cb0b9eb1f0adb06e359269bbf946c89c8a2fa02744bcc74c295a8cc870596b538e58899e8d6e01b921ea3cd0c41ceecfc354dc0d331b7e742fb1430cae139806b88ba030155c15856ae2265620278e7dd070c6eb1a195f50db21a0d8574837d39076dc7ffc55a507b1a6d72495547c172e20b1f9139286deaaae70ea6dd41c29cc77160b8e23544874c64c968b1e3e50d0abee7beef3d636fb87839c36041cb27c435d47e4eca401e21fbbce33c700be251c6ce8f19da318167520732f23ea9057c62c91e22454aa43512c92de13f719d063e0bb98e4063608d5148712dd3019426dca11056e6d2cfce3dd1bd498e86ebb9a7cc5b2a616b75d89d7894beb590a302280c638486f12256d3c732f446a7be89b1ab1108d6e9b81f7240ebfe1c1b8808e560517cb5ba719a339ab5f92d71f39367780685be77511af32771b604ccfc18f3e70b291de188ab5bdcc6560407468e6bd94935ba49e1eafc911d6e2dd4b7d2ed3e7bd9ba85dc715f94b5f17f859ced8a512338f7b76e72351ed7439cd030a46641b6f633f884052512c101f302b5c7087ba8edb266439bb0c2068534b96a96a9f22edbb73762b52063969318588d7f2b3040e6e04c8fadb0e823a8934deee9ca8a6b4216839173ee83c864a3baba6fc8fe402c71decfa448ee8ebbd2f27ee0c2342e17c140180d3dc87367766922a8e3a22d70371755a20d2b3f7e96af7eb9c101d11e94301298f40f1af6c82a85cfd1a9d3c13097fa423997802a6f4c1bd4956bca770805f1b67d08f98e6167b1f3c6948edf1afbcae721c8ee447182446f58d762313658fb9c64a201fdd4b43192fdb258a0da0615814913796105ff9c45a93654dc9568f546baefa4c315db9d5e2f257564a035f8ae838b1aea29ec24a39b6c7cdb111e205e2c0a16dfe25ef5fadca36acfb5f1e41ba7bcd83ca9e2235231b1688111aa564f82f18f7a5484876a428192eecb42bdffa260a48d12e38a3af65f786f807d711f800591861f7a153e326bfeb8db45df7cdc9c4d27b9c5db0167d77706dd61cbfd879b944dbb1649ba18b42169ed9d54bc3b278334f35b83af25cbd21ecb314f075480ec86722c36168314eba37218efbbec95169c62d7305f50e4d11356a98db378d0ca96913fda90ce88f6ced18d6a2257480eb9852a83cd75b0811cb73e5410476511ab7c87c6f711e0a9f15c495a3948c630b685178810892531682b21673a95ffec9fe47577535653e5252465c9ffb4d59418838e7f59ee47914ec781e27bea66d0b66959ddb3819e676c21ad38723ab0452f3c4c66710c2d48ad8801423b6fa9cb3f3b56929db7057b1c52ee3b7a49cac9a8c6444bb0f2768a2bfe8930af7096ade74e0319f2784daa22107c2b94cac7361e831deb743ab85b16cfc2b1a24d9f954566ae15f31df59b2f786d0e29f1a3902471822273b818a702a931f9de46c99055a72595ae77d02d6d3c85fc80f1d30ae01bca44858c83edfa8a56d7ad0968d329a66d610d490c2300471d659dd73a817e526b070944b15aa34bb4eb20d7476010bc5834d75289837641f4a2136ff1bb325723c3f715d8e2c850ea38469ddf6d26904146238d6b2aa488f36b1afd741c9303be880151846ae04a00a5a7797d50e8d6d10f930480ce34f19a9a7c52f69896a96324238a3112c208cd01c2abe6525a36d570cd73882562c76f0f234ca19cd283c216660dfe94b24790930008574274c4ac58a4792bc5429605cc65dbc576eee70db854960354ab4929e67ac4ae470fe8ac14df3a123c9def51ca39ac5416a7a732558b730b81d046b1387607efa6470b03b70904b9b50dd50b01c95bae8bf46339d3cb652eed60f23203dfd38fd3c91fe2fa6528867bc4c246616227edd8d6d4ec5578b7eb0701a4c474fdef757229c53245b0cbcc951306875c67fc201195a31a15a3083857c019ff6ae6d08b86a7f3ed25266e3f72f542c6616f02497cd27f00a20c8f07222890f6fcbccb1e521603153efa33fe0f1447c210362ef5b9d7be5f46888de3b5cddef99712412cd7139e1629dd008a26b80e6cea81a5c2e73a6833d60e3602a2b50e7ae89fc3fc93f2be00544bdec933c18a754f091d2298eb3dae7a0b8a765683634cd94d97490fbe8d5a46ab5505bb7f9822e35460f3e27487e297cf997fb07c521b034863d64268f9bceac67bc1d9e429a16d19c32ac55c8313f90d1c02f09a81ca9f3b626afe708eb9e96d06f59bb76fb16ada49712bbc9e5edcb3b64ffbf4c2a0daf495beebf538bccd6e643846171613c8574dc40eff595694e6c0df63551b4f0176ce8743baa6b4d36880b585ef43b2feafb3ad26d2041b0850088ffc15ee95992e9b4ac97396db8dad1bf35fee54553b7375114fbc0e9970cd6675e405c4262fc2564ac0261e97ccbccf93bc4deff57f5f7512bedcc14483c96db0cc73df3582187459a4456aeedcfa44084d334c61756f7b194decde007a141fb5a2d29d61570c2189c865247646f7d10a89651204e1b64a76ccc9994876c16c83fa0a9da20a3ae3cc30167ea5aca5d30c405f223605a73b2ddcff45e87c4cba0130457418e18136c7f0fb57ce686f891e3b50f14a144993ebdf16df050974bb6ba58548391eebb08164c3b2c8594099f805edad11e2c6755aa8aea9802f36f25166917300829cfed2eacca290a74ee2d5ad33c08b71783191bc40d6d349e3e99cee4cc7f0b7154cbaaa78ea740b9f23ae5618a560f05a01221666024df82d4dbfb2d21abe66a3fa70987a37748f6805f9056d27c2179f5bf714e5734061963f53641a65737bde0159d81b3d4bd40b734b6e6cb31c93f33329791032b5b75929d899f63ddd09e3da958a55c0f11dd22b2ac5db6b2a2420e22bd666eff29afa898fc9eb4c7ce67014373436fd196f14a01015743867a94a8c289b943eb64acc99f19e65e0ed02e26a922ca2c84988793b9ed5c92ea276edc5e14884546e28761527b97704f4a0163af746196bf270eaac6d99f4769cc33aaa7c96ddaca004ad45e91afce67d44695b6d8207328e0117dbb258e7dc12bc83f5b3190e674d6062bac1f149f0ec35c2f901710240940283382e351f47d43a6aba708b05f96e490d6d98dd6c27faf717a3278cfa16a72e462929028d72f48bc1f8c0c22b5a5190383fa230eb9472ab845154f796a46fee01be1e9875906644d15af4d8e74c5a78b884935de055422b1329790094fd87833d101619a3e0d08b4c498c79aaca8cbd8399ecd4cd0792e5f3ac24c43b2b583ad4d365b1506278e83e39b6527fdf4d5bfbbc3d0afd3951b49683f1d3b72aa42a69a013ee9016fa929fa931e4bacb9b5822f07121abd09c1cce9c336596d619e9c7adda06b42376f04ea62c1d8c3f1a83f8f1e127c9ed4b8136c92c0946c923a36b68833eab0df2d46ee9933e06fdb53716db8235d67ed233242a2c61eee242da2cd49ca0a818bfd20c4d48e794094267dba375834dd18c2c9810608afec3b8669026a37de148baa27af76c1d90bae8436dd75beb094aa597c3da56cdb75d3b402d7031815b4e840a5bcb2fac13924c0767b4608a64ec2927192b40f9ca7dad5cd72dfa6371c5c888695e89008b635990b37b791c1a189ead2a0da6fc87e305804c6d30bdeec1fb0374025956eeea4b7112460a6f3348500cfe400491a01a83c07e983a658901207162a68b57b672a312d4af3a4f088b600666cf16aecd23424855203c265df3c8b1a220e4a733be086a27e9d5f9efa0de55c65e5043f543656a8056926ce4dfe85bade1585d2c377dcb9a2bbd706b6e65d6b646536ef3abc3872684cc9338dbc2b99bf409097a8e0813cebf10a3bf9550f91d3ff576c83b1b0a36668c5d020173db8dd259e6cb4a463e67d2a6bc2a8d5f2d086f9d5348c9067d0f3cf25769c9b151307053371cbeea7bf163a8ed069db7cca26d2003bb971a5b8fef324418b9e07939fc56175d1e78ccb721fa4c40ada2e31617d61aa90f0952ea7017f963462943f34217ca4272efa244a724ce56b365eb75d16ef04a7510c6c336d31b399451fcbdd1033d8d94ef69217b052237dafd4b1b5921eebf609f3caeb33323571bfb46b87406fe71c6e607d347bba2368a38161e354dbf645b5715b75024c01c2f8006547abeced886772a8c9bd7d9ad4e47af51d44437e75375e5357e1f97e289745338bc55b9bfb6a197aaf27626dc632ff44c019722affe0fd8fca232f4099f8dcd5d77b8f203c14bcf782c8e72035d8e0550bb6fbe6e591563bf137af4757691b8b8991f8aac6373fbc433cf6c3a1a389acf8aabdeb0906f92b5b406459d6f9d4195c88ab19ef5aa3b0d9b19e7f6b85b48ccf1856a64511ff31d3259158abe219060d213bee475d3bb4a94cc25924e813c7e5d3df5683779e7979d06fc6e546482fe88663403659375550823ba407cdc4d97ca2f69e3e56decaebaf8806465ccdd485b4aed43cb9c5fe41e574ebd712f4ecce1d01dd6b00fb4e934ee7aeac77054d04f9e500f2cbadad9c109829d9a365caebf8d8e7ef1d56fae02a6359aa926ecd93b93e1172144b2754adf5818624e2d9541d5a2460431c5fd8901e66857e80fe9e2e7d768d4842082d6fee1bbbd11c9138fa4873b2cc499427366e7db38a40be6df0d402d0e01bde77bc3c91ff1bffc9e0b1cd1102a7380d93f018fa4f79de34186dd8c898535e98c3d7f1629e40b0006e56ce3686df7588dc5b7e1905a35d900661fb97a4e1f52a1d9a0de87cdb5d6b9869791f710e736042bfcda81bda5476df6da5dde3077dd4b1384cf18195e0f7596137117128aaa779b58942aa38411ed4bf9b06a94b670a857393255bb6643f840a63788b86967f44b6bfacfb2c83416b66e0df061e3b64cd5ca826e11c54042007348573a3e37ee9f1d75a07a01c8a5abc0020733011fc06ae5875a33060f72c1abdf0138d80b0a5e957cf4f85537202aa58fb5b10ee4f2c3a2094e54b20dd92d09d925d7ae8d15c90463e7220b538afe7236b8b2853d6486c24063f6d5e49c41cbf0a3b1cb6d14036c9bf0be83d4e035ea5f6d8a28fdc39b4d754887f084de7004931132175e0d92ebe031f029adc133be729e5571f444664f72f390857fb53763d76a7ff78445a164e99d5e0905c9fff4188239b2334bf6bd72bf8e4df02811ba95ed851ac50011b752ceeefb755f51360c522a69b160b42d57d490d9b2600a8262e9b6db6284224d6d3bff8437f168f4089abbd85591b7b03af729a869635a9e65eae2b05753e5f535c74acd459d37b0587a00f8b6f68a3f94a5aafb617a24f4fed61d177c40786195ed705c0dd88f8e748e773eeee7e911a268321fceca6d3e80bca906b165077f3aa6a08baec26ecfa8f7874c8ca31e6a81b280dd2ea568a56fb50c7560f8f91171f9797319a388870ccd5cac5cd6e508a4639c815b89a6c2fe060c54a5157a408d5ac0eb56426a4ed20322167a3bc93e5c004b8b09b7005032d85afd78698fed7716c9e44c68e54354fcff0c9d3d4fb70024519c21fd9b93b1f8c3f43ef33bb4f186013339d7181156ec03a199cb027c63eac54a2b9ca54a6055a003c28d42df9e76c3f12cee014318b5df6d83e6221455646f187d5ba8bcfd581bd355365bf0cb6dcf1cb0b6cd69a5e845befd88276c2e8ddb6004d795e6d21a141362553da5821a8120e3970a71322346b02c46c0a9b364495104b5f09db312d804c9c124fb145877383d75768aed2a0779300b6bb99be16610530c43814e4345d30fd5b30ace927c3106cdfa053cf4c9bf8ef50044a5a9f585c264f7e55839aaeaf2c0740b54833fbb3422de126a454ed7a5f17bb90a0435d4a39049eeaa83189a3c232bfec5d62d6a6a2f1a2e22cb63827cbcdd5ef11a20ee9187345ea1d7ca096ee6f1baeb03ea3e5f135f25188291509df2292dffa15081d0d7a33cfaa5bc5450a80d7c7afca4f70ec317aeeecba2877402e80d241b6a641e6e5a4e192c0d56d4412c23ae9da74547377b7d4a970a810823346bc8a316598ab519ac06c1d0d9f39646f76da0be7b5200de4198f51f9937a70fac0a09cd54f6155b3dd4a3ebe526935f104ec0a7cecbda157efdf8fd77ff6cc2d5266ca0fde1aabb40458e2ee0095368727169e4255e43484f713c60117ad1f8912d292d4c4033542d32a052006da61e3adb7cc8ed0fee57819e4f6f8a44e05bf9b8e5ca3bc923ea6c750311b63e7d1e36e08ea8093112f4f734a34153a07dd0c2f086f7e7839e0d984571a7eb8e042de08d64c0c5c8e7bd208532c442c39e40dde80ca9b6efafa3927353bc244c7169b272772f1cfa277bfc0666e0bbe03f5361e329ebf4de8ea0e5992a74d3cfc4bc49bc75647fed7d3d4df2575e705713c98ad83f151af7486ca44656f2062180de4a7e857d215025d849f5141d7bbddabed770fa04901f9631c22a48b6fe8ee0dddce59ee44daffcf8893a4422dad5c073fa3f1e3c6083c17b315f15a9823ec0b18670d88fbcc062a8b8a10147912685ffe9343d23057f53c148774d51804fdd1082c9a1d4fe76dc52e55cba5c358ef37209103df4ddb6a9f7df6f7d866fbf327174814ca6379d95639ea896dc22065b8eaa4d669b3b42ea8a72cd55fef56117a7213a1d4a82e133f42c552ecc0affa8655b46b1c0f913a93312b14e81bdb96ce5d502df9c1316e071abd0045039bab8411ea61cb4064f212a43c28d17194fbaf1f3d3e8624864ddc904dc1750908946490f70ef6f2a6a3b93f1e3b0c66ead111cd47f2dd400b6229ff58823f48fe98dbb04800e8625166254bac55351ccac4ba6d0957805afb9e0ed8617dea02ea65703d7e5590433d41416f5e32088c2d6378faed5e5ddbc16767ea3358e935fa8daa020b3c75725b17a214bfeb31eb7571b98cf600e296ae150b9c22bf7c1d2c97a1406d112552036112a00c482442f58a396614c907c579ec9f3ab87a0344563346658064a8093fbcfc22847d8ed5cd677542babdb8b7a4081c4eb10b9c806e02775800c93005847e86514c8b0a6c6b144b2344a2862ed401e679b33d891239cf357b6e0e3b1fc616d4732edb64aad0dbbd8702cb7103be2341a92681dbda9f8716905a02e67d1d0153a08b95200ce4a49361d92233c1e11c34e27a54afd5c9bb3ad379d4d1ed9eae0a47768f4e1f675d0d5f8954ef532defa3076d96bd7d34428018ac23ab9a46cd54b97b14e418148b9c79a591f829cf54124cfaaaf3ec77c9e11b14b53b68fcf0a01f620128b407dd9045023cddb85983d6802f135dfa9ee15feb2d245d1b22804f9f7f51e9d5282ec81742336fd2787aa5c5d1d76454eca49c863a9e2f5f6cfb09ddf282f38d667976b005c175296025bec739c1259622accaa87d4f69487be073dfc55e5ba13360c5320bdc7d15230dc36ceb6bbdca1cc1d3fa1f448ce39aea734cc08b7127b0266451c9d5bbc5131e6595a49476cbfa797931fb78ace4362c26bafc0d35d54392f340c2ec6920d7caa029012dd045a85df8851f5f6fb3aa513c0ae27c8690441c00bcc120c898d1da6c646ebdcf845ca2451c684b5408f756efc6bd1f538ad5d41869fb5b87ea219ccfe640c09ba9bc049badf3873855f75d5264a68e36da29facfd2cf186861da713d62d3722bbb2a4c010739a7e514f183cd33dccfef6c5892ef5014911e686f58dde3bba2744c513b39c1504100e9d52889b7e5ea10858e35a57f065e8fa60daa8cdde028e8f6bb8834832a35ef2ad5ecda8754b07ef8069f30eda8185b8819e05cb6b0e5a00e7b424691010f48eee5f1679bd830753882ca2647d9be1e0fb07cf9e3bed3dac43a2fd64c171c4a8df7c0b1505569f7b312f5ccd184bd48a7e5428ff0c8c2f4fbe24fe4cb3dab80b6ade78b3c7d51b5e798f710be92adfb783f855714d5e0a0c9fe5dcbad42778e658eee7fa0cc60112bb524b941a052f76f2ae127ff8af41cf4ee163afa9300bb808635e84bd3c4e258ba416e89199962845fb60788ef1b3c343dca5f47b39d638e332adc302ebe24f09c32a7c3ac97991e81210ce4671d2ddf137ced51081036807748dfaead6268ba922e50350d8bf44a195c655380074c985911228559ccc7388de61573517e6a00166c63ce570166c3f52d184f1822a7861801f344704a571b2fb25069ffede745930a0fe9944a10488cfe4b4ebdc8b36a96c7385c773f19363a5e63069c0e24d651163c7eee00570167c3f65d94c5a8b8619ca71f669947fe27c38198f97940308fd4c85e67fbd87d3bb8f2f06d31dfcb85f8214b8a963d251e907aad79e8cc6c45192ba3ebd9277885531f4b6bc52996c8a3b403cd4753646a1e354cbb7a0a1ff2324e3efc8eecc592d8045400acffbef23f5fdd248c572cb6c8d026592860ba7fdd8f6615a1335f02a3555ec887476e05b1bf73a42c0bfb1263c36ad0cecc7d77ab75b857685ff66b344fdcfdf859fa07b4a7b4906dcd0dc6460d0617914a62a8b4d56630032642eb54e3835bce8fca56f0f56103749bf8ee94f9298066cc3da03e9ec7504495d411070045207928d5f87672b3413b559c60c01af8d6174e029dba453f97d9670f6a5bfafb5988ce056f2049aa5d1d3b29e2d4777ef2581cd91835504a48cfc12313f4d3dd546845fed46dce01ecb8fefca7b2ac84d33ba341219e74f971b7cd2f627471a9b6600c61b235a617a3b4936677479182e4fe447f498b60f800a6fff6256ac2b6617787a13d972cd3505e5e652bf9cf0475ed151cec8aae43e91fca656d7ceffd8d8acb5da1203d84e4fd27031ff8c1b39f1e354dbbee24d1c6014e83c786ff90820c90ff211e975aca336f01cc89d1cbb5b0362ffc715a066ce3b659ffa1a6f73c2460fb8e85dd5ba1a85fbadee658f176da07cc43de8e4a63a2e2d3eff34a00ed601b80c44623d131e5341efeec5642db735b4401c8fa2e605f8e17a13616d6c88449345647d4da234399ec42e9f5615ad679c0b2d20b2cd154f27b7d5321c2279df7fbb46c1eeb8d1cb78416b69f550036b02f4cfed01f2570359cc195a1888da858ab644a7c7f89879df0df34703a491a1bbcd97e9956ffd392e8d528ae96e4c59981a32435f47bb8fce5ae1f674c222d379fbb2e295319ebda9678f92645e6548f3b0323e292894eac4a28c023a6015d400d285b7d7c037ecff99a34365c555153dc1596c8e0844a3341d1fcca8bb60f36faf9c64b041cb817d4ffa138419fd8efb4db2948128696220cea831466ba4cbc05dbd4f89fd6e6dbc0ff5089ab07cd65ab1cc4654eec524d715c2948846621712079425f948b7e67a6b96dfacb9d75a6621d1667cbcdf07033377a95eb07f71c8587aa18eac1246248b4303def92aecb90ef5211df158b73df41ed69f1715a5d776b9bd9bb4fd5c6477d333307bb0d693435a3b0ff9d16ddab6d4a7c93dfeb28fc68ba1d2375436f57a2aec37dc86e5305649a56d0c6b361f19b2c44389ecdc46ad7db4a7d3a6b8af698d6e9148f7332e8a3214e7fbdda9ffc5db24ed76945cd055627a3e0256d2b9c7e248b10d012489161ab3a0d8979665c07cc31a8bfb2fd36998fced6ffba1c3a227c8d4828c58169d826a0694e9d9e377146729d6d2a1717fcbf93f7978bb682e83dce1bf81ba4973aea06ecc141e7a7a6c77c5f0bd98ca5fbaed16618b4f8d478158ace29724a53c2ce383f78c9b9d2318a5be68bb558f81820334417d548d051a5ce6cfca19eb0ee970b05942f545764f5358610c2174235e081df5bea563011197e79f16d947affa86c273895d46faaafab656b341e5329246e66fa97d1dfaa2ab6dc0c03fb1b79e6ad12dc1926a20c9a9164a2a906d98fa40b2f8e11647d3ee17871c363e73de82415816296652aff7eaae4ed26b20a3f7ce8723df1a7741e77a231d20801163380eef077fcd25dd7db8ee9dbee5d2473a2272cab646de143088bd64c1d137b7baaea7c29d0930c399969d943e6959314fa5e80751366704c0343564ed3cb728c691fdd1de901c0253dcef630b7785cf4b239c85600937ae2196cef0fa650d15df783dc0bfe4e89549dc69c6037d8a2e317944fa62be204437836873266a0d46d6823a6528656465ac512e99dd4e52492b3dc3a46fa9183230656133d601b164a3f6b49f87fa6871c9801da0968653d339a4dc97310226e3c474230c87b1684244d54fe04adbb32f12769a60ce8963fc7edb8102c9101faf11f2678c28db4ccfdf44c2efcdf7392c61a13080e7934358020f179b5112fb3e5f027b2363973e5f2b3730bb86da578b62e053aa5a0fba2c368df90cf4378cf2babfd4af2988d450d28a5848034b66d764c3e29b6578406b54374df4ccccf9d444f4d9a8d2c13aadf19df64f2ea8509b35801eb8c1c330e19786fc0f350dd7c9d020d31024c49ca7ce3756599bdab44e7a84e912e28722ab908f4b4140230cd8c682e7c6b6995cfdde7a9d058e391dff5253d1ffe5dc9621dd5040dffbad66c744cf384464e9270e5163a046c77957385772b03ef0ad35cde947da9987cd4b68c563787a6ed08621642ba153b83ffbb657d9ee8f4b6b4465292cf10666796aed88f91da6baa615914020482a22a6483467d9f9dba51895d9c05d27757376ab94e6719c0c13efed9da67d489683ec5dd63fc3f7029823e2c30c3ecc9ee4f0f51f27e63737e7dd1529efebbd4cb1f7b4f29bffa42faac41104fde129b3bbb1d4a6ab2fb1ff3014d55dd71052fde72251469a0c99a1bb8697f1f178935bfdaae238804eb9316a27499027a244b5069e8e60fe04d8d83d68fff5ae259dc47c00251e7a1606925d1d5662b2a87919164efb4c19c829a6355339abc5046a03539736b1fb99ed12f5f540fce2bf2f8588f416fcbb75c06a539a499869a084251c4847236e483df42d06bf978121f679b7ebb86bb7c60e777c425808487789f98dacc74c32b6e748f7d54f0925ffe556d241844870ae9222771c76012dee46102a7c1d4fc1a218d9dfd7daea85bc720f66911a9f51660202c2ffed0bb6be0c3999467bba80f4d59197dfdada082f006342b3bd330480d0e2679ca5f72a5d4f45a95ca590bb24ae15d861384e3110bbb5f125e34f55f38c7b0cc9b90fc8480e4a6159b63f3bfdf5757148b8923f3a988d8e78250f330acaa6439d81df533b13e83ffc8ee329f72751750bacc516c8c5822d71d5a13bf9dd53f0ebadd439aa03e4de060eb14eb98e2ddec5a11623828b57fbdfea885e18b1288170a9fb8786ad5916bfe675ed68114ca57230d6d46bf1cf6a7dd2d4d82a11e434fd26551ef0a7e84d6ccd3f73a619622f32c9e0b035b5b9669a761cad4e676d79e81245a33725b019478b57bc2b82e2f4aad0cbe576096dcc57954972b078b7f81d5e251d4b98d39b3a1aa450b64d8c8745710e3b5abe3469352c3100ac77fd89aa3d48c64b1843c7492d3e8a3f608af86ef1ac170f63164bd32caca1105c14c26a4907a7578e964bf6a595f4592b251f61af9989600358ed22d0b81df2094bd10514c7a82756b5c00abb1c4ab5b05dbda6bf64e8371ab01771b99f4815bfc5d38fcb798d0e0355289399afc101988c4fc063a3b9bd4d02cc4af62a3d76c54c1406b00af66c856a34aa19a6a8cb376a0950abeb5c26f6047391c6cc1d7625ff0fba9254c91fb17411c7e3911281b12bf576ac9b8f4178dec396be8f193c75a451b9dcb24b6035fef0654b137fb8bf7ed16a3a76325a0d73aa5898c3c69c7b6b777c6dd9354db36bebdb6bfd875be37894a28a13e6e7a3beab93ddc5a41b1aa11e5fdc570bfbfc0fb398b5092b4ab3529595c56944749318008922e173c5c94958a208990f0d4352e8277e0aea6e409904b3cd7f56c1fcc63efd62f7f1192196be3ec32ded8ed9419602cd840c7e4aeb8bd816671f0421f9ef95da12f8bafc86036cddeeba61e9082b5a0a34b2338b6c43844698b903f9bcfd17536ea47637e261932e00cef9c1fcbb2a8caa85c2505c5c3aabd8ace7a777caf5d0af7c2f067cde7e82509b77d20ad017fc20ebc4a20a3c5e9a704307ab8d41a89785e253208f82ebf3e01e07bdb28211b7280a7acbeba760a58cfc46c23c933781ee6292be1389c0039e90783a42b95c6ef5873203bea365353b1068723af2ab8f655591836e20d0fe2d9902be3d5689e9c8a81d196e36139ea6e7ee3ce22bbfc08d866d2923d462e1e610721b4c9ac85ccf3f31f214e796bf8aab0fa69fa8db5a6d5626faff0dcf674639c506829de6d99f5776733a392d85f5ea795af5c57eb5e19b4f72e59293ab01487f90bf8fb7e6754a197ac2316754b901a659cce9131d34a247d5fe1f51888eb6ac26ab7aa1aaa245908ea0e64cd85602794e93b18c439756b2b4c4156150895f811f30b164b51a0eb6020c89deb915083ae2abe06f423e115d655fbbd2fb23f8469c92a579321489a015b676a45a5a6a1292d4d68fc1cfd2aef8b224a04fa0c017b8ab822417396233cad8c074feda602d15cf3b577edbd347169b24f10d2aad09da86bf2ea05f3034b0c3e45b61fe354ba94e51e902d70ff6a52fba361d8ecca949f4580a1f999d1f2262addef4d6813ffde0ffbb7fac45d074c3f20afb628d89a2f25fb131486374c98a1f24246332666a3f97269e2eef2c458fd3506d52e5f749735caf109841f3521fc9d5ae2807a0f7d90bc7e5fa2ee13f7e32103eabe6b95693f056a8bedcd5a3836392b13d409051adb0e95c9e307be417715b7ee09779dcb71d9b1166e01755d46d6fa03b08f5004b10fcc98b3021fe4c05e8e4bab004683d154f46ca83cfc8c72252c31b6e9c01d1dbbb603e4f013bb06ec334e70c1de318384d464451cfccc2c8c3f2504f1cf818c0ef622d5dd7d708c08d63f259a60d90760e248ee8db28e8fd0b7a825b3237b85136b1f4cf51cfa43cb1a893c901ed9381dddeaac4f3b18dacc74d60b9e268b52692c7eff2a1d0aa470df3b243835f577aa5fb21d8c35060d2b759a739ccce6537d7ac78a69761a79e54219f1b8c0e7d16661efa3f71db5ddf4e2bed1a79c246aa2600545b27b9b6d70b94e4f1bf2a9e97676545f21c3f82f1cc713d4b4420d07f06d0bb75f4c211e4a68ea66870c3336bd2a28a14301e9387e77f676c4ed83dd2e530a43dfaf124daf337df60ef0f2ec03d9decdcc69ae5eaacddebebc1744c9638ff7dc731e535a46741285b001d0a90ef146dcd0da1b0789c6d7dff41d4df3bb3d0e87960c4c831f2fc6d79eab23a9b3cd78db1bd1fb69734201fe60d7a874c3325190d1ef01f9080d1398f07af537fa65b22254a44c627760784111125233bd39a466004030e1768a79feb96fadb9842438d8b344279eb5cb1ea770b6a9f89a8b64d400bf0e70165d05d61b18fad6156627f72757bf0b6caa60954e6b9fbc0318cd17ba2a95e043f12fb42bef9c3b6dd7aa8b8dc6edc2d0ff7ba634a484e6f94951d430783c62d986ae6cb673cce681c225d2fac99e1d4beacc050af71991f965251538f13083e5f6c6b4d9c28d8fb068807b196e9a65fa2f8bf45e92cd888836a7d39df64c1e6293236779dab057e9f9e41f374f5a3570186677ec3093ae9e1f075a30c84c0f0d7a1b92a4310cb51ef0fc0ae052292bb36ad09faa97cf1eef89ad9c3b4ad811482579a2ea066f02960ff337b056bd4767aec51a9cc674e6abe4eb461fc7f37e84b9a094fb136625deaa1ad094be83e73aabd3ccf8cea7ce63a2bc54e593f95d0136b664851bc3547c9e383567a6de4a5bb167b1456a08b9f56eb24c77e6db9c2aae0947d21f8244193b35a8bc19ce939b25a7c7779490df6e49f52c3439bbfde5bfe9f420f33b5074d0818d0f4642b377f94e252e86895f21d9c3b265e6b43f6b715564e779c82c309a13d3cf900639273955fcf246710988b1c0ae22da817c171b28a62dcd626bb30ae342b1ff1acbfc2116387b7988f5ba2159949d455e601730e4e042a6e53b1d999b46561306bf291b4c686e3f61c1c0e82d00dab9896ab9558931cee54eac8afa2a2c7f39e3835a1476dffdfabbd7b0d647338e404f42fba0bb53335d8d6beafe268ba528f1bebfc519bf3598bd18eb74482a0fe1ea1cffcb6131203a4913066b6f4eb5ce08820499706f6cec0344e2a53a7d0d47571f71c95787421bec290f946bf96d479286e1b09e34413229e0b708664b7197a7f562c2b3eeb7564e723ffd09d79d84e2210e09650725e41f2dd882b7fc01747d9bd427e1fd0e9e360b919a91f21cb13a3fc40adcac05cfc3f3bcb66ddf3520c6de7f24878c844a802486f5bf552246ba3f283f47871cd8543da9ddef9ce3fb9b29fa819b24c37e0d15fe5c32430b92a5d7381eb5b2614194b077fefd28322908eb9b183aae97b38665d90201c753697811ba5de3c38eb08f10091259fa1d67af04e8c844fc05a5e9b2efd5f4c4
+  </script>
+  <div class="hbe-preview"><p>本问题发生的场景是：使用 Kafka Connect 的 Debezium MySQL Source Connector 将 MySQL 的 CDC 数据 （Confluent Avro 格式）接入到 Kafka 之后，通过 Flink 读取并解析这些 CDC 数据，然后写入到 Hudi 表中。在测试过程中发现：启动写入作业后，Hudi 表中迟迟没有数据写入，而 Flink 作业也没有报错。实际上，这应该是一比较常见的问题，我们的测试环境并没有特别的配置，大多数初次进行集成的开发者，大概率都会遇到这一问题，本文将详细介绍一个该问题产生和原因和解决方法。</p>
+<h2 id="1-触发写入操作提交的“秘密”"><a href="#1-触发写入操作提交的“秘密”" class="headerlink" title="1. 触发写入操作提交的“秘密”"></a>1. 触发写入操作提交的“秘密”</h2><p>实际上，Flink 以流式读取 Kafka 消息，向 Hudi 写入数据时，在默认的配置下，就是不会将任何记录持久化到 Hudi 表中的，这其实是一个默认行为。我们来看一下表现，以下是执行了 <code>insert into my-hudi-sink-talbe select ... from my-kafka-source-table</code> 这样的 SQL 后，Flink Job Manager 页面上的情况：</p>
+<p> <img src="/../../images/hudi/flink-kafka-to-hudi-no-records/2.png" alt="image-20240130141748162"></p>
+<p>Kafka Topic 中已经有 69 条 CDC 数据了，从上图也可以看到，作业成功地读取到了 69 条记录，过程中也无任何报错，然后整个 Job 就一直这样运行着，在 Hudi 表对应的存储目录上，一个数据文件也没有。</p>
+<p>导致这一问题的关键原因是：**Flink 和 Hudi 集成的实现：Flink Hudi Connector 采用了这样的设计：当 Flink 流式读取 Kafka 中的消息并写入 Hudi 表时，触发写入操作进行提交的条件是：到达了检查点 Checkpoint ）！**如果我们全程使用的是 Flink SQL 操作，那么，在不显式配置的情况下，Flink 是不会启用 Checkpoint 的，所以，也就永远不会触发实际的提交动作，因此 Hudi 表中不会有任何“落地”的记录，这就是 Root Cause！我们看一下以两篇官方文章对该情况的解释：</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://hudi.apache.org/blog/2020/10/15/apache-hudi-meets-apache-flink/">https://hudi.apache.org/blog/2020/10/15/apache-hudi-meets-apache-flink/</a></li>
+</ul>
+</div><div class="hbe-preview-end"><span>试读结束</span></div><div class="hbe hbe-content">
+    <form id="hbeForm" class="hbe hbe-form">
+      <div class="hbe hbe-input hbe-input-default">
+      <div class="hbe-qrcode-field"><img class="hbe-qrcode not-gallery-item" src="&#x2F;images&#x2F;profile&#x2F;wechat-qrcode.jpg" alt="QR code"><input class="hbe hbe-input-field hbe-input-field-default" type="password" id="hbePass" placeholder="在此输入文章密码..."></div>
+      <label class="hbe hbe-input-label hbe-input-label-default" for="hbePass">
+        <span class="hbe hbe-input-label-content hbe-input-label-content-default">本文为付费阅读内容，扫描下方二维码，关注作者微信公众号：“十万公里通票”，搜索文章《2024年度付费文章》，付费后可在文章中获得解锁密码。</span>
+      </label>
+    </div>
+      <button class="hbe hbe-button button is-small is-size-7" type="submit">解锁全文</button>
+      <div class="hbe hbe-error" role="alert" aria-live="polite"></div>
+    </form>
+  </div>
+</div>
+<script data-pjax>(function(){var f=document.getElementById("hbePass");if(f){var focus=f.focus;f.focus=function(){focus.call(f,{preventScroll:true});};}}());</script><script data-pjax>(function(){if(window.__hbeToc){return;}window.__hbeToc=true;window.addEventListener("hexo-blog-decrypt",function(){if(!document.querySelector("#toc .menu")){return;}document.querySelectorAll("#toc .menu").forEach(function(m){var c=m.cloneNode(true);c.querySelectorAll("a[data-href]").forEach(function(a){a.setAttribute("href",a.getAttribute("data-href"));a.removeAttribute("data-href");});m.replaceWith(c);});var s=document.createElement("script");s.src="/js/toc.js";document.body.appendChild(s);});}());</script><script data-pjax src="/lib/hbe.a3b9f59caa.js"></script><link href="/css/hbe.style.css" rel="stylesheet" type="text/css"><span hidden data-yearly-password="2024"></span><script data-pjax src="&#x2F;js&#x2F;yearly_password.js"></script></div><div class="article-licensing box"><div class="licensing-title"><p>Flink 读取 Kafka 消息写入 Hudi 表无报错但没有写入任何记录的解决方法</p><p><a href="https://laurence.enlightgram.com/hudi/flink-kafka-to-hudi-no-records/">https://laurence.enlightgram.com/hudi/flink-kafka-to-hudi-no-records/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2024-01-31</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Kafka/">Kafka</a><a class="link-muted mr-2" rel="tag" href="/tags/Flink/">Flink</a><a class="link-muted mr-2" rel="tag" href="/tags/Hudi/">Hudi</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/hudi/flink-debezium-hudi-delete-messages/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Flink 流式读取 Debezium CDC 数据写入 Hudi 表无法处理 -D / Delete 消息</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/flink/flink-hive-metastore/"><span class="level-item">Flink 集成和使用 Hive Metastore</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-触发写入操作提交的“秘密”"><span class="level-left"><span class="level-item">1. 触发写入操作提交的“秘密”</span></span></a></li><li><a class="level is-mobile" href="#2-读取-Hudi-表时对应的-collect-作业报错"><span class="level-left"><span class="level-item">2. 读取 Hudi 表时对应的 collect 作业报错</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

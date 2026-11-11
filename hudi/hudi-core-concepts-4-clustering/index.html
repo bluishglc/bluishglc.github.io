@@ -1,0 +1,1189 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>探索 Apache Hudi 核心概念 (4) - Clustering - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="Clustering是Hudi在 0.7.0 版本引入的一项特性，用于优化文件布局，提升读写性能，现在它已经成为Hudi的一项重要 性能优化 手段。本文我们会通过Notebook介绍并演示Clustering的运行机制，帮助您理解其工作原理和相关配置。 运行 Notebook 本文使用的Notebook是： 《Apache Hudi Core Conceptions (5) - COW: Clus"><meta property="og:type" content="article"><meta property="og:title" content="探索 Apache Hudi 核心概念 (4) - Clustering"><meta property="og:url" content="https://laurence.enlightgram.com/hudi/hudi-core-concepts-4-clustering/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="Clustering是Hudi在 0.7.0 版本引入的一项特性，用于优化文件布局，提升读写性能，现在它已经成为Hudi的一项重要 性能优化 手段。本文我们会通过Notebook介绍并演示Clustering的运行机制，帮助您理解其工作原理和相关配置。 运行 Notebook 本文使用的Notebook是： 《Apache Hudi Core Conceptions (5) - COW: Clus"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/hudi/hudi-core-concepts-4-clustering/2.jpeg"><meta property="article:published_time" content="2023-04-17T17:10:27.000Z"><meta property="article:modified_time" content="2026-11-11T03:37:39.338Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="EMR"><meta property="article:tag" content="Hudi"><meta property="article:tag" content="Clustering"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/hudi/hudi-core-concepts-4-clustering/2.jpeg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/hudi/hudi-core-concepts-4-clustering/"},"headline":"探索 Apache Hudi 核心概念 (4) - Clustering","image":["https://laurence.enlightgram.com/images/hudi/hudi-core-concepts-4-clustering/2.jpeg"],"datePublished":"2023-04-17T17:10:27.000Z","dateModified":"2026-11-11T03:37:39.338Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"Clustering是Hudi在 0.7.0 版本引入的一项特性，用于优化文件布局，提升读写性能，现在它已经成为Hudi的一项重要 性能优化 手段。本文我们会通过Notebook介绍并演示Clustering的运行机制，帮助您理解其工作原理和相关配置。 运行 Notebook 本文使用的Notebook是： 《Apache Hudi Core Conceptions (5) - COW: Clus"}</script><link rel="canonical" href="https://laurence.enlightgram.com/hudi/hudi-core-concepts-4-clustering/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">探索 Apache Hudi 核心概念 (4) - Clustering</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Hudi/">Hudi</a></span><span class="level-item">发表于：<time dateTime="2023-04-17T17:10:27.000Z" title="2023-04-17 10:10:27">2023-04-17</time></span><span class="level-item">阅读用时：38 分钟 (约 5765 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>Clustering是Hudi在 <code>0.7.0</code> 版本引入的一项特性，用于优化文件布局，提升读写性能，现在它已经成为Hudi的一项重要 性能优化 手段。本文我们会通过Notebook介绍并演示Clustering的运行机制，帮助您理解其工作原理和相关配置。</p>
+<h3 id="1-运行-Notebook"><a href="#1-运行-Notebook" class="headerlink" title="1. 运行 Notebook"></a>1. 运行 Notebook</h3><p>本文使用的Notebook是： <a target="_blank" rel="noopener" href="https://github.com/bluishglc/apache-hudi-core-conceptions/blob/master/5-cow-clustering.ipynb">《Apache Hudi Core Conceptions (5) - COW: Clustering》</a> ，对应文件是：5-cow-clustering.ipynb，请先修改Notebook中的环境变量 <code>S3_BUCKET</code> ，将其设为您自己的S3桶，并确保用于数据准备的Notebook： <a target="_blank" rel="noopener" href="https://github.com/bluishglc/apache-hudi-core-conceptions/blob/master/1-data-preparation.ipynb">《Apache Hudi Core Conceptions (1) - Data Preparation》</a> 已经至少执行过一次。Notebook使用的Hudi版本是 <code>0.12.1</code> ，Spark集群建议配置32 vCore &#x2F; 128 GB及以上。</p>
+<h3 id="2-核心概念"><a href="#2-核心概念" class="headerlink" title="2. 核心概念"></a>2. 核心概念</h3><p>通常，数据采集倾向于将数据并行写入多个小文件，这样可以提升写入吞吐量，让下游及早获得采集数据；但对于查询来说，大量的小文件会严重影响读取性能；另一方面，在数据采集时，数据是按到达的先后顺序存储的，这种数据分布无法被查询引擎有效利用，如果数据能按查询频率最高的条件列排序后再存储则可以显著提升部分查询的性能，这里有两方面的原因：一是排序后可以利用谓词下推和Data Skip技术跳过大量不相关的数据，二是有一个为人所熟知的理论：统计显示，当一条记录被访问后，与之“临近”的数据也将很快被访问到，现代文件系统（例如HDFS）一般都有Block Cache，已读取的数据块会被缓存在内存中，访问临近数据时效率会非常高。这里的“临近”就取决于我们如何对数据进行排序。所以，对于一个湖仓系统来说，在数据接入和数据查询两种场景下，对文件大小和数据排布是有不同要求或偏好的，在数据只有一份，配置也只有一份的情况下，系统可优化的空间非常有限，用户只能在接入性能和查询性能之间进行权衡。</p>
+<p>针对这种“两难”局面，Hudi的Clustering给出了一套相对完善的解决方案，它的核心思想是：在数据接入时，允许并行写入多个小文件，以提升写入性能，同时通过一个异步（也可以同步执行，但不推荐）进程或线程周期性地将小文件 合并 成大文件并在这一过程中对数据按特定的列重新排序，这样在解决小文件问题的同时又改善了查询性能。实际上，Clustering是一种通用的数据布局优化手段，Spark SQL&#x2F;Hive中的 <code>cluster by</code> 和Cassandra中的 <code>clustering key</code> 都是Clustering思想的具体实现，只是Hudi的Clustering除了这一标准功能外还多了一项合并小文件的工作。以下是与Clustering有关的几项重要配置，在后面的介绍中我们会逐一介绍它们的作用：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">默认值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringinline-1">hoodie.clustering.inline</a></td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringscheduleinline">hoodie.clustering.schedule.inline</a></td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringasyncenabled">hoodie.clustering.async.enabled</a></td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringinlinemaxcommits">hoodie.clustering.inline.max.commits</a></td>
+<td align="left">4</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringasyncmaxcommits">hoodie.clustering.async.max.commits</a></td>
+<td align="left">4</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategysmallfilelimit">hoodie.clustering.plan.strategy.small.file.limit</a></td>
+<td align="left">314572800 ( 300MB )</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategytargetfilemaxbytes">hoodie.clustering.plan.strategy.target.file.max.bytes</a></td>
+<td align="left">1073741824 ( 1GB )</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategysortcolumns">hoodie.clustering.plan.strategy.sort.columns</a></td>
+<td align="left">-</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieparquetsmallfilelimit">hoodie.parquet.small.file.limit</a></td>
+<td align="left">104857600 ( 100MB )</td>
+</tr>
+</tbody></table>
+<h4 id="2-1-排期与执行"><a href="#2-1-排期与执行" class="headerlink" title="2.1. 排期与执行"></a>2.1. 排期与执行</h4><p>Clustering的执行机制和Compaction非常类似，也是分为：排期（Schedule）和执行（Execute）两个阶段。排期阶段的主要工作是划定哪些文件将参与Clustering，然后生成一个计划（Clustering Plan）保存到Timeline里，此时在Timeline里会出现一个名为 <code>replacecommit</code> 的Instant，状态是 <code>REQUESTED</code> ；执行阶段的主要工作是读取这个计划（Clustering Plan）并执行它，执行完毕后，Timeline中的 <code>replacecommit</code> 就会变成 <code>COMPLETED</code> 状态。</p>
+<h4 id="2-2-同步与异步"><a href="#2-2-同步与异步" class="headerlink" title="2.2. 同步与异步"></a>2.2. 同步与异步</h4><p>和Compaction一样，Clustering的运行模式也分为：同步、异步以及半异步三种模式（“半异步”模式是本文使用的一种叫法，为的是和同步、异步两种模式的称谓对齐，Hudi官方文档对这一模式有介绍，但没有给出命名），它们之间的差异主要体现在从（达到规定阈值的某次）提交（Commit）到排期（Schedule）再到执行（Execute）三个阶段的推进方式上。在Hudi的官方文档中，交替使用了Sync&#x2F;Async和Inline&#x2F;Offline两组词汇描述推进方式，这两组词汇是有微妙差异的，为了表述严谨，我们使用同步&#x2F;异步和立即&#x2F;另行这两组中文术语与之对应。以下是Clustering三种运行模式的详细介绍。</p>
+<ul>
+<li>同步模式（Inline Schedule，Inline Execute）</li>
+</ul>
+<p> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/2.jpeg" alt="请添加图片描述"></p>
+<p>同步模式可概括为：立即排期，立即执行（Inline Schedule，Inline Execute）。在该模式下，当累积的提交（Commit）次数到达一个阈值时，会立即触发Clustering的排期与执行（排期和执行是连在一起的），而这个阈值是由配置项 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringinlinemaxcommits"> <code>hoodie.clustering.inline.max.commits</code> </a> 控制的，默认值是 <code>4</code> ，即：默认情况下，每提交4次就（有可能）会触发并执行一次Clustering。锁定同步模式的配置是：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">设定值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringinline-1">hoodie.clustering.inline</a></td>
+<td align="left">true</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringscheduleinline">hoodie.clustering.schedule.inline</a></td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringasyncenabled">hoodie.clustering.async.enabled</a></td>
+<td align="left">false</td>
+</tr>
+</tbody></table>
+<ul>
+<li>异步模式（Offline Schedule，Offline Execute）</li>
+</ul>
+<p> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/3.jpeg" alt="请添加图片描述"></p>
+<p>异步模式可概括为：另行排期，另行执行（Offline Schedule，Offline Execute）。在该模式下，任何提交都不会直接触发和执行Clustering，除非使用了支持异步Clustering的Writer，否则用户需要自己保证有一个独立的进程或线程负责定期执行Clustering操作。Hudi提供了三种运行异步Clustering的方式：</p>
+<ol>
+<li><p>通过hudi-cli或直接提交Spark作业驱动异步Clustering</p>
+</li>
+<li><p>在HoodieDeltaStreamer中配置并运行异步Clustering</p>
+</li>
+<li><p>在Spark Structured Streaming中配置并运行异步Clustering</p>
+</li>
+</ol>
+<p>在后面的 测试用例 中，我们将使用第一种方式演示如何进行异步的Clustering排期与执行。和同步模式类似的是，在异步模式下，只有累积到足够的提交（Commit）次数时才会触发排期，这个值是由配置项 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringasyncmaxcommits"> <code>hoodie.clustering.async.max.commits</code> </a> 设定的，默认值也是 <code>4</code> ，即：默认情况下，每提交4次就（有可能）会触发并执行一次Clustering。</p>
+<p>如果对比一下Compaction，我们就会发现，此时Clustering和Compaction在设计上开始出现了一些差异。在Compaction中，与提交次数有关的配置项只有一个，即： <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinlinemaxdeltacommits"> <code>hoodie.compact.inline.max.delta.commits</code> </a> ，该项对于Compaction的同步、异步和半异步模式都有效，而在Clustering中，针对同步和异步则提供了两个不同的配置项： <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringinlinemaxcommits"> <code>hoodie.clustering.inline.max.commits</code> </a> 和 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringasyncmaxcommits"> <code>hoodie.clustering.async.max.commits</code> </a> 。</p>
+<p>在异步模式下，由于发起排期和提交之间没有必然的协同关系，所以在发起排期时，Timeline中可能尚未积累到足够数量的提交，或者提交数量已经超过了规定阈值，如果是前者，不会产生排期计划，如果是后者，排期计划会将所有累积的提交涵盖进来，在这一点上，Clustering和Compaction的处理方式是一致的。锁定异步模式的配置是：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">设定值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringinline-1">hoodie.clustering.inline</a></td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringscheduleinline">hoodie.clustering.schedule.inline</a></td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringasyncenabled">hoodie.clustering.async.enabled</a></td>
+<td align="left">true</td>
+</tr>
+</tbody></table>
+<ul>
+<li>半异步模式（Inline Schedule，Offline Execute）</li>
+</ul>
+<p> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/4.jpeg" alt="请添加图片描述"></p>
+<p>半异步模式可概括为：立即排期，另行执行（Inline Schedule，Offline Execute），即：排期会伴随提交自动触发，但执行还是通过前面介绍的三种异步方式之一去完成。</p>
+<p>在半异步模式下，Clustering和Compaction在设计上出现了更显著的差异。Compaction的半异步模式，即：Inline Schedule， Offline Execute，其排期周期会受 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinlinemaxdeltacommits"> <code>hoodie.compact.inline.max.delta.commits</code> </a> 的控制，即：排期会根据累积的提交次数周期性触发；而Clustering的半异步模式则采用了完全不同的做法，不管是 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringinlinemaxcommits"> <code>hoodie.clustering.inline.max.commits</code> </a> 还是 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringasyncmaxcommits"> <code>hoodie.clustering.async.max.commits</code> </a> 都对它不起作用，该模式下，每一次提交都会（尝试）生成排期计划，没有配置项能改变这个排期周期，初次了解到这一状况时，很多人会感到困惑，因为这样会变成每提交一次就得进行一次Clustering，这肯定是不合理的。</p>
+<p>实际情况是，排期还会受到另外一个因素的影响：如果当前Timelines中有积压的排期计划（即状态为 <code>REQUESTED</code> 的 <code>replacecommit</code> ），Hudi不会再生成新的排期，直到它被执行掉，这就相当于将排期的周期“挂靠”到了执行周期上。举个例子：假设一个Hudi的客户端使用半异步模式向某张表持续写入数据，每分钟内会产生若干次提交，与此同时，一个异步进程每分钟会进行一次Offline Execute，在这个场景下，每次Execute完成时，Timeline中那个pending的排期计划就会被consume掉（ <code>replacecommit</code> 从 <code>REQUESTED</code> 变成了 <code>COMPLETED</code> ），于是，紧接着的下一次提交会立即生成新的排期计划，这个排期计划会将此前一分种内提交的小文件全部涵盖在内，等到一分钟后再次启动Offline Execute时，这批小文件就被打包成大文件了。</p>
+<p>简单总结一下半异步的设计思想：它在每次提交时都会尝试生成排期，如果此前已经生成了排期且尚未执行，则放弃排期，等待其被执行，当异步进程或线程完成执行作业时，紧接着的下一次提交会立即生成新的排期，这样，整个Clustering的“节奏”就由异步的执行程序来掌控了。锁定半异步模式的配置是：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">设定值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringinline-1">hoodie.clustering.inline</a></td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringscheduleinline">hoodie.clustering.schedule.inline</a></td>
+<td align="left">true</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringasyncenabled">hoodie.clustering.async.enabled</a></td>
+<td align="left">false</td>
+</tr>
+</tbody></table>
+<h4 id="2-3-排期策略"><a href="#2-3-排期策略" class="headerlink" title="2.3. 排期策略"></a>2.3. 排期策略</h4><p>前面在介绍 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringinlinemaxcommits"> <code>hoodie.clustering.inline.max.commits</code> </a> 和 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringasyncmaxcommits"> <code>hoodie.clustering.async.max.commits</code> </a> 时，我们说在达到这些阈值时“有可能”会触发Clustering，因为是否会生成一个Clustering排期还取决于排期策略。</p>
+<p>实际上，Clustering在排期和执行上都有可插拔的策略，以及在执行期间如何应对数据更新也有相应的更新策略，执行策略和更新策略较为简单，使用默认配置即可，本文不再赘述，详情可参考官方文档。本文着重介绍一下排期策略。Hudi有三种Clustering排期策略可供选择：</p>
+<ul>
+<li><p><code>SparkSizeBasedClusteringPlanStrategy</code> : 该策略为默认的排期策略，它会筛选出符合条件的小文件（就是看文件大小，小于 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategysmallfilelimit"> <code>hoodie.clustering.plan.strategy.small.file.limit</code> </a> 规定值的文件就是小文件），然后将选出的小文件分成多个Group，Group的数量和大小都是可配置的，划分Group的目的是提升Clustering的并行度。注意：该策略将会扫描全部分区。</p>
+</li>
+<li><p><code>SparkRecentDaysClusteringPlanStrategy</code> : 该策略会在此前N天的分区内查找小文件，对于使用日期作分区，且数据增量是可预期的数据表来说，这种策略是非常适合的。如果在这种情况下使用默认排期策略，就会扫描全部分区，给系统带来没有必要的负载。</p>
+</li>
+<li><p><code>SparkSelectedPartitionsClusteringPlanStrategy</code> ：该策略允许我们针对特定的分区进行Clustering，这可能会应用在运维或某些具有独特业务特征的数据表上。</p>
+</li>
+</ul>
+<p>下面，我们看一下排期策略会使用到的和文件大小相关的配置项，在接下来的测试用例中，也会使用到它们：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">默认值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategysmallfilelimit">hoodie.clustering.plan.strategy.small.file.limit</a></td>
+<td align="left">314572800 ( 300MB )</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategytargetfilemaxbytes">hoodie.clustering.plan.strategy.target.file.max.bytes</a></td>
+<td align="left">1073741824 ( 1GB )</td>
+</tr>
+</tbody></table>
+<p><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategysmallfilelimit"> <code>hoodie.clustering.plan.strategy.small.file.limit</code> </a> 在前面已经提及，只有小于该值的文件才会被视为小文件，从而参与到Clustering中，默认值是 <code>300MB</code> ； <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategytargetfilemaxbytes"> <code>hoodie.clustering.plan.strategy.target.file.max.bytes</code> </a> 用于限制Clustering生成的文件大小，默认是 <code>1GB</code> ，即：经Clustering合并后的数据文件最大不会超过1GB，如果数据总量大于1GB，会均分为多个文件。</p>
+<h4 id="2-4-排序列"><a href="#2-4-排序列" class="headerlink" title="2.4. 排序列"></a>2.4. 排序列</h4><p>配置项 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategysortcolumns"> <code>hoodie.clustering.plan.strategy.sort.columns</code> </a> 用于指定在Clustering过程中针对哪个列重新进行排序，这也是前文重点解释的Clustering能提升数据读取性能的关键。该列的选择对提升查询效率非常重要，通常会选择查询频率最高的条件列。尽管该配置项支持多列，但如果配置了两个或更多列的话，对于那些排在第一列后面的列来说，以它们为条件的查询并不能从中获得太多收益，这和在HBase中拼接列值到Rowkey中以提升检索性能是一样的。不过，Hudi提供了以z-order和hilbert为代表的空间填充曲线技术用于解决多列排序问题。</p>
+<h4 id="2-5-关闭小文件检查"><a href="#2-5-关闭小文件检查" class="headerlink" title="2.5. 关闭小文件检查"></a>2.5. 关闭小文件检查</h4><p>最后，也许应该是最先提醒的一点：关闭Parquet的小文件检查，即：将 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieparquetsmallfilelimit"> <code>hoodie.parquet.small.file.limit</code> </a> 置为 <code>0</code> 。介绍到这里的时候，相信你应该能理解为什么要这样做了：将该项置为 <code>0</code> 意味着所有的文件都会被视作大文件，任何数据的写入都不再发生Copy On Write的Copy动作，而是直接写入新文件，这将大大减轻写入负担，由此产生的大量小文件就是Clustering要去解决的事情了。</p>
+<h3 id="3-同步Clustering"><a href="#3-同步Clustering" class="headerlink" title="3. 同步Clustering"></a>3. 同步Clustering</h3><h4 id="3-1-关键配置"><a href="#3-1-关键配置" class="headerlink" title="3.1. 关键配置"></a>3.1. 关键配置</h4><p><a target="_blank" rel="noopener" href="https://github.com/bluishglc/apache-hudi-core-conceptions/blob/master/5-cow-clustering.ipynb">《Apache Hudi Core Conceptions (5) - COW: Clustering》</a> 的第1个测试用例基于COW表演示了同步Clustering的运行机制。测试用的数据表有如下几项关键配置：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">默认值</th>
+<th align="left">设定值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringinline-1">hoodie.clustering.inline</a></td>
+<td align="left">false</td>
+<td align="left">true</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringscheduleinline">hoodie.clustering.schedule.inline</a></td>
+<td align="left">false</td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringasyncenabled">hoodie.clustering.async.enabled</a></td>
+<td align="left">false</td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringinlinemaxcommits">hoodie.clustering.inline.max.commits</a></td>
+<td align="left">4</td>
+<td align="left">3</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategysmallfilelimit">hoodie.clustering.plan.strategy.small.file.limit</a></td>
+<td align="left">314572800 ( 300MB )</td>
+<td align="left">209715200 ( 200MB )</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategytargetfilemaxbytes">hoodie.clustering.plan.strategy.target.file.max.bytes</a></td>
+<td align="left">1073741824 ( 1GB )</td>
+<td align="left">314572800 ( 300MB )</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategysortcolumns">hoodie.clustering.plan.strategy.sort.columns</a></td>
+<td align="left"></td>
+<td align="left">review_date</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieparquetsmallfilelimit">hoodie.parquet.small.file.limit</a></td>
+<td align="left">104857600 ( 100MB )</td>
+<td align="left">0</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecopyonwriterecordsizeestimate">hoodie.copyonwrite.record.size.estimate</a></td>
+<td align="left">1024</td>
+<td align="left">175</td>
+</tr>
+</tbody></table>
+<p>这些配置项在介绍概念时都已提及，通过这个测试用例将会看到它们组合起来的整体效果。</p>
+<h4 id="3-2-测试计划"><a href="#3-2-测试计划" class="headerlink" title="3.2. 测试计划"></a>3.2. 测试计划</h4><p>该测试用例会先后插入三批数据，然后进行同步的Clustering排期和执行，过程中将重点观察时间线和文件布局的变化，整体测试计划如下表所示：</p>
+<table>
+<thead>
+<tr>
+<th align="center">步骤</th>
+<th align="left">操作</th>
+<th align="left">数据量（单分区）</th>
+<th align="left">文件系统</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1</td>
+<td align="left">Insert</td>
+<td align="left">96MB</td>
+<td align="left">+1 Small File</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td align="left">Insert</td>
+<td align="left">213MB</td>
+<td align="left">+1 Max File +1 Small File</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td align="left">Insert</td>
+<td align="left">182MB</td>
+<td align="left">+1 Max File +1 Small File +2 Clustered Files</td>
+</tr>
+</tbody></table>
+<p><em>提示：我们将使用色块标识当前批次的Instant和对应存储文件，每一种颜色代表一个独立的File Group。</em> </p>
+<h4 id="3-3-第1批次"><a href="#3-3-第1批次" class="headerlink" title="3.3. 第1批次"></a>3.3. 第1批次</h4><p>第1批次单分区写入了96MB数据，Hudi将其写入到一个Parquet文件中，第一个File Group随之产生。</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/5.jpeg" alt="请添加图片描述"></p>
+<h4 id="3-4-第2批次"><a href="#3-4-第2批次" class="headerlink" title="3.4. 第2批次"></a>3.4. 第2批次</h4><p>第2批次单分区写入了213MB数据，由于数据表关闭了小文件检查，即：将 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieparquetsmallfilelimit"> <code>hoodie.parquet.small.file.limit</code> </a> 设为了 <code>0</code> ，所以这批数据全部都会写入新文件，由于总体积超过了120MB，所以将分成两个文件写入，第二和第三个File Group出现。</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/6.jpeg" alt="请添加图片描述"></p>
+<h4 id="3-5-第3批次"><a href="#3-5-第3批次" class="headerlink" title="3.5. 第3批次"></a>3.5. 第3批次</h4><p>第3批次单分区写入了182MB数据，和上一批次一样，因为总体积超过了120MB，所以分成两个文件写入，第四和五个File Group出现。由于该表被设置为同步Clustering模式且最大提交次数是 <code>3</code> ，所以此次提交触发了Clustering机制，自动发起了名为 <code>replacecommit</code> 的第四次提交，第四次提交将5个小于200MB的文件打包，经重新排序后，写入到了两个新文件中，一个220MB，另一个269MB，完成了一次标准的Clustering操作：</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/7.jpeg" alt="请添加图片描述"></p>
+<p>和COW写Parquet文件不同的是，Clustering倾向于将数据均匀分布到生成的文件中，以使它们大小相同或接近，而不是写满一个300MB的Max File和一个189MB的Small File。</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/8.jpeg" alt="请添加图片描述"></p>
+<h4 id="3-6-复盘"><a href="#3-6-复盘" class="headerlink" title="3.6. 复盘"></a>3.6. 复盘</h4><p>最后，让我们将此前的全部操作汇总在一起，重新看一下整体的时间线和最后的文件布局：</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/9.jpeg" alt="请添加图片描述"></p>
+<h3 id="4-异步Clustering"><a href="#4-异步Clustering" class="headerlink" title="4. 异步Clustering"></a>4. 异步Clustering</h3><h4 id="4-1-关键配置"><a href="#4-1-关键配置" class="headerlink" title="4.1. 关键配置"></a>4.1. 关键配置</h4><p><a target="_blank" rel="noopener" href="https://github.com/bluishglc/apache-hudi-core-conceptions/blob/master/5-cow-clustering.ipynb">《Apache Hudi Core Conceptions (5) - COW: Clustering》</a> 的第2个测试用例基于COW表演示了异步Clustering的运行机制。测试用的数据表有如下几项关键配置：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">默认值</th>
+<th align="left">设定值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringinline-1">hoodie.clustering.inline</a></td>
+<td align="left">false</td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringscheduleinline">hoodie.clustering.schedule.inline</a></td>
+<td align="left">false</td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringasyncenabled">hoodie.clustering.async.enabled</a></td>
+<td align="left">false</td>
+<td align="left">true</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringasyncmaxcommits">hoodie.clustering.async.max.commits</a></td>
+<td align="left">4</td>
+<td align="left">3</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategysmallfilelimit">hoodie.clustering.plan.strategy.small.file.limit</a></td>
+<td align="left">314572800 ( 300MB )</td>
+<td align="left">209715200 ( 200MB )</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategytargetfilemaxbytes">hoodie.clustering.plan.strategy.target.file.max.bytes</a></td>
+<td align="left">1073741824 ( 1GB )</td>
+<td align="left">314572800 ( 300MB )</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategysortcolumns">hoodie.clustering.plan.strategy.sort.columns</a></td>
+<td align="left"></td>
+<td align="left">review_date</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieparquetsmallfilelimit">hoodie.parquet.small.file.limit</a></td>
+<td align="left">104857600 ( 100MB )</td>
+<td align="left">0</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecopyonwriterecordsizeestimate">hoodie.copyonwrite.record.size.estimate</a></td>
+<td align="left">1024</td>
+<td align="left">175</td>
+</tr>
+</tbody></table>
+<p>这些配置项在介绍概念时都已提及，通过这个测试用例将会看到它们组合起来的整体效果。</p>
+<h4 id="4-2-测试计划"><a href="#4-2-测试计划" class="headerlink" title="4.2. 测试计划"></a>4.2. 测试计划</h4><p>该测试用例会先后插入三批数据，然后进行异步的Clustering排期和执行，过程中将重点观察时间线和文件布局的变化，整体测试计划如下表所示：</p>
+<table>
+<thead>
+<tr>
+<th align="center">步骤</th>
+<th align="left">操作</th>
+<th align="left">数据量（单分区）</th>
+<th align="left">文件系统</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1</td>
+<td align="left">Insert</td>
+<td align="left">96MB</td>
+<td align="left">+1 Small File</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td align="left">Insert</td>
+<td align="left">213MB</td>
+<td align="left">+1 Max File +1 Small File</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td align="left">Insert</td>
+<td align="left">182MB</td>
+<td align="left">+1 Max File +1 Small File</td>
+</tr>
+<tr>
+<td align="center">4</td>
+<td align="left">Offline Schedule</td>
+<td align="left">N&#x2F;A</td>
+<td align="left">N&#x2F;A</td>
+</tr>
+<tr>
+<td align="center">5</td>
+<td align="left">Offline Execute</td>
+<td align="left">491MB</td>
+<td align="left">+2 Clustered Files</td>
+</tr>
+</tbody></table>
+<p>由于该测试用例的前三步操作与第3节（第1个测试用例）完全一致，所以不再赘述，我们会从第4步操作（Notebook的3.8节）开始解读。</p>
+<h4 id="4-3-异步排期"><a href="#4-3-异步排期" class="headerlink" title="4.3. 异步排期"></a>4.3. 异步排期</h4><p>在完成了和第3节完全一样的前三批操作后，时间线和文件系统的情形如下：</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/10.jpeg" alt="请添加图片描述"></p>
+<p>这和3.5节执行后的状况非常不同，没有发生Clustering，连排期也没有看到，因为我们关闭了 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringinline-1"> <code>hoodie.clustering.inline</code> </a> 。于是，在接下来的第4步操作中（Notebook的3.8节），我们通过 <code>spark-submit</code> 手动发起了一个排期作业（ <code>--mode &#39;schedule&#39;</code> ）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> -u hadoop spark-submit \</span><br><span class="line">  --jars <span class="string">&#x27;/usr/lib/hudi/hudi-spark-bundle.jar&#x27;</span> \</span><br><span class="line">  --class <span class="string">&#x27;org.apache.hudi.utilities.HoodieClusteringJob&#x27;</span> \</span><br><span class="line">  /usr/lib/hudi/hudi-utilities-bundle.jar \</span><br><span class="line">  --spark-memory <span class="string">&#x27;4g&#x27;</span> \</span><br><span class="line">  --mode <span class="string">&#x27;schedule&#x27;</span> \</span><br><span class="line">  --base-path <span class="string">&quot;s3://<span class="variable">$&#123;S3_BUCKET&#125;</span>/<span class="variable">$&#123;TABLE_NAME&#125;</span>&quot;</span> \</span><br><span class="line">  --table-name <span class="string">&quot;<span class="variable">$&#123;TABLE_NAME&#125;</span>&quot;</span> \</span><br><span class="line">  --hoodie-conf <span class="string">&quot;hoodie.clustering.async.enabled=true&quot;</span> \</span><br><span class="line">  --hoodie-conf <span class="string">&quot;hoodie.clustering.async.max.commits=3&quot;</span> \</span><br><span class="line">  --hoodie-conf <span class="string">&quot;hoodie.clustering.plan.strategy.small.file.limit=209715200&quot;</span> \</span><br><span class="line">  --hoodie-conf <span class="string">&quot;hoodie.clustering.plan.strategy.target.file.max.bytes=314572800&quot;</span> \</span><br><span class="line">  --hoodie-conf <span class="string">&quot;hoodie.clustering.plan.strategy.sort.columns=review_date&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>执行后，文件布局没有变化，但是在时间线中出现了一个状态为 <code>REQUESTED</code> 的 <code>replacecommit</code> ：</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/11.jpeg" alt="请添加图片描述"></p>
+<h4 id="4-4-异步执行"><a href="#4-4-异步执行" class="headerlink" title="4.4. 异步执行"></a>4.4. 异步执行</h4><p>第5步操作（Notebook的3.9节）通过 <code>spark-submit</code> 手动发起了一个执行作业（ <code>--mode &#39;execute&#39;</code> ）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> -u hadoop spark-submit \</span><br><span class="line">  --jars <span class="string">&#x27;/usr/lib/hudi/hudi-spark-bundle.jar&#x27;</span> \</span><br><span class="line">  --class <span class="string">&#x27;org.apache.hudi.utilities.HoodieClusteringJob&#x27;</span> \</span><br><span class="line">  /usr/lib/hudi/hudi-utilities-bundle.jar \</span><br><span class="line">  --spark-memory <span class="string">&#x27;4g&#x27;</span> \</span><br><span class="line">  --mode <span class="string">&#x27;execute&#x27;</span> \</span><br><span class="line">  --base-path <span class="string">&quot;s3://<span class="variable">$&#123;S3_BUCKET&#125;</span>/<span class="variable">$&#123;TABLE_NAME&#125;</span>&quot;</span> \</span><br><span class="line">  --table-name <span class="string">&quot;<span class="variable">$&#123;TABLE_NAME&#125;</span>&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>执行后，原 <code>replacecommit</code> 状态由 <code>REQUESTED</code> 变为 <code>COMPLETED</code> ，原5个小于200MB的文件被打包，经重新排序后写入两个245MB的大文件：</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/12.jpeg" alt="请添加图片描述"></p>
+<h4 id="4-5-异步排期-异步执行"><a href="#4-5-异步排期-异步执行" class="headerlink" title="4.5. 异步排期 + 异步执行"></a>4.5. 异步排期 + 异步执行</h4><p>异步的排期和执行可以通过一个命令一步完成， <a target="_blank" rel="noopener" href="https://github.com/bluishglc/apache-hudi-core-conceptions/blob/master/5-cow-clustering.ipynb">《Apache Hudi Core Conceptions (5) - COW: Clustering》</a> 的第3个测试用例演示了这一操作。它的前三步操作与第2个测试用例一样，在第四步时，使用了“排期 + 异步”一起执行的方式（ <code>--mode &#39;scheduleAndExecute&#39;</code> ）一步完成了Clustering操作，命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> -u hadoop spark-submit \</span><br><span class="line">  --jars <span class="string">&#x27;/usr/lib/hudi/hudi-spark-bundle.jar&#x27;</span> \</span><br><span class="line">  --class <span class="string">&#x27;org.apache.hudi.utilities.HoodieClusteringJob&#x27;</span> \</span><br><span class="line">  /usr/lib/hudi/hudi-utilities-bundle.jar \</span><br><span class="line">  --spark-memory <span class="string">&#x27;4g&#x27;</span> \</span><br><span class="line">  --mode <span class="string">&#x27;scheduleAndExecute&#x27;</span> \</span><br><span class="line">  --base-path <span class="string">&quot;s3://<span class="variable">$&#123;S3_BUCKET&#125;</span>/<span class="variable">$&#123;TABLE_NAME&#125;</span>&quot;</span> \</span><br><span class="line">  --table-name <span class="string">&quot;<span class="variable">$&#123;TABLE_NAME&#125;</span>&quot;</span> \</span><br><span class="line">  --hoodie-conf <span class="string">&quot;hoodie.clustering.async.enabled=true&quot;</span> \</span><br><span class="line">  --hoodie-conf <span class="string">&quot;hoodie.clustering.async.max.commits=3&quot;</span> \</span><br><span class="line">  --hoodie-conf <span class="string">&quot;hoodie.clustering.plan.strategy.small.file.limit=209715200&quot;</span> \</span><br><span class="line">  --hoodie-conf <span class="string">&quot;hoodie.clustering.plan.strategy.target.file.max.bytes=314572800&quot;</span> \</span><br><span class="line">  --hoodie-conf <span class="string">&quot;hoodie.clustering.plan.strategy.sort.columns=review_date&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="5-半异步Clustering"><a href="#5-半异步Clustering" class="headerlink" title="5. 半异步Clustering"></a>5. 半异步Clustering</h3><h4 id="5-1-关键配置"><a href="#5-1-关键配置" class="headerlink" title="5.1. 关键配置"></a>5.1. 关键配置</h4><p><a target="_blank" rel="noopener" href="https://github.com/bluishglc/apache-hudi-core-conceptions/blob/master/5-cow-clustering.ipynb">《Apache Hudi Core Conceptions (5) - COW: Clustering》</a> 的第4个测试用例基于COW表演示了半异步Clustering的运行机制。测试用的数据表有如下几项关键配置：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">默认值</th>
+<th align="left">设定值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringinline-1">hoodie.clustering.inline</a></td>
+<td align="left">false</td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringscheduleinline">hoodie.clustering.schedule.inline</a></td>
+<td align="left">false</td>
+<td align="left">true</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringasyncenabled">hoodie.clustering.async.enabled</a></td>
+<td align="left">false</td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategysmallfilelimit">hoodie.clustering.plan.strategy.small.file.limit</a></td>
+<td align="left">314572800 ( 300MB )</td>
+<td align="left">209715200 ( 200MB )</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategytargetfilemaxbytes">hoodie.clustering.plan.strategy.target.file.max.bytes</a></td>
+<td align="left">1073741824 ( 1GB )</td>
+<td align="left">314572800 ( 300MB )</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieclusteringplanstrategysortcolumns">hoodie.clustering.plan.strategy.sort.columns</a></td>
+<td align="left"></td>
+<td align="left">review_date</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodieparquetsmallfilelimit">hoodie.parquet.small.file.limit</a></td>
+<td align="left">104857600 ( 100MB )</td>
+<td align="left">0</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecopyonwriterecordsizeestimate">hoodie.copyonwrite.record.size.estimate</a></td>
+<td align="left">1024</td>
+<td align="left">175</td>
+</tr>
+</tbody></table>
+<p>这些配置项在介绍概念时都已提及，通过这个测试用例将会看到它们组合起来的整体效果。</p>
+<h4 id="5-2-测试计划"><a href="#5-2-测试计划" class="headerlink" title="5.2. 测试计划"></a>5.2. 测试计划</h4><p>由于半异步模式的执行机制与同步和纯异步都有不小的差异，所以测试计划也做出了一些相应的调整，以便能展示它的全貌，整体测试计划如下：</p>
+<table>
+<thead>
+<tr>
+<th align="center">步骤</th>
+<th align="left">操作</th>
+<th align="left">数据量（单分区）</th>
+<th align="left">文件系统</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1</td>
+<td align="left">Insert</td>
+<td align="left">96MB</td>
+<td align="left">+1 Small File</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td align="left">Insert</td>
+<td align="left">213MB</td>
+<td align="left">+1 Max File +1 Small File</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td align="left">Insert</td>
+<td align="left">182MB</td>
+<td align="left">+1 Max File +1 Small File</td>
+</tr>
+<tr>
+<td align="center">4</td>
+<td align="left">Offline Execute</td>
+<td align="left">96MB</td>
+<td align="left">+1 Clustered File</td>
+</tr>
+<tr>
+<td align="center">5</td>
+<td align="left">Insert</td>
+<td align="left">14.6MB</td>
+<td align="left">+1 Small File</td>
+</tr>
+<tr>
+<td align="center">6</td>
+<td align="left">Offline Execute</td>
+<td align="left">503MB</td>
+<td align="left">+2 Clustered Files</td>
+</tr>
+</tbody></table>
+<h4 id="5-3-第1次同步排期"><a href="#5-3-第1次同步排期" class="headerlink" title="5.3. 第1次同步排期"></a>5.3. 第1次同步排期</h4><p>如前文所述，在半异步模式下，每次提交都会尝试生成排期计划，这一点，在测试用例的第一批次（Notebook 5.5节）插入中就表现了出来：</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/13.jpeg" alt="请添加图片描述"></p>
+<p>初次提交时，Timeline上没有未处理的排期，Hudi会立即生成排期计划，而在这个排期计划里，只是一个96MB的数据文件（只看单分区），所以可以推断：这个排期计划执行完毕后，依然只会生成一个相同大小的数据文件。</p>
+<p>在第二批次（Notebook 5.6节）插入后，Timeline中并没有生成新的排期，原因是当前Timeline中存在未处理的排期计划，第三批次（Notebook 5.7节）同样如此：<br> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/14.jpeg" alt="请添加图片描述"></p>
+<h4 id="5-4-第1次异步执行"><a href="#5-4-第1次异步执行" class="headerlink" title="5.4. 第1次异步执行"></a>5.4. 第1次异步执行</h4><p>完成了三个批次的插入后，测试用例在第四步（Notebook 5.8节）发起了一次异步执行。由于此时的这个排期计划是在第一批次提交时生成的，当时只有一个96MB的小文件（只看单分区）可以参与Clustering，所以结果就是又生成了一个同样大小的文件：</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/15.jpeg" alt="请添加图片描述"></p>
+<p>尽管这一行为在当下看起来有些怪异，但它的整体逻辑是没有问题的，这只是半异步模式下短暂出现的“空转”现象，在后续的排期中会慢慢正常起来。</p>
+<h4 id="5-5-第2次同步排期"><a href="#5-5-第2次同步排期" class="headerlink" title="5.5. 第2次同步排期"></a>5.5. 第2次同步排期</h4><p>完成第四步（Notebook 5.8节）的异步执行后，Timeline中就没有待执行的排期计划了，于是在第五步（Notebook 5.9节）插入操作完成后，随即生成了第2次排期：</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/16.jpeg" alt="请添加图片描述"></p>
+<p>此次排期将会覆盖此前所有提交生成的文件（包括第1次Clustering生成的那个96MB的文件），因为它们全都是没有超过200MB的小文件。</p>
+<h4 id="5-6-第2次异步执行"><a href="#5-6-第2次异步执行" class="headerlink" title="5.6. 第2次异步执行"></a>5.6. 第2次异步执行</h4><p>第六步（Notebook 5.10节）发起了第2次异步执行，不同于第1次执行，这次的操作效果已经是一次符合预期的标准Clustering了：<br> <img src="/../../images/hudi/hudi-core-concepts-4-clustering/17.jpeg" alt="请添加图片描述"></p>
+<hr>
+<p>关联阅读：</p>
+<p><a href="/hudi/hudi-core-concepts-1-file-layouts/">探索Apache Hudi核心概念 (1) - File Layouts</a> </p>
+<p><a href="/hudi/hudi-core-concepts-2-file-sizing/">探索Apache Hudi核心概念 (2) - File Sizing</a> </p>
+<p><a href="/hudi/hudi-core-concepts-3-compaction/">探索Apache Hudi核心概念 (3) - Compaction</a> </p>
+<p><a href="/hudi/hudi-core-concepts-4-clustering/">探索Apache Hudi核心概念 (4) - Clustering</a> </p>
+<hr>
+<p>关于作者：耿立超，架构师，著有 <a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a> 一书，多年IT系统开发和架构经验，对大数据、企业级应用架构、SaaS、分布式存储和领域驱动设计有丰富的实践经验，个人技术博客： <a href="/">https://laurence.enlightgram.com</a> </p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>探索 Apache Hudi 核心概念 (4) - Clustering</p><p><a href="https://laurence.enlightgram.com/hudi/hudi-core-concepts-4-clustering/">https://laurence.enlightgram.com/hudi/hudi-core-concepts-4-clustering/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2023-04-17</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/EMR/">EMR</a><a class="link-muted mr-2" rel="tag" href="/tags/Hudi/">Hudi</a><a class="link-muted mr-2" rel="tag" href="/tags/Clustering/">Clustering</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/hudi/hudi-core-concepts-series/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">探索 Apache Hudi 核心概念（系列文章）</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/security/dns-srv-record-ldap-kerberos/"><span class="level-item">DNS lookup for realm name failed, SRV record for LDAP / Kerberos does not exist for IP … 解决方法</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-运行-Notebook"><span class="level-left"><span class="level-item">1. 运行 Notebook</span></span></a></li><li><a class="level is-mobile" href="#2-核心概念"><span class="level-left"><span class="level-item">2. 核心概念</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-1-排期与执行"><span class="level-left"><span class="level-item">2.1. 排期与执行</span></span></a></li><li><a class="level is-mobile" href="#2-2-同步与异步"><span class="level-left"><span class="level-item">2.2. 同步与异步</span></span></a></li><li><a class="level is-mobile" href="#2-3-排期策略"><span class="level-left"><span class="level-item">2.3. 排期策略</span></span></a></li><li><a class="level is-mobile" href="#2-4-排序列"><span class="level-left"><span class="level-item">2.4. 排序列</span></span></a></li><li><a class="level is-mobile" href="#2-5-关闭小文件检查"><span class="level-left"><span class="level-item">2.5. 关闭小文件检查</span></span></a></li></ul></li><li><a class="level is-mobile" href="#3-同步Clustering"><span class="level-left"><span class="level-item">3. 同步Clustering</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#3-1-关键配置"><span class="level-left"><span class="level-item">3.1. 关键配置</span></span></a></li><li><a class="level is-mobile" href="#3-2-测试计划"><span class="level-left"><span class="level-item">3.2. 测试计划</span></span></a></li><li><a class="level is-mobile" href="#3-3-第1批次"><span class="level-left"><span class="level-item">3.3. 第1批次</span></span></a></li><li><a class="level is-mobile" href="#3-4-第2批次"><span class="level-left"><span class="level-item">3.4. 第2批次</span></span></a></li><li><a class="level is-mobile" href="#3-5-第3批次"><span class="level-left"><span class="level-item">3.5. 第3批次</span></span></a></li><li><a class="level is-mobile" href="#3-6-复盘"><span class="level-left"><span class="level-item">3.6. 复盘</span></span></a></li></ul></li><li><a class="level is-mobile" href="#4-异步Clustering"><span class="level-left"><span class="level-item">4. 异步Clustering</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#4-1-关键配置"><span class="level-left"><span class="level-item">4.1. 关键配置</span></span></a></li><li><a class="level is-mobile" href="#4-2-测试计划"><span class="level-left"><span class="level-item">4.2. 测试计划</span></span></a></li><li><a class="level is-mobile" href="#4-3-异步排期"><span class="level-left"><span class="level-item">4.3. 异步排期</span></span></a></li><li><a class="level is-mobile" href="#4-4-异步执行"><span class="level-left"><span class="level-item">4.4. 异步执行</span></span></a></li><li><a class="level is-mobile" href="#4-5-异步排期-异步执行"><span class="level-left"><span class="level-item">4.5. 异步排期 + 异步执行</span></span></a></li></ul></li><li><a class="level is-mobile" href="#5-半异步Clustering"><span class="level-left"><span class="level-item">5. 半异步Clustering</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#5-1-关键配置"><span class="level-left"><span class="level-item">5.1. 关键配置</span></span></a></li><li><a class="level is-mobile" href="#5-2-测试计划"><span class="level-left"><span class="level-item">5.2. 测试计划</span></span></a></li><li><a class="level is-mobile" href="#5-3-第1次同步排期"><span class="level-left"><span class="level-item">5.3. 第1次同步排期</span></span></a></li><li><a class="level is-mobile" href="#5-4-第1次异步执行"><span class="level-left"><span class="level-item">5.4. 第1次异步执行</span></span></a></li><li><a class="level is-mobile" href="#5-5-第2次同步排期"><span class="level-left"><span class="level-item">5.5. 第2次同步排期</span></span></a></li><li><a class="level is-mobile" href="#5-6-第2次异步执行"><span class="level-left"><span class="level-item">5.6. 第2次异步执行</span></span></a></li></ul></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

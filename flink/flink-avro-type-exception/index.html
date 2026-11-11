@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Flink 集成 Debezium Confluent Avro 报 AvroTypeException: Found ＜topic＞.Value, expecting union 错误解决方法 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="在使用 Flink 读取 Debezium Confluent Avro 格式的 CDC 数据时，遇到了上述错误。背景介绍和具体操作请参考 《Flink 集成 Debezium Confluent Avro ( format=debezium-avro-confluent )》 一文，该错误是在查询 Kafka Sink Table 时（也就是真正读取并解析 Avro CDC 数据时）发生的，具体"><meta property="og:type" content="article"><meta property="og:title" content="Flink 集成 Debezium Confluent Avro 报 AvroTypeException: Found ＜topic＞.Value, expecting union 错误解决方法"><meta property="og:url" content="https://laurence.enlightgram.com/flink/flink-avro-type-exception/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="在使用 Flink 读取 Debezium Confluent Avro 格式的 CDC 数据时，遇到了上述错误。背景介绍和具体操作请参考 《Flink 集成 Debezium Confluent Avro ( format=debezium-avro-confluent )》 一文，该错误是在查询 Kafka Sink Table 时（也就是真正读取并解析 Avro CDC 数据时）发生的，具体"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/flink/flink-avro-type-exception/1.png"><meta property="article:published_time" content="2024-01-30T21:39:20.000Z"><meta property="article:modified_time" content="2026-11-11T02:50:16.316Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Avro"><meta property="article:tag" content="Debezium"><meta property="article:tag" content="Schema Registry"><meta property="article:tag" content="Flink"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/flink/flink-avro-type-exception/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/flink/flink-avro-type-exception/"},"headline":"Flink 集成 Debezium Confluent Avro 报 AvroTypeException: Found ＜topic＞.Value, expecting union 错误解决方法","image":["https://laurence.enlightgram.com/images/flink/flink-avro-type-exception/1.png"],"datePublished":"2024-01-30T21:39:20.000Z","dateModified":"2026-11-11T02:50:16.316Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"在使用 Flink 读取 Debezium Confluent Avro 格式的 CDC 数据时，遇到了上述错误。背景介绍和具体操作请参考 《Flink 集成 Debezium Confluent Avro ( format=debezium-avro-confluent )》 一文，该错误是在查询 Kafka Sink Table 时（也就是真正读取并解析 Avro CDC 数据时）发生的，具体"}</script><link rel="canonical" href="https://laurence.enlightgram.com/flink/flink-avro-type-exception/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Flink 集成 Debezium Confluent Avro 报 AvroTypeException: Found ＜topic＞.Value, expecting union 错误解决方法</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item article-label">付费</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Flink/">Flink</a></span><span class="level-item">发表于：<time dateTime="2024-01-30T21:39:20.000Z" title="2024-01-30 13:39:20">2024-01-30</time></span><span class="level-item">阅读用时：5 分钟 (约 715 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><div class="hbe hbe-container" id="hexo-blog-encrypt"
+     data-hbe-format="4"
+     data-wpm="密码错误, 请重新输入."
+     data-whm="密码错误, 请重新输入."
+     data-salt="e9d5d66bb2b56e0f414b886e9d50b46d6ba4fd333399be9bdde8fd47d531c519"
+     data-nonce="460c76721075ddb40080cd1a"
+     data-kdf-iterations="250000"
+     data-auto-save="true">
+  <script id="hbeData" type="hbeData">
+    b3494551bfb027e6e3ee93281b0815400f67bce657187c587989b9774d4d0280d792618802f45422c9aa5835db1cb85d7845520d30b4cfbfd325437344b32b07598254dcf246addabac77df29b7aaff18ed17e0d06c7ebb7d0161fdcf2b21f0e2b92cae6b0bbb87c639525fee1f6db797b50ef856fb2d66a5ffc41c4e44ebc9bc02101e8dd6fb9d7658d14242aa29b3187012336213ded6c5f026eb9356395afd3e7288fad21449abc61b9cf09be0f359003b45ad4107baab8cd91bd96bf5ac21266c34c3f3f308c5f686f04a108c682eaf8acb2d5032bb3dbf40135d048be8aea3fce72387933e8a7943bffdf0f553a49da7f239cb464b698f18dcb8513bb94867ef23665dd13ae7a8fc0f50e2b3a6631e3cc9ddab3b9064b3c67be4d289a16e706018380b161d419173729945fc7a72bc10303795b0c63605fb3d8aee453e8a1d68d8fd72edf423a44f7d222ffd3f4c210e84926edb9bee2251e5f8825bb1c6d7d4b3032b4f71ed6aa4f81712ce517efc5fdd83d022be4f2cc2b264dac96697d97282af2cb559330574be85c95450cf24bfdb3cdd8a3dca6db7d702358375c284ec26a803495502578e80f41aaee6c285d5698c51a79ad1491ad0a6ba38e327b946439c40244bfe5b0a6b74cf01e219387ca9da62dcce9207734cfeb3c9d6690d8505daabb6779efa8d801a5f7e43cc366e536c3fbff546942d7fe52d98da582ba9c3e1cbb6eeb2711946eec642a80f34318adb72c3a3df7e246b5edc54953aa96af62623f0f6712273cb826f69d5abcaa3b77eae786944da0de9fa097bef4f72cea6e2c580eb3a7a242cb9cf22c0c0a3e663c035bd62048ca367c3552df3b13874d8ffdb7d8aea8f6890bf41a7c559d2412afaf482942549bdaf2f4a234e9fa096a271fc650718315e7317136d6e20cf70d86003d6c7954c55bb222af98120141561a68208020ca43e13c7819c23cf71d9f3833cbe3bce3401b234f77da07dc596f9c7c95581a8192c04239b4af18cb6febe5a4d0620d47d44aad5a944e1ebe5533f5728b1c74e760b6828d205c86bbce1a9a4dc016ad8469f7362567747e2e674e0bc1ad1f29a7d8edf834536d2602f3afb763a3006846d69a34797506ac87803f2fccfeb663c3bebed5a8eceaa79cbe4dd18f5fff597fdb87ee2dd3294f3364df37713e3aceaaee4a74bafee446c0f1f52234811f43c74d5c538b000f6f633adf1738cb4c861e61a87f62f9ed74a30da12ac92cc6ce7b7f01bd72b8681d17205a1f5e1fb83c733994aa0b0adb94b8b79143a4c5b3289cff35d00727eb70ad8f2099d25bca0cc68c49ba104a55b22e8835f0812a8f0497b361d590369317538a673b18b9242624ff27ad7b93ae435aef602ef957882cea33101a59b30055b7da2fd4d3c4dac5a65d16bf08984d07e5957b31150a3c4dd900b0ee10b898ab04571c6396280948b0dfaf0f2d5dc584c1725cf1fc0346294aff36123f6f98bc4f7e5c1df3f188c7a544525aa80c77f8f48c8e0774491aeecc60c560c198be0781c1f368efb0076f4adeffbaaca17266d82983c3783a4735e006b76e4ec3c5f4d1940b1ed1fd9e8fd928806e69e264e6d647c75addcbc248213bb6e9a69c75f6d1181f3f4442798ab56688f6a247fdc863bd309fdcf9ffb13f43e032a7f66620568a6e0f62ff64ce574042fae2b679c49b33752cac29409df2b86ea5cd06e8452e5bb1ad3afe3088473b292a737e844841ed6f3f448602b5ca5fac97d3f9646cf2ccf63243991d7ada1adc1091cd731af4706cfd86e701b42d98d95ea2374eacce178c47634d48bd7e848b2e24f38f94491eeb83cf6928db6e5c4ad31a41da7226ee30228d3224f0c5d822fa9861d09472ae03ec5111fb9684c76f68aa63e544459c5f961a651d5860d178c11dd1ed0c1e2d940938ec08fac87f3f840977a81d861c7c33156c5111eba4670c53cefcce67532a2f7ccd55b0215c8742b26122aa9134b0e3ade9a398cdbab77c805590a022a449cd6fcb25e9e0e2d76a8e23db64800e7cb93372915810e44702c01573b91eda4160311f92d5c04e08d36a2d7fd5e452b67bd85661f1dd4a25fd888e99e2de16979665de0a21e6bff85ff4fabd6496d51817166376aa345367b950a76d226fc10785c809c7d55c6e454de520564b3fc26cbb84e2ccaed5187e5024142f2cac63e602f62ab0cb464a2fda098df8936e37d088b4bd6dfa3e31715bf8be4beb1c14da63d460a0f897872677b19d2ced68d405f481fb72585e631b075805bde5fc45a0f6f5d065bbddd0f0e640b260c2f1c0547aa67c26ce33655425a55b3bd5f9e3983be2067a7dfa88265d4e8e9607b99811dc8c28e311bef3ce4e7d10003cd17f14a8a3e1d602c63a076017014686fb81a9925d5ebfb0f6945e102eab2e9ff63a99155c3c42c5c23085d802a9c8c53ec14b510665cbb057e0033855e6baa00c9adb9cbc029555717b489e71d6106bf8aaaa87e7e30447ab26111554c1e713af47c49493cf277b692aa945efd3d54d81ee48209929bff0a5a724908c6f202bbbb592b40ec5a73a93c44524cea264cfd8b09d15296b17fb6590686d17845ec48f6682d758df93e7451419e8205818a9238080a5402f555c7c1eca47f61e05302c4141981afeb7c862e6abf192b5c29342d5a1568d55e33c2a8651ecc6329cebed3dba38045189284dc82a3b3502fc914668254d5fb7015a9320e17e24585e713d5af28814bdc0855f91cd9d5f81dd54e10748070d39079692045822d11957a5627e64011d81cda11ed392452976c5c866c33eae111a47dd5b0793ad44c52712bc5bf4d73671c18298fc32b4d8b073e3a293ca8579a8d54b0c4f52270e1727f30c5cb5968708d5de260ba4dded0717565a70c2bc147dfcf990a356bafa8e69d213f8a26a3d8464f9f37db65cf755f0b12991f953c6317110a57151d165bfffee9e5ce674a1a334a7ff82d1ecac962c850cdcf1a4645b1473c184f17e36053fec5af2966c8749971a4922f53e380bc34a03d141341e3813bb17f18ec6cd66b5c7a3668ff387025bc8ff06d16d7c3cabcbe0911afa316b1ecd2402cbfa8f29a7c2c8765c9e1a02ff5bb598d38d2b387f55f40403642fde58f9e059c9b2213cd3fc0c717de8e09e520fd0ea62f08a71fd190608ce16f87b4066ca1c4906c686f187b5a8c60a59e3823c52d76aae22def4c3934a8e0835e56b2889c6c57131384d1cd52bb6e69e07867467b7961323f6a595bd02ab65c5aaa42ad271e21004674d37b4a60da47bf0a03ccbc0208ffe591bfc3ec1bc9acb6b1d37e8afbd9c88c24a09146e150607cfc40860146f820266a31ddf458ecb320e5ee2995b63816f4ba4f92d8c6c94a2f0785a6ea4a5f640f7f762611d566c9f1febc5156f04b525f3aa642a75fbaf64668538a6ecd856a35d19ce2448da9401af0786ffe1cc15ac8f2e0418d76bf45d24baddc3d733e5f7dc9a8f089e7de16142260377baa470c897dc48d8be5536af9318b822b85295259ae42b6c230b49304da9776200e3493ea9329b884921106f71cca88fd506aeb69b0927699970e29fe85c487967c8d109a61560ea0609f0327350dd798b5726658bc3d5205bed7f4c5930a2db6ee1cf8a47a4f9f4234816949df8b6090be83f9086a4a32c8b934ede1252339bb7dc73e0e498e0043a649237b73492bd7e282262b00eefc0e674223d5abba332c8fe0e55afdb195c6f3ff25ece8d58923561491245a9cbb901242f8ec876c437341df58d9c8d9fc9b3769c08952339bdf6c493f318c02841d8aa42e780de923c6957e84658e423b61af1d8006abba717164ef6ce10cef4a5b0b75e6e624bda8ce6dc199408ef32f01b3748d043cda509d78c6a64a160b87127ec4cb6d1946a79f93b9583ce91d3691fbb2c235ce6b981cd8ce5839c6a2b1b4db9f4a7c0a8e5a892b785520b86487ca9ff4ce118adcea461ecaa110cc9b04a65fc7fa8bd139f51cb5ecfef651bfaff5c95a52dc10b04b67d573d0ed24904922eb10595a48d7bfc94f2c3eb8c8d23df687606f398ee394c767c06ef3f4c3565b29c7900a8185591699173624fa743c0906ab9ed9f06dc8e20d74ca0803f3eb7fe4f2a733d4f4fc9831fd43b7056ff03d8c44cdf8b478fd3275aaaa7e1b8c39bd588ac317d3b2c2e26eef7af8089f780f6ca9d3fa30e30e15f748e1f4324ae54dd11efe8b0e9b19e293cd91f9cdea8c8d7388d3198eeb41408f2d23e1ec6e469c432f23ba36ac8e47129ea793051013f8b71001fa662a732dbc568fd5c6166bbd569cba2bfa1a0c01eb0b68ffd1f6487003b0c035e5f7f1e9a11d08366cba8d962bfd8c8362fcdd57c8777f43e514cd8fdf5120aa003880ca7c38a382caa2bd77d700b31f4df0f19c3c35aea44a61bb4e5389c04fcadf012bbcac703bcac1c3b54248782aac2ccdce67c2baabe46fcb6cce0865c27b2936a2fc3c4ec347e8da05e5d649f1e581fd4edebd57da673b5f708744dfcf29cc914f480c55841ec7c80b9e172dff368fcc4ee830382212d31c2fd81502e6b316107092d83a586401d5bf385a8240837b0330bae2cc4e5f818d9c931d5f915ae0cba28eb97b0d970c2be32541c158a43c4f5697ab7e7d0327fe1f61db2f0cc283080f944bbc2603626cbe73be89b7f92ad29d1d91de8b090458530bde45ef05c097cc01d127e886dcb56fa8a58a2741bf3c63c35273cf1d801c1e277843839545fd4e99a3695d7ddfcb1af28646e22c0a2afdbcbd11ba8d3604c6c1de24cdf617ac03585076b19b1332ef69d94f3a0a334c6b1a04a0099220eaaee153d7982135e8fd69adb1a71eb22ed0fa395a779af22d7eb9079f80429fef24dbaa6e0d44df64d5f308fcf4b021d4a876f5aac0110641e08249caa7d97eafd3b285685c2a61bbabcd97e560c7db3f26eb8d2e1abb1738a98247af6fe7fab6efa00c942ffce85cbce833f706b012d3f4ef2ca248678fa8e23e432605657ae732ab42ed2fb37fe5acd54371c1d5849ed4233058589a7fece2fd111bfeac1e1653bb3512b2c240b60a9ee18706926d6266c2e713f2d17e24f757f78278312539833a8ac6648a1a2ab786fa633333a34bc8491f00596fdeee4d4eef41be688396ff0a13726dd272c289cec4f5e5ed19c6a1b4bfd575e43e415556d679b0ea54d9c2cc0fa79e26e12a1880e00b41ba3397b1c9cf239158afb69532e5b3ac447b2133dbf5e4f8a7d2d800cc08182b481ba5a1c3e02c00296de28bad06ea515d4c51d4f4335f63a622533793c5b3afede679fdbf2a52a9aaf7da052613a1abcb5e7db2f82401cf0feda9669243a53e5e704cdefff3f9087036029ea04aec46f983ec14c80cc6f3f3c937071533d8e0e0ca4666ae6419452625efc86a96951c107241d80e953663f9d73c867809b9863d7582294cdd12c0b4c9cc9d161123106f5f5025fbd1599eb0d161f8d59a901d72a86d454952357085f8e0e7cd60900c2b70a56ad9552bce39a2a0a73204aab23ce5d5cf1c6c7753f0e7ec717a3cc07a408ffc4a779cc156f5d4b363419a3439ad49225a26f03c6d9a383127149a0cc0b45c352be0b8a79442cdb55a7607769187a36b225f8d6b0c1dd2e4c1efb00c5b775a60802fa243d0cfc7973166ef889f061f2631c3940f0832c2c2645cf7937147bb6193936bae4c2f0168f587126f3586070ff4ae429b68a134c4649c317ad9cef7a6624ccf9d6de1571eb61d16f342f80fb9fc1e51048b0c55ef6614e8ba6d0e5ffb3a692c4bccb233c057ebce5ae7ffb5e047878b6943738a8acb0c17bc053c45f39e9fd567086569d64d273c9990fc586c748f3a43b5ffe5596a8f4fe8c6b84983016bc2b68afbf594dfc6064ad287e20d1b955540c362dc63370f3f7a866e1578452222705987af13ae1cc621bef5fb9b93dd3637febabea5c298ef6a67f5152d38dd34a7c7739d1c1cc72f0627624b435af2dfa464e272f5ad95e42eb6dce398300497709b7532121433ee7e82935f9e3d9fd323996ab027b66f700b1cce56185cf5a0a1daee9d1d14a6886d1cdb069a6d85d2b8c0c23e0d38df26a59cc1eeea9fa16c6a4f723984cac8b83805672bfb44ae79f3405f3236be98fe6c8c1fe0ce81c5c4c014938fce9fdb9cd930d66509593487335e203433a3fead2c048604547fff8abd0c25a7043e56cd5ff9f4c9b19647f69e51384610cdbb09b741b8f81542121e42ac48b918eec175d808ee277859d2076a0a5c3e591e59f97621836726962bdf24dcfae7e5e93bdc7ca926a8a88c174522951b584ba29b13ca0eae65ee478e7f140818686da5b604b5ce14179828b5120ee83d7bcd4262d921131d1c1f3fdeb84cb24253f85cf47a605d6b3e55b904107bc867905cb9e0664b74b5f9d9074d4eacde2e2c92d31e1b823679f1b21df484d9bf08991a827b8ee91e158bfeadfcf2e070894b23ee65926ae22cbe0c89a93488d9386b4e3fe421363b9045e8f33dc956f3115f0f0886147e247dd79afce627a05487072f62798ac00b264874f346c889328d5690653c5377eb54dab861142d0003ca1472482f4d8d662c7f8eb426032be8dcd8e0d178921ecddf72680ec7a7c7c17983b3b5f65337c59a11f453b6ddd10e149ab71fce08e33fe7751c3c729d2fc1a58f69c72118e651198f6654ee68046414cb6d8fb7b5ff445f816318d825b28cd4fe3798ba3720997e77676d4f2863b5c2f8992b116bc53060b162bdb708d398f885b058d6420bf92531d30bcd29d77119b13bfee90fe84d4fa674a5dbd5fd8118383c62322ffcf8dbd7409542d82f6c11ac4675f56c4b251dc31f56b55a67f8c5d9f5f4e289254204875cfd1a4087b5a675ac10d40017ad7f46a1faa41254d21dbea5a37c37c01bef5bf9b96f4e51a27386b97fb05ad47899655d32fea2e8187ce041aefac1f03d15b5c5dfa5676a97b19addcff128f07dd4701c5c1d3c7ad92092805f44a5c5a6145898e0e886840c6aaa75aa0cf753ea5e697d243890d22a71c7b5ee1d9970079bcb77e30191802fadc54ce030a28a0a3a2266f695d695577bcc416bf3716ea79fbc4ad7358d9a72e703912e08cbe944bf3c6e85e00151d67ea2760ab8f497372c5b5ca65634e7ea367942b369aa0fce661aab6f339c900b5775b9b7be64fd5e4b060385b767ca820c114492b83604d2c121fd7524e48cd873935def75d76277df5a271ced74b2e6de7b2bc1b80e14664811d4fce5171911d758360314e8678d6fc1cf897e62145c36a4fb1740e02cce890fef4cb3539ee2c96b6b656b2b79c7ac4a3a1c1fc6d5eb9e618ca21364e296362052af0edc0e9ce728711a3ed8160b1c0052c2f31056a1cd07299298884271a426cb71c68e9600fad59fa81036110911a79ea61f6be780c5646eaa4737d452cc61900fc9f09fd9127ffd6c9cd5e8ee815b0f45ab129453c87bbf1cb8dc74b528cfed518de30ea3da5afbab02cf936f45944dc16b24f9a4b8045fbadd78514af260eb9ddff8786e1ee06263de3920a2eebf3aa5537b7e33143820bc08122dd2f8e539246aafdab8dcd9624ee99d099e45295c07005bbba9c4865d348d770436e0053833cb6d2876a529a41764bdc8ebedde8f02c5ecc1e94630a7a34e987243fd22c45a10559b70a72f5e0cb87ad68e4652cbd1e74a829ec337fad8173fb719f54563ed050e50a3430aafed1a273ca52e5d6226c5cdd1125cf9ff16a51fe4d1e60cb19aa7e3e4b445de39afea5a19d7b795029d843324c
+  </script>
+  <div class="hbe-preview"><p>在使用 Flink 读取 Debezium Confluent Avro 格式的 CDC 数据时，遇到了上述错误。背景介绍和具体操作请参考 <a href="/flink/flink-debezium-confluent-avro/">《Flink 集成 Debezium Confluent Avro ( format&#x3D;debezium-avro-confluent )》</a> 一文，该错误是在查询 Kafka Sink Table 时（也就是真正读取并解析 Avro CDC 数据时）发生的，具体错误信息如下：</p>
+</div><div class="hbe-preview-end"><span>试读结束</span></div><div class="hbe hbe-content">
+    <form id="hbeForm" class="hbe hbe-form">
+      <div class="hbe hbe-input hbe-input-default">
+      <div class="hbe-qrcode-field"><img class="hbe-qrcode not-gallery-item" src="&#x2F;images&#x2F;profile&#x2F;wechat-qrcode.jpg" alt="QR code"><input class="hbe hbe-input-field hbe-input-field-default" type="password" id="hbePass" placeholder="在此输入文章密码..."></div>
+      <label class="hbe hbe-input-label hbe-input-label-default" for="hbePass">
+        <span class="hbe hbe-input-label-content hbe-input-label-content-default">本文为付费阅读内容，扫描下方二维码，关注作者微信公众号：“十万公里通票”，搜索文章《2024年度付费文章》，付费后可在文章中获得解锁密码。</span>
+      </label>
+    </div>
+      <button class="hbe hbe-button button is-small is-size-7" type="submit">解锁全文</button>
+      <div class="hbe hbe-error" role="alert" aria-live="polite"></div>
+    </form>
+  </div>
+</div>
+<script data-pjax>(function(){var f=document.getElementById("hbePass");if(f){var focus=f.focus;f.focus=function(){focus.call(f,{preventScroll:true});};}}());</script><script data-pjax>(function(){if(window.__hbeToc){return;}window.__hbeToc=true;window.addEventListener("hexo-blog-decrypt",function(){if(!document.querySelector("#toc .menu")){return;}document.querySelectorAll("#toc .menu").forEach(function(m){var c=m.cloneNode(true);c.querySelectorAll("a[data-href]").forEach(function(a){a.setAttribute("href",a.getAttribute("data-href"));a.removeAttribute("data-href");});m.replaceWith(c);});var s=document.createElement("script");s.src="/js/toc.js";document.body.appendChild(s);});}());</script><script data-pjax src="/lib/hbe.a3b9f59caa.js"></script><link href="/css/hbe.style.css" rel="stylesheet" type="text/css"><span hidden data-yearly-password="2024"></span><script data-pjax src="&#x2F;js&#x2F;yearly_password.js"></script></div><div class="article-licensing box"><div class="licensing-title"><p>Flink 集成 Debezium Confluent Avro 报 AvroTypeException: Found ＜topic＞.Value, expecting union 错误解决方法</p><p><a href="https://laurence.enlightgram.com/flink/flink-avro-type-exception/">https://laurence.enlightgram.com/flink/flink-avro-type-exception/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2024-01-30</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Avro/">Avro</a><a class="link-muted mr-2" rel="tag" href="/tags/Debezium/">Debezium</a><a class="link-muted mr-2" rel="tag" href="/tags/Schema-Registry/">Schema Registry</a><a class="link-muted mr-2" rel="tag" href="/tags/Flink/">Flink</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/flink/flink-deploy-jars/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Flink 添加 / 部署 Jar 包的若干注意事项</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/flink/flink-debezium-confluent-avro/"><span class="level-item">Flink 集成 Debezium Confluent Avro ( format=debezium-avro-confluent )</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><!--!--></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

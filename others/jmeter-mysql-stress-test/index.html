@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>使用 JMeter 生成测试数据对 MySQL 进行压力测试 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="数据库的压测工具和方法有很多，最简单的方法无非是编写脚本自动执行 INSERT INTO 语句，也有专门的 GUI 工具可以图形化配置测试计划，例如： Data Generator for MySQL 和 EMS Data Generator for MySQL 等，不过，绝大多数的图形化工具都是付费的。 实际上，对数据库的压测，也包括其他类型的压测，最主要的工作是：如何能简单地生成压测数据（Du"><meta property="og:type" content="article"><meta property="og:title" content="使用 JMeter 生成测试数据对 MySQL 进行压力测试"><meta property="og:url" content="https://laurence.enlightgram.com/others/jmeter-mysql-stress-test/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="数据库的压测工具和方法有很多，最简单的方法无非是编写脚本自动执行 INSERT INTO 语句，也有专门的 GUI 工具可以图形化配置测试计划，例如： Data Generator for MySQL 和 EMS Data Generator for MySQL 等，不过，绝大多数的图形化工具都是付费的。 实际上，对数据库的压测，也包括其他类型的压测，最主要的工作是：如何能简单地生成压测数据（Du"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/others/jmeter-mysql-stress-test/2.png"><meta property="article:published_time" content="2024-02-22T20:43:09.000Z"><meta property="article:modified_time" content="2026-11-06T11:55:19.878Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="基准测试"><meta property="article:tag" content="MySQL"><meta property="article:tag" content="JMeter"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/others/jmeter-mysql-stress-test/2.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/others/jmeter-mysql-stress-test/"},"headline":"使用 JMeter 生成测试数据对 MySQL 进行压力测试","image":["https://laurence.enlightgram.com/images/others/jmeter-mysql-stress-test/2.png"],"datePublished":"2024-02-22T20:43:09.000Z","dateModified":"2026-11-06T11:55:19.878Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"数据库的压测工具和方法有很多，最简单的方法无非是编写脚本自动执行 INSERT INTO 语句，也有专门的 GUI 工具可以图形化配置测试计划，例如： Data Generator for MySQL 和 EMS Data Generator for MySQL 等，不过，绝大多数的图形化工具都是付费的。 实际上，对数据库的压测，也包括其他类型的压测，最主要的工作是：如何能简单地生成压测数据（Du"}</script><link rel="canonical" href="https://laurence.enlightgram.com/others/jmeter-mysql-stress-test/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">使用 JMeter 生成测试数据对 MySQL 进行压力测试</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/others/">其他</a></span><span class="level-item">发表于：<time dateTime="2024-02-22T20:43:09.000Z" title="2024-02-22 12:43:09">2024-02-22</time></span><span class="level-item">阅读用时：9 分钟 (约 1341 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>数据库的压测工具和方法有很多，最简单的方法无非是编写脚本自动执行 INSERT INTO 语句，也有专门的 GUI 工具可以图形化配置测试计划，例如： <a target="_blank" rel="noopener" href="https://www.devart.com/dbforge/mysql/data-generator/">Data Generator for MySQL</a> 和 <a target="_blank" rel="noopener" href="https://sqlmanager.net/products/mysql/datagenerator">EMS Data Generator for MySQL</a> 等，不过，绝大多数的图形化工具都是付费的。</p>
+<p>实际上，对数据库的压测，也包括其他类型的压测，最主要的工作是：如何能简单地生成压测数据（Dummy Data ），除了要生成与数据类型相符的字面量之外，更多的是要能控制好数据的取值范围，特别地，在数据库的压测中，受外键约束的影响，对于外键列的取值更不能使用随机值。</p>
+<p>考虑到写脚本太麻烦，图形化工具收费还不通用，所以，我们还是选择使用老牌的压力测试工具：Apache JMeter，除了它内置了丰富的随机值生成方法外，还因为它是一个统一的压测平台，操作和配置都和其他类型的压测一致。</p>
+<p>备注：本文以 Debezium 官方提供的 <a target="_blank" rel="noopener" href="https://hub.docker.com/r/debezium/example-mysql">MySQL Docker镜像</a> 中的 Inventory 数据库为示例介绍和演示压测步骤。</p>
+<h2 id="1-下载-与安装"><a href="#1-下载-与安装" class="headerlink" title="1. 下载 与安装"></a>1. 下载 与安装</h2><p>JMeter 官方下载： <a target="_blank" rel="noopener" href="https://jmeter.apache.org/download_jmeter.cgi">https://jmeter.apache.org/download_jmeter.cgi</a> </p>
+<p>提示：在 Windows 下，请运行 <code>${JMETER_HOME}/bin/jmeterw.cmd</code> （运行 jmeter.bat 会多打开一个 console 窗口）</p>
+<p>MySQL JDBC Driver 官方下载： <a target="_blank" rel="noopener" href="https://dev.mysql.com/downloads/connector/j/">https://dev.mysql.com/downloads/connector/j/</a> </p>
+<p>解压 zip 包获得里面的 jar 包，将 jar 包放置到 <code>${JMETER_HOME}/lib</code> 目录下</p>
+<h2 id="2-创建-Test-Plan"><a href="#2-创建-Test-Plan" class="headerlink" title="2. 创建 Test Plan"></a>2. 创建 Test Plan</h2><p>打开 JMeter 时，默认会自动创建一个空的 Test Plan，我们将其重命名为： <code>Debezium MySQL Example Ddatabase Test Plan</code> </p>
+<p> <img src="/../../images/others/jmeter-mysql-stress-test/2.png" alt="image-20240220133920297"></p>
+<h2 id="3-创建-Thread-Group"><a href="#3-创建-Thread-Group" class="headerlink" title="3. 创建 Thread Group"></a>3. 创建 Thread Group</h2><p>在刚创建的 Test Plan 上单击右键打开菜单，添加一个 Thread Group，其中 Number of Threads (users) 是并行的线程数，Loop Count 是重复执行的次数，假设我们的压测内容是插入一条数据，则执行一次 Thread Group 插入的记录数是两者的乘积。本例中，该测试计划将会插入 2 * 50 &#x3D; 100 记录。</p>
+<p> <img src="/../../images/others/jmeter-mysql-stress-test/3.png" alt="image-20240220134043246"></p>
+<p> <img src="/../../images/others/jmeter-mysql-stress-test/4.png" alt="在这里插入图片描述"></p>
+<h2 id="4-添加-MySQL-JDBC-Connection-配置"><a href="#4-添加-MySQL-JDBC-Connection-配置" class="headerlink" title="4. 添加 MySQL JDBC Connection 配置"></a>4. 添加 MySQL JDBC Connection 配置</h2><p>为使 JMeter 能联通 MySQL 数据库，测试计划的第一步就是创建 JDBC 连接的配置。在刚创建的 Test Group 上单击右键打开菜单，添加一个 JDBC Connection Configrutation，这里有两点需要注意：</p>
+<ul>
+<li><p>JMeter 要求 JDBC 的 URL 必须指定数据库名，否则执行时会报错</p>
+</li>
+<li><p>必须配置 Variable Name for created pool，否则执行时会报错</p>
+</li>
+</ul>
+<p> <img src="/../../images/others/jmeter-mysql-stress-test/5.png"></p>
+<p> <img src="/../../images/others/jmeter-mysql-stress-test/6.png" alt="image-20240220134808317"></p>
+<h2 id="4-添加-JDBC-Request-Sampler"><a href="#4-添加-JDBC-Request-Sampler" class="headerlink" title="4. 添加 JDBC Request Sampler"></a>4. 添加 JDBC Request Sampler</h2><p>JMeter 负责向数据库发送 SQL 的组件是：JDBC Request Sampler，所以我们要创建一个 JDBC Request Sampler 并填入相应的 SQL 语句，在刚创建的 Test Group 上单击右键打开菜单，添加一个 JDBC Request：</p>
+<p> <img src="/../../images/others/jmeter-mysql-stress-test/7.png" alt="在这里插入图片描述"></p>
+<p> <img src="/../../images/others/jmeter-mysql-stress-test/8.png" alt="在这里插入图片描述"></p>
+<p>在这里，Query Typle 选择 Upate Statement (这是 JDBC 中的 API)， <strong>填入的 SQL 是整个测试计划中最核心的部分，所有的动态变量、取值范围等细节，都通过这条 SQL 实现了，因为我们使用了 JMeter 的函数和变量来生成期望的数值！</strong> </p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">INSERT INTO</span> `orders` </span><br><span class="line">	(`order_date`, `purchaser`, `quantity`, `product_id`) </span><br><span class="line"><span class="keyword">VALUES</span></span><br><span class="line">	(<span class="string">&#x27;$&#123;__RandomDate(,2016-01-01,2016-12-31,,)&#125;&#x27;</span>, $&#123;__Random(<span class="number">1001</span>,<span class="number">1004</span>)&#125;, $&#123;__Random(<span class="number">1</span>,<span class="number">9</span>)&#125;, $&#123;__Random(<span class="number">101</span>,<span class="number">109</span>)&#125;)</span><br></pre></td></tr></table></figure>
+
+<p>关于 <code>${__RandomDate(,2016-01-01,2016-12-31,,)}</code> 和 <code>${__Random(1001,1004)}</code> 这些 JMeter 的函数，请移步 JMeter 官方文档：<a target="_blank" rel="noopener" href="https://jmeter.apache.org/usermanual/functions.html">https://jmeter.apache.org/usermanual/functions.html</a> ，这里有细致地解释。</p>
+<h2 id="5-添加-View-Results-Tree"><a href="#5-添加-View-Results-Tree" class="headerlink" title="5. 添加 View Results Tree"></a>5. 添加 View Results Tree</h2><p>View Results Tree 是用来查看执行结果的，在配置或执行过程中出错的话，可以在这里看到发送的请求和详细错误，是很有必要配置的一个组件。在刚创建的 Test Group 上单击右键打开菜单，添加一个 View Results Tree 即可，无需特别配置。</p>
+<p> <img src="/../../images/others/jmeter-mysql-stress-test/9.png" alt="image-20240220141548007"></p>
+<h2 id="6-执行测试计划"><a href="#6-执行测试计划" class="headerlink" title="6. 执行测试计划"></a>6. 执行测试计划</h2><p>完成上述配置后，就可以执行测试计划了，点击工具栏中的 “绿色开始按钮”，等待测试计划执行完毕，然后打开 View Results Tree 可以看到每次测试的详细情况，包括是否执行成功、发送的请求内容和得到的响应。如果初始尝试没有成功，可以在这里找到详细的错误信息，从而帮助定位问题并解决。</p>
+<p> <img src="/../../images/others/jmeter-mysql-stress-test/10.png" alt="image-20240220142654988"></p>
+<h2 id="7-已知错误"><a href="#7-已知错误" class="headerlink" title="7. 已知错误"></a>7. 已知错误</h2><p><strong>1. Name for DataSoure must not be empty in JDBC Connection Configuration</strong> </p>
+<p>执行测试计划时，JMeter 报错：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">java.lang.IllegalArgumentException: Name for DataSoure must not be empty in JDBC Connection Configuration</span><br><span class="line">	at org.apache.jmeter.protocol.jdbc.config.DataSourceElement.testStarted(DataSourceElement.java:119) ~[ApacheJMeter_jdbc.jar:5.6.3]</span><br><span class="line">	at org.apache.jmeter.engine.StandardJMeterEngine.notifyTestListenersOfStart(StandardJMeterEngine.java:247) [ApacheJMeter_core.jar:5.6.3]</span><br><span class="line">	at org.apache.jmeter.engine.StandardJMeterEngine.run(StandardJMeterEngine.java:432) [ApacheJMeter_core.jar:5.6.3]</span><br><span class="line">	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:539) [?:?]</span><br><span class="line">	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264) [?:?]</span><br><span class="line">	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136) [?:?]</span><br><span class="line">	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635) [?:?]</span><br><span class="line">	at java.base/java.lang.Thread.run(Thread.java:833) [?:?]</span><br></pre></td></tr></table></figure>
+
+<p>原因：JDBC Connection Configuration 和 JDBC Request 中没有配置 pool 的变量名，或者配置了，但取名不一样，改为相同的变量名即可：</p>
+<p> <img src="/../../images/others/jmeter-mysql-stress-test/11.png" alt="image-20240220122631378"></p>
+<p> <img src="/../../images/others/jmeter-mysql-stress-test/12.png" alt="image-20240220122704434"></p>
+<h2 id="8-附录"><a href="#8-附录" class="headerlink" title="8. 附录"></a>8. 附录</h2><p>以下是本文使用的 Debezium 官方提供的 <a target="_blank" rel="noopener" href="https://hub.docker.com/r/debezium/example-mysql">MySQL Docker镜像</a> 中的 Inventory 数据库的 orders 数据表的表结构:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- Dumping structure for table inventory.orders</span></span><br><span class="line"><span class="keyword">DROP</span> <span class="keyword">TABLE</span> IF <span class="keyword">EXISTS</span> `orders`;</span><br><span class="line"><span class="keyword">CREATE TABLE</span> IF <span class="keyword">NOT</span> <span class="keyword">EXISTS</span> `orders` (</span><br><span class="line">  `order_number` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT NULL</span> AUTO_INCREMENT,</span><br><span class="line">  `order_date` <span class="type">date</span> <span class="keyword">NOT NULL</span>,</span><br><span class="line">  `purchaser` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT NULL</span>,</span><br><span class="line">  `quantity` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT NULL</span>,</span><br><span class="line">  `product_id` <span class="type">int</span>(<span class="number">11</span>) <span class="keyword">NOT NULL</span>,</span><br><span class="line">  <span class="keyword">PRIMARY KEY</span> (`order_number`),</span><br><span class="line">  KEY `order_customer` (`purchaser`),</span><br><span class="line">  KEY `ordered_product` (`product_id`),</span><br><span class="line">  <span class="keyword">CONSTRAINT</span> `orders_ibfk_1` <span class="keyword">FOREIGN KEY</span> (`purchaser`) <span class="keyword">REFERENCES</span> `customers` (`id`),</span><br><span class="line">  <span class="keyword">CONSTRAINT</span> `orders_ibfk_2` <span class="keyword">FOREIGN KEY</span> (`product_id`) <span class="keyword">REFERENCES</span> `products` (`id`)</span><br><span class="line">) ENGINE<span class="operator">=</span>InnoDB AUTO_INCREMENT<span class="operator">=</span><span class="number">10008</span> <span class="keyword">DEFAULT</span> CHARSET<span class="operator">=</span>latin1;</span><br><span class="line"></span><br><span class="line"><span class="comment">-- Dumping data for table inventory.orders: ~5 rows (approximately)</span></span><br><span class="line"><span class="keyword">INSERT INTO</span> `orders` (`order_number`, `order_date`, `purchaser`, `quantity`, `product_id`) <span class="keyword">VALUES</span></span><br><span class="line">	(<span class="number">10001</span>, <span class="string">&#x27;2016-01-16&#x27;</span>, <span class="number">1002</span>, <span class="number">5</span>, <span class="number">104</span>),</span><br><span class="line">	(<span class="number">10002</span>, <span class="string">&#x27;2016-01-17&#x27;</span>, <span class="number">1002</span>, <span class="number">2</span>, <span class="number">105</span>),</span><br><span class="line">	(<span class="number">10003</span>, <span class="string">&#x27;2016-02-25&#x27;</span>, <span class="number">1002</span>, <span class="number">2</span>, <span class="number">106</span>),</span><br><span class="line">	(<span class="number">10006</span>, <span class="string">&#x27;2016-02-29&#x27;</span>, <span class="number">1002</span>, <span class="number">2</span>, <span class="number">106</span>),</span><br><span class="line">	(<span class="number">10007</span>, <span class="string">&#x27;2016-02-28&#x27;</span>, <span class="number">1001</span>, <span class="number">2</span>, <span class="number">106</span>);</span><br></pre></td></tr></table></figure>
+</div><div class="article-licensing box"><div class="licensing-title"><p>使用 JMeter 生成测试数据对 MySQL 进行压力测试</p><p><a href="https://laurence.enlightgram.com/others/jmeter-mysql-stress-test/">https://laurence.enlightgram.com/others/jmeter-mysql-stress-test/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2024-02-22</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-06</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E5%9F%BA%E5%87%86%E6%B5%8B%E8%AF%95/">基准测试</a><a class="link-muted mr-2" rel="tag" href="/tags/MySQL/">MySQL</a><a class="link-muted mr-2" rel="tag" href="/tags/JMeter/">JMeter</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/flink/flink-non-determinism/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Flink：流上的“不确定性”（Non-Determinism）</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/kafka/debezium-mysql-example-database/"><span class="level-item">快速构建 Debezium MySQL Example 数据库</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-下载-与安装"><span class="level-left"><span class="level-item">1. 下载 与安装</span></span></a></li><li><a class="level is-mobile" href="#2-创建-Test-Plan"><span class="level-left"><span class="level-item">2. 创建 Test Plan</span></span></a></li><li><a class="level is-mobile" href="#3-创建-Thread-Group"><span class="level-left"><span class="level-item">3. 创建 Thread Group</span></span></a></li><li><a class="level is-mobile" href="#4-添加-MySQL-JDBC-Connection-配置"><span class="level-left"><span class="level-item">4. 添加 MySQL JDBC Connection 配置</span></span></a></li><li><a class="level is-mobile" href="#4-添加-JDBC-Request-Sampler"><span class="level-left"><span class="level-item">4. 添加 JDBC Request Sampler</span></span></a></li><li><a class="level is-mobile" href="#5-添加-View-Results-Tree"><span class="level-left"><span class="level-item">5. 添加 View Results Tree</span></span></a></li><li><a class="level is-mobile" href="#6-执行测试计划"><span class="level-left"><span class="level-item">6. 执行测试计划</span></span></a></li><li><a class="level is-mobile" href="#7-已知错误"><span class="level-left"><span class="level-item">7. 已知错误</span></span></a></li><li><a class="level is-mobile" href="#8-附录"><span class="level-left"><span class="level-item">8. 附录</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

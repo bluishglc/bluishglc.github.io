@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Rust 颠覆过你的面向对象编程世界观吗？ - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="引言 就我个人而言，并没有在过去 面向对象 的编程中吃过什么“先天性顽疾”的苦头，我们所遇到的“麻烦”往往都是因为“设计得还不够好”导致的，在设计模式的指引下通过不断的重构，问题总是可以解决的，即使有些时候解决得不够完美。但也许正因为这样，我们才意识不到面向对象思维本身的缺陷，因为我们遇到了面向对象的问题然后又用面向对象的方式解决了它，这可能会把问题的根源遮掩了过去。在这一点上，语言设计者的目光或"><meta property="og:type" content="article"><meta property="og:title" content="Rust 颠覆过你的面向对象编程世界观吗？"><meta property="og:url" content="https://laurence.enlightgram.com/rust/rust-and-oop/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="引言 就我个人而言，并没有在过去 面向对象 的编程中吃过什么“先天性顽疾”的苦头，我们所遇到的“麻烦”往往都是因为“设计得还不够好”导致的，在设计模式的指引下通过不断的重构，问题总是可以解决的，即使有些时候解决得不够完美。但也许正因为这样，我们才意识不到面向对象思维本身的缺陷，因为我们遇到了面向对象的问题然后又用面向对象的方式解决了它，这可能会把问题的根源遮掩了过去。在这一点上，语言设计者的目光或"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/rust/rust-and-oop/1.png"><meta property="article:published_time" content="2026-06-26T15:00:00.000Z"><meta property="article:modified_time" content="2026-11-11T02:50:16.424Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Rust"><meta property="article:tag" content="面向对象"><meta property="article:tag" content="Trait"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/rust/rust-and-oop/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/rust/rust-and-oop/"},"headline":"Rust 颠覆过你的面向对象编程世界观吗？","image":["https://laurence.enlightgram.com/images/rust/rust-and-oop/1.png"],"datePublished":"2026-06-26T15:00:00.000Z","dateModified":"2026-11-11T02:50:16.424Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"引言 就我个人而言，并没有在过去 面向对象 的编程中吃过什么“先天性顽疾”的苦头，我们所遇到的“麻烦”往往都是因为“设计得还不够好”导致的，在设计模式的指引下通过不断的重构，问题总是可以解决的，即使有些时候解决得不够完美。但也许正因为这样，我们才意识不到面向对象思维本身的缺陷，因为我们遇到了面向对象的问题然后又用面向对象的方式解决了它，这可能会把问题的根源遮掩了过去。在这一点上，语言设计者的目光或"}</script><link rel="canonical" href="https://laurence.enlightgram.com/rust/rust-and-oop/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Rust 颠覆过你的面向对象编程世界观吗？</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Rust/">Rust</a></span><span class="level-item">发表于：<time dateTime="2026-06-26T15:00:00.000Z" title="2026-06-26 08:00:00">2026-06-26</time></span><span class="level-item">阅读用时：32 分钟 (约 4742 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/rust/rust-and-oop/1.png" alt="Rust 颠覆过你的面向对象编程世界观吗？" fetchpriority="high"></figure><div class="content"><p><strong>引言</strong> </p>
+<p>就我个人而言，并没有在过去 面向对象 的编程中吃过什么“先天性顽疾”的苦头，我们所遇到的“麻烦”往往都是因为“设计得还不够好”导致的，在设计模式的指引下通过不断的重构，问题总是可以解决的，即使有些时候解决得不够完美。但也许正因为这样，我们才意识不到面向对象思维本身的缺陷，因为我们遇到了面向对象的问题然后又用面向对象的方式解决了它，这可能会把问题的根源遮掩了过去。在这一点上，语言设计者的目光或许会更敏锐一些，因为开发者往往更关注的是怎样通过优化自己的设计去搞定问题。<br>总之，现在，我不能确定地说 Rust 这样做（对面向对象特性的“取舍”）就一定是好的，但至少应该不会更差。有取舍就会有得失，这很难量化，不同的语言设计者们基于不同的背景和经历，有了不同的看法，做了不同的选择，这很正常，争论没有意义，用户和市场会验证这些决策是否正确。对于普通的开发者来说，基于语言现有的机制解决实际问题才是第一位的，如果有一天大家开始共同吐槽某项机制时，那就说明它确实有问题了，这一点，在目前的 Rust 面向对象机制中还没有发生，所以，我们可以保持开放的心态继续我们的 Rust 之旅……</p>
+<p><strong>正文</strong> </p>
+<p>此前，我们已经在本博客的数篇文章中介绍了 Rust 语言的一些基本特性，现在，可以展开聊聊 Rust 的面向对象特性了。诚如你所知道的：Rust 没有 Class，不支持继承，从这个角度上说，Rust 不算是一种面向对象的编程语言；同时，Rust 的忠实拥趸们认为：Rust 引入了 trait，使用组合替代了继承，可以实现更好的面向对象编程。本文，我们就来探讨一下 Rust 的面向对象特性。真诚推荐本公众号近期的两篇精华好文： <a href="/rust/rust-borrow-checker-permission-model/">《你真得懂 Rust 借用检查吗？一文聊透 Borrow Checker 底层逻辑：权限模型》</a> 和 <a href="/rust/rust-lifetimes/">《深入理解 Rust 生命周期（可能是全网最透彻的解读了）》</a> 。</p>
+<p>记得在我刚接触 Rust 发现它没有 Class 的时候，我感到非常意外，这甚至影响了我对 Rust 的第一印象：认为它不够高级，可能只是一种改良版的 C 语言。毕竟，当今所有的主流编程语言都是面向对象的，像我这样传统的程序员，很难接受一门编程语言没有类，没有继承。后来，随着对 Rust 的深入了解，我发现它从其他语言里借鉴了很多实用且高级的机制，这让我意识到： <strong>Rust 没有提供传统的面向对象机制不是不能，而是不想</strong> 。</p>
+<p>这确实是一个很值得深思的问题。Rust 的创造者 Graydon Hoare 曾多次公开表达过对 Class 和“继承”的一些批判性看法，现在的 Rust 开发团队也延续着这种观点，Rust 官方对于类和继承的态度可以从《The Rust Programming Language》一书的第 17 章中窥见一二。</p>
+<h2 id="1-Rust-放弃了“Class”"><a href="#1-Rust-放弃了“Class”" class="headerlink" title="1. Rust 放弃了“Class”"></a>1. Rust 放弃了“Class”</h2><p>不管 Rust 对 Class 持怎样的态度，以“数据 + 行为”这一经典模式存在了数十年的 Class 是有其成功道理的。不过，成也萧何，败也萧何，传统的 OOP 理念确实存在着一些“弊病”， <strong>Rust 的设计者们认为： Class 承载了太多东西，包括数据模型、多态、生命周期、基于继承的复用等等，这些机制全部绑定在 Class 这一种载体上，不可避免地形成了一种强耦合关系，给程序设计引入了很多复杂性</strong> 。所以，Rust 放弃了 Class，你不能在 Rust 中使用 class 关键字创建一个类。知名程序员 Casey Muratori 也曾在一次演讲（<a target="_blank" rel="noopener" href="https://www/">https://www</a>. youtube .com&#x2F;watch?v&#x3D;wo84LFzx5nI）中表达过他对 OOP 的一些批判性观点，他认为：</p>
+<blockquote>
+<p>如今的程序员一代又一代只能用面向对象编程的视角来思考编程，比如类、继承层次结构等等。因为他们从小到大只接触过这些概念，看不到其他可能性。OOP 反而阻碍了他们思考更简单的解决方案，甚至让他们根本意识不到问题本身就存在解决方案。它限制了他们能够解决的问题范围。</p>
+</blockquote>
+<p>真是无差别地“扫射”所有人，我想我们中的大多数都是这样的“一代”程序员，从接触编程开始就受面向对象思想的影响，并以此作为设计程序的指导方针。回顾这么多年编写代码的经历，我倒真想不出曾经遇到过什么因为 OOP 机制本身而导致的糟糕处境（当然，也许是我没有意识到问题的根源是类和继承导致的）。我唯一纠结和痛苦过的是面向对象模型和关系模型之间的映射问题，也就是 ORM 问题。尽管使用过多种 ORM 框架，我依然能深刻地体会到两种“模型”天然的“互不相容”性，也就是所谓的“阻抗失配”问题。</p>
+<p>回到对 Class 的态度问题上，我觉得对于绝大多数的程序员来说不必纠结于此，更何况 Rust 还有自己的替代方案，并没有将面向对象拒之门外。它从其他语言里借鉴了一些被认为是非常成功的机制（例如 Trait），重新设计了自己的面向对象体系。虽然 Rust 没有 class 关键字，但你却可以通过组合多种 Rust 语言机制创建出一个非常健全的类。这些机制包括：</p>
+<ul>
+<li><p>数据：字段 &#x2F; 成员变量 ➪ Sruct</p>
+</li>
+<li><p>行为：方法 &#x2F; 成员函数 ➪ Trait + Impl</p>
+</li>
+<li><p>可见性: public &#x2F; private ➪ Module</p>
+</li>
+</ul>
+<h2 id="2-Rust-放弃了“继承”"><a href="#2-Rust-放弃了“继承”" class="headerlink" title="2. Rust 放弃了“继承”"></a>2. Rust 放弃了“继承”</h2><p>以 Class 为基础，面向对象编程最基本的一项特性就是“继承”了。继承首先是一种“代码复用”机制，子类继承父类之后，将自动获得父类的属性和方法；然后，子类通过重写父类中定义的方法，又可以让整个类族（Class Hierarchy）获得“多态”的能力，即：调用端是以父类作为接口编写的，但因子类的具体实现不同而表现出了不同的行为逻辑，这是继承的第二个功能。</p>
+<p>相比于 Class，大家对“继承”的态度是比较一致的，即使是在传统的 OOP 语言里，面向对象的设计准则也是鼓励大家： <strong>多用组合，少用继承</strong> 。继承最大的问题就是：破坏了封装。在一个类族中，如果我们修改了某个类的方法，那么，它的所有子类都会受到影响，在某些场景下，这会让局面变得无法收拾，所以即使是在纯面向对象语言里，大家也意识到了继承的“副作用”非常大，所以才推荐：多用组合，少用继承。</p>
+<p>不过， <strong>很多后续的语言设计者却根本不买账，他们认为：子类不应总是共享其父类的所有特征，但是继承却始终如此，这是继承天生的“缺陷”，既然如此，那就直接把它从语言里移除吧！对于长期受 OO 思想洗礼的程序员来说，这太过“离经叛道”了，但是，Rust 就是这样做了</strong> 。看看我们前面引述的 Casey Muratori 的观点，只能说，针对同一个问题，是非对错并不是绝对的，区别只在于我们所做的“取舍”将会换来什么样的“得失”。</p>
+<p>Rust 禁止了结构体之间的继承，也就堵死了数据在结构体之间以继承方式被暴露的可能，从数据视角看， <strong>在 Rust 中建模出的实体都被“扁平化”了，也就是在语言层面上没有了任何层级关系</strong> 。那在行为能力上又是什么情况呢？过去，我们认为 Dog 和 Cat 都会“叫”（sound）是它们从它们的共同父类 Animal 那里继承了这种“行为”（也是一种“能力”），并表现出了一定的“差异”（也就是“多态”）：Dog 的叫是 “bark”，Cat 的叫是 “meow”。如今，在 Rust 里，Dog 和 Cat 不再有任何“亲缘”关系（no common parent），彼此是“陌生”的，它们之所以都能“叫”仅仅是因为：它们都贴了同一张叫“Soundable”的“功能贴纸”（Functionality Stickers，这是我很喜欢的一种比喻，它贴切地反映了 Rust 中 trait 的功能定位），也就是各自实现了“Soundable”这个 trait。有时候，你可能会觉得这种设计“有些牵强”，并不符合人们对事物的自然理解，或者说是我们过去的设计习惯， <strong>你会在 Rust 面向对象设计的初期不断地感受到这种“差异”，总是觉得自己设计的领域模型不够 OO，这并不完全是因为你对语言的驾驭能力还不够导致的，还有一部分原因是 Rust 确实限制了我们在某些方向上的发挥，原因就是 Rust 放弃了某些传统 OO 机制导致的，这一点不用回避，当然，有舍就有得，收益的部分我们也提过了</strong> 。</p>
+<p>此外，需要单独提一下的是：Rust 是允许 trait 继承的，但是这种继承和我们理解的那种继承完全没有关系。当一个 trait A 继承了一个 trait B 时，并不表示 A 拥有了 B 的方法，它只是告诉 A 的实现者必须要同时实现 B 的方法，因为：trait A 继承 trait B 表示 A “依赖”到了 B，最常见的情况就是在 A 的某个方法的默认实现中调用了 B 声明的某个方法。所以，在 Rust 中，trait A: B 并不是 A 继承了 B 的实现，而 A 在 B 的基础上增加了新的能力要求，这也是一种“扁平化的能力叠加方式”，绝非传统的继承。</p>
+<h2 id="3-Rust-引入了“Trait”"><a href="#3-Rust-引入了“Trait”" class="headerlink" title="3. Rust 引入了“Trait”"></a>3. Rust 引入了“Trait”</h2><p>十年前，当我学习 Scala 时，我并不知道 OO 世界里还有 Trait 这种东西，那也是我第一次意识到：原来面向对象机制还在不断地进化。十年后，学习 Rust 时，我又遇到了 Trait，原本庆幸“又遇到了一项熟悉的机制，可以少费些力气了”，仔细一看，发现 Rust 的 Trait 和 Scala 的 Trait 又不一样。</p>
+<p>在 Rust 里，Trait 被定位于专门针对“行为”进行抽象的一种设施，它和 Struct 相互协作，共同对现实世界中的“概念”或“实体”进行建模。你可以在 Rust 里感受到一种明显的“设计意图”：Rust 设计者不想让数据和行为硬性地绑定在一起，他们将数据和行为拆分开，然后用 Struct 和 Trait 分别去承载，再根据需要使用 impl 语法将它们“组装”起来去表示一个实体。这与传统意义上的面向对象系统确实有很大的差异，总是会给刚接触 Rust 的程序员一种“破碎感”。这正印证了文章开头提到过的：Rust 的设计者认为 Class 承载了太多东西…</p>
+<p>Trait 在 Rust 不单单是行为的抽象，它还肩负起了继承缺失后对“多态”的支持，尽管它的实现方式与传统的 OO 方式非常不同。Rust 通过Trait + 泛型的组合（也就是静态分发）以及 dyn Trait (也就是动态分发），实现了事实上的“多态”，通过 Trait Bound 还可以精细地控制哪些类型实现哪种行为逻辑，既无重复代码，又可以进行细粒度的“多态”控制，这是很优秀的一点。</p>
+<h2 id="4-Rust-里与面向对象有关的-“新玩法”"><a href="#4-Rust-里与面向对象有关的-“新玩法”" class="headerlink" title="4. Rust 里与面向对象有关的 “新玩法”"></a>4. Rust 里与面向对象有关的 “新玩法”</h2><p>以上几个大的“变动”塑造了 Rust 非常独特的面向对象特性，再加上 Rust 里其他一些语言机制的参与，使得我们可以在 Rust 里见到一些在传统 OOP 里没有见过的“新玩法”。</p>
+<p><strong>➢ 枚举升级为了原生的 OOP 对象</strong> </p>
+<p>我们曾在 <a href="/rust/rust-enum/">《Rust 语言特性：枚举》</a> 一文中介绍过：枚举的每一个成员（variants），本质上都是一个匿名结构体，枚举值就是枚举成员的实例。Rust 确实把枚举提升到了在其他语言里都不曾有过的高度，它之所以能拥有这样的能力，很大程度上是因为它被升级为对象实体才获得的。下图展示了每个枚举成员（variants）被编译器编译成一个结构体的样子（示意性代码，仅供理解参考）：</p>
+<p><img src="/../../images/rust/rust-and-oop/2.png"></p>
+<p><strong>➢ 追加扩展（Retroactive Extension）能力</strong> </p>
+<p>在 Rust 中，我们可以为一个已经定义好的类型“补充”行为，也就是追加 Trait。很简单，看一下例子就知道了，先定义一个自己的 trait：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">trait</span> <span class="title class_">PrettyPrint</span> &#123;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">pretty_print</span>(&amp;<span class="keyword">self</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>然后，在未来为某个需要的类型（特别是不由自己控制的三方类型）添加这个 trait 所描述的能力：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span> <span class="title class_">PrettyPrint</span> <span class="keyword">for</span> <span class="title class_">Vec</span>&lt;<span class="type">String</span>&gt; &#123;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">pretty_print</span>(&amp;<span class="keyword">self</span>) &#123;</span><br><span class="line">        ...</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这看上去没什么了不起的，但在传统 OO 语言中是无法用这种“开小灶”的方式给类添加方法的。这有什么用呢？一个典型的用途是：在不修改源码的情况下，扩充第三方类库！这是一种很有用的语言能力。在 Scala 里也有类似的功能，叫 Implicit Conversion（隐式类型转换），利用它可以很优雅地在第三方类库的基础上追加一些自定义功能或将第三方类库更顺滑的适配到自己的编程环境中。</p>
+<p><strong>➢ 关联类型：Trait 的“小机关”</strong> </p>
+<p>关联类型（Associated Type）是 Rust Trait 中一个精准解决目标问题的特性。关联类型（Associated Types）是一个将类型占位符和 trait 绑定在一起的方式，这样在 trait 的方法签名中就可以使用这些占位符类型。关联类型经常会被拿来和泛型做比较，因为它们之间的语义差别非常微妙，也容易被混淆。</p>
+<p>关联类型跟泛型的一个根本区别是：泛型的具体类型是由调用者决定的，而关联类型的具体类型是由实现者决定的，如果某个类型参数是“实现者固有的一部分”，就应该使用关联类型，而不是泛型，这种情况下使用泛型只会将内部类型“外化”，在所有使用到的地方显示传递，造成无意义的类型参数爆炸。关于关联类型更多的信息，可以参考《Rust 语言特性：关联类型》。</p>
+<p>还有一些与面向对象有关的机制，我们不再展开了。面向对象不是孤立的特性，它会和其他机制相互影响和制约，例如在 Rust 中再简单的对象也会受到所有权系统的约束，这是别的语言里都没有的。</p>
+<h2 id="5-结语"><a href="#5-结语" class="headerlink" title="5. 结语"></a>5. 结语</h2><p><strong>毫无疑问，一些过去我们熟悉的 OO 建模方案在 Rust 里因为语言的限制和引导需要重新设计，对于业务实体的抽象（是结构体还是特质？）和层级关系的处理（没有了层级关系，具有相似性的业务实体之间怎样处理“共性”部分和表达关系？）等很多问题都要重新考虑</strong> 。我的一个直觉是：在 Rust 中建模出的领域模型将更加“扁平化”，过去的业务实体会被拆分到更多更细粒度的结构中（特别是 trait）然后再组合成一个相对独立的整体。此外，还有一个更实际的问题：我们得想方设法给各种 trait 起一些“说得过去”的名字，trait 的名称之所以难取，也是因为 Rust 在一定程度上影响到了建模的方式和思维，对于习惯了传统 OO 建模的程序员来说需要一个适应的过程。</p>
+<p>最后，我想说的是：我们不应该盲目地相信一种观点或论断，一个好的程序员应该根据实际的使用经验去批判性地思考，而不是无脑跟随别人的论调。就我个人而言，并没有在过去面向对象的编程中吃过什么“先天性顽疾”的苦头，我们所遇到的“麻烦”往往都是因为“设计得还不够好”导致的，在 设计模式 的指引下通过不断的重构，问题总是可以解决的，即使有些时候解决得不够完美。但也许正因为是这样，我们才意识不到面向对象思维本身的缺陷，因为我们遇到了面向对象的问题然后又用面向对象的方式解决了它，这确实可能会把问题的根源遮掩了过去。在这一点上，语言设计者的目光或许会更敏锐一些，因为开发者往往更关注的是怎样优化自己的设计去搞定问题。</p>
+<p>总之，现在，我不能确定地说 Rust 这样做（对面向对象特性的“取舍”）就一定是好的，但至少应该不会更差。有取舍就会有得失，这是很难量化的，不同的语言设计者们基于不同的背景和经历，有了不同的看法，做了不同的选择，这很正常，争论没有意义，用户和市场会验证这些决策是否正确。对于普通的开发者来说，基于语言现有的机制解决实际问题才是第一位的，如果有一天大家开始共同吐槽某项机制时，那就说明它确实有问题了，这一点，在目前的 Rust 面向对象机制中还没有发生，所以，我们可以保持开放的心态继续我们的 Rust 之旅……</p>
+<hr>
+<p>参考资料：</p>
+<p><a target="_blank" rel="noopener" href="https://users.rust-lang.org/t/from-tony-hoare-to-graydon-hoare/132033/20">https://users.rust-lang.org/t/from-tony-hoare-to-graydon-hoare/132033/20</a><br><a target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=wo84LFzx5nI">https://www.youtube.com/watch?v=wo84LFzx5nI</a><br><a target="_blank" rel="noopener" href="https://graydon2.dreamwidth.org/307291.html?utm_source=chatgpt.com">https://graydon2.dreamwidth.org/307291.html?utm_source=chatgpt.com</a><br><a target="_blank" rel="noopener" href="https://www.thecodedmessage.com/posts/oop-3-inheritance/?utm_source=chatgpt.com">https://www.thecodedmessage.com/posts/oop-3-inheritance/?utm_source=chatgpt.com</a></p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>Rust 颠覆过你的面向对象编程世界观吗？</p><p><a href="https://laurence.enlightgram.com/rust/rust-and-oop/">https://laurence.enlightgram.com/rust/rust-and-oop/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-06-26</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Rust/">Rust</a><a class="link-muted mr-2" rel="tag" href="/tags/%E9%9D%A2%E5%90%91%E5%AF%B9%E8%B1%A1/">面向对象</a><a class="link-muted mr-2" rel="tag" href="/tags/Trait/">Trait</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/rust/rust-polymorphism-1-dispatch/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Rust “多态”的来龙去脉(上)：静态分发与动态分发</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/rust/rust-associated-types/"><span class="level-item">Rust 语言特性：关联类型</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-Rust-放弃了“Class”"><span class="level-left"><span class="level-item">1. Rust 放弃了“Class”</span></span></a></li><li><a class="level is-mobile" href="#2-Rust-放弃了“继承”"><span class="level-left"><span class="level-item">2. Rust 放弃了“继承”</span></span></a></li><li><a class="level is-mobile" href="#3-Rust-引入了“Trait”"><span class="level-left"><span class="level-item">3. Rust 引入了“Trait”</span></span></a></li><li><a class="level is-mobile" href="#4-Rust-里与面向对象有关的-“新玩法”"><span class="level-left"><span class="level-item">4. Rust 里与面向对象有关的 “新玩法”</span></span></a></li><li><a class="level is-mobile" href="#5-结语"><span class="level-left"><span class="level-item">5. 结语</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

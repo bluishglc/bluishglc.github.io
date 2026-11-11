@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>集成 OpenLDAP 与 Kerberos 实现统一认证 (2)：基于 SSSD 同步 LDAP 账号 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="写作背景 写作本系列文章的背景是我们要在大数据平台/企业数据湖场景下给出中心化的用户身份认证方案。此前，我们实现过 Windows AD + Kerberos的集成方案，由于Windows AD是LDAP和Kerberos的双重实现，这种天然优势使得Windows AD可以实现真正意义上的（大数据集群的）Kerberos账号与企业用户账号的统一管理。当我们想在OpenLDAP + Kerberos"><meta property="og:type" content="article"><meta property="og:title" content="集成 OpenLDAP 与 Kerberos 实现统一认证 (2)：基于 SSSD 同步 LDAP 账号"><meta property="og:url" content="https://laurence.enlightgram.com/security/openldap-kerberos-2-sssd/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="写作背景 写作本系列文章的背景是我们要在大数据平台/企业数据湖场景下给出中心化的用户身份认证方案。此前，我们实现过 Windows AD + Kerberos的集成方案，由于Windows AD是LDAP和Kerberos的双重实现，这种天然优势使得Windows AD可以实现真正意义上的（大数据集群的）Kerberos账号与企业用户账号的统一管理。当我们想在OpenLDAP + Kerberos"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/security/openldap-kerberos-2-sssd/2.jpeg"><meta property="article:published_time" content="2022-06-08T00:10:01.000Z"><meta property="article:modified_time" content="2026-11-11T03:37:39.394Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="LDAP"><meta property="article:tag" content="Kerberos"><meta property="article:tag" content="OpenLDAP"><meta property="article:tag" content="SSSD"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/security/openldap-kerberos-2-sssd/2.jpeg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/security/openldap-kerberos-2-sssd/"},"headline":"集成 OpenLDAP 与 Kerberos 实现统一认证 (2)：基于 SSSD 同步 LDAP 账号","image":["https://laurence.enlightgram.com/images/security/openldap-kerberos-2-sssd/2.jpeg"],"datePublished":"2022-06-08T00:10:01.000Z","dateModified":"2026-11-11T03:37:39.394Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"写作背景 写作本系列文章的背景是我们要在大数据平台/企业数据湖场景下给出中心化的用户身份认证方案。此前，我们实现过 Windows AD + Kerberos的集成方案，由于Windows AD是LDAP和Kerberos的双重实现，这种天然优势使得Windows AD可以实现真正意义上的（大数据集群的）Kerberos账号与企业用户账号的统一管理。当我们想在OpenLDAP + Kerberos"}</script><link rel="canonical" href="https://laurence.enlightgram.com/security/openldap-kerberos-2-sssd/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">集成 OpenLDAP 与 Kerberos 实现统一认证 (2)：基于 SSSD 同步 LDAP 账号</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Security/">Security</a></span><span class="level-item">发表于：<time dateTime="2022-06-08T00:10:01.000Z" title="2022-06-07 17:10:01">2022-06-07</time></span><span class="level-item">阅读用时：25 分钟 (约 3763 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><h3 id="1-写作背景"><a href="#1-写作背景" class="headerlink" title="1. 写作背景"></a>1. 写作背景</h3><p>写作本系列文章的背景是我们要在大数据平台&#x2F;企业数据湖场景下给出中心化的用户身份认证方案。此前，我们实现过 Windows AD + Kerberos的集成方案，由于Windows AD是LDAP和Kerberos的双重实现，这种天然优势使得Windows AD可以实现真正意义上的（大数据集群的）Kerberos账号与企业用户账号的统一管理。当我们想在OpenLDAP + Kerberos上实现同样的目标时，发现这一领域的知识与方案琐碎而凌乱，缺少统一连贯，脉络清晰的讲解，在经过大量技术调研和系统梳理后，我们特别撰写了本系列文章，希望可以借此将这一话题全面彻底地阐述清楚。本系列由三篇文章组成，将沿着“如何集成OpenLDAP与Kerberos实现统一认证管理”这一主线推进，在实现过程中会详细介绍使用到的技术和原理并给出完备的执行脚本用于实际环境的搭建。我们假设读者已经具备OpenLDAP和Kerberos的基本知识，不再对两者进行单独介绍。此外，本系列文章写作期间正值2022年4月-5月上海疫情最严重的时期，特以此文纪念这段艰难的特殊时光。（本文发表于作者技术博客，原文链接： <a href="/security/openldap-kerberos-2-sssd/">https://laurence.enlightgram.com/security/openldap-kerberos-2-sssd/</a> ）</p>
+<h3 id="2-既定目标"><a href="#2-既定目标" class="headerlink" title="2. 既定目标"></a>2. 既定目标</h3><p>在上一篇文章中，我们安装了OpenLDAP并将Kerberos的后台数据库迁移到了OpenLDAP上，实现了两系统用户数据的统一存储。本文将展开第二阶段的集成工作，即此前在技术方案（路线图）中介绍的第③和第④步：</p>
+<p><img src="/../../images/security/openldap-kerberos-2-sssd/2.jpeg" alt="在这里插入图片描述"></p>
+<center>图1: OpenLDAP与Kerberos集成方案</center>
+
+<p>这两步操作将在Linux主机上启用SSSD，用户通过SSH登录大数据集群各个节点时，将会通过SSSD转到OpenLDAP进行身份认证。</p>
+<p>对于大数据集群来说，③④两步操作的主要意义并不在于可以让用户登录Linux，而是在于：当我们向Yarn提交作业时，Yarn会要求执行作业的各Worker节点上能找到提交作业的Linux用户，因此，我们需要架设一条通道将OpenLDAP账号同步到各个Linux主机上，这个通道就是SSSD。</p>
+<h3 id="3-工作原理"><a href="#3-工作原理" class="headerlink" title="3. 工作原理"></a>3. 工作原理</h3><p>本文操作的主要对象是SSSD（ System Security Services Dameon，官网地址：<a target="_blank" rel="noopener" href="https://sssd.io),它是一个工作在/">https://sssd.io），它是一个工作在</a> Linux系统 上与LDAP&#x2F;AD对接进行身份认证和账号缓存的服务，与直接同LDAP对接相比，SSSD有如下一些优点：</p>
+<ul>
+<li><p>支持离线认证：当本地主机与LDAP服务器断网的情况下，用户依然可以登录</p>
+</li>
+<li><p>减轻LDAP服务器的负载：通过SSSD，一台Linux主机仅与LDAP服务器建立一个连接</p>
+</li>
+<li><p>支持多个LDAP&#x2F;AD：通过SSSD，可以同时配置多个LDAP&#x2F;AD作为认证源</p>
+</li>
+</ul>
+<h3 id="4-安装操作"><a href="#4-安装操作" class="headerlink" title="4. 安装操作"></a>4. 安装操作</h3><p>※ 提示：本文所有命令均以root用户身份执行，不再显式使用sudo修饰。</p>
+<h4 id="4-1-创建SSSD的Bind-DN"><a href="#4-1-创建SSSD的Bind-DN" class="headerlink" title="4.1 创建SSSD的Bind DN"></a>4.1 创建SSSD的Bind DN</h4><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<p>由于SSSD需要登录OpenLDAP检索账号，所以需要为其在OpenLDAP上创建一个专职账号： <code>cn=sssd,ou=services,dc=example,dc=com</code> ，操作命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF | ldapadd -D &quot;cn=admin,dc=example,dc=com&quot; -w Admin1234!</span></span><br><span class="line"><span class="string">dn: cn=sssd,ou=services,dc=example,dc=com</span></span><br><span class="line"><span class="string">sn: sssd</span></span><br><span class="line"><span class="string">cn: sssd</span></span><br><span class="line"><span class="string">objectClass: top</span></span><br><span class="line"><span class="string">objectclass: person</span></span><br><span class="line"><span class="string">userPassword: Admin1234!</span></span><br><span class="line"><span class="string">EOF</span></span><br></pre></td></tr></table></figure>
+
+<p>备注： 这是本文唯一一处需要在OpenLDAP上执行的操作，后续所有操作均在大数据集群各个节点上执行。</p>
+<h4 id="4-2-安装软件包"><a href="#4-2-安装软件包" class="headerlink" title="4.2 安装软件包"></a>4.2 安装软件包</h4><p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
+<p>使用如下命令安装必要的软件包：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum -y install openldap-clients sssd sssd-client sssd-ldap sssd-tools authconfig nss-pam-ldapd oddjob-mkhomedir</span><br></pre></td></tr></table></figure>
+
+<h4 id="4-3-使用authconfig配置SSSD"><a href="#4-3-使用authconfig配置SSSD" class="headerlink" title="4.3 使用authconfig配置SSSD"></a>4.3 使用authconfig配置SSSD</h4><p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
+<p>authconfig是Linux系统上一个对各种认证资源进行统一配置的工具，我们将通过它完成一部分的SSSD配置，命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">authconfig --enablesssd --enablesssdauth --enablemkhomedir --enablerfc2307bis --enableldap --enableldapauth --disableldaptls --disableforcelegacy --disablekrb5 --ldapserver ldap://ip-10-0-0-70.cn-north-1.compute.internal --ldapbasedn <span class="string">&quot;dc=example,dc=com&quot;</span> --updateall</span><br></pre></td></tr></table></figure>
+
+<p>关于这条命令，大部分选项都可以直接从名称上了解其作用，需要特别解释的是下面几个配置项：</p>
+<ul>
+<li>–disableforcelegacy</li>
+</ul>
+<p>–disableforcelegacy其实是 默认值 ，不显式配置也会生效，和它对应的是–enableforcelegacy选项。官方文档对这两个选项的解释并不够细致，它们是为兼容某些旧式服务（例如一些很旧的OpenLDAP版本）而设计的，但其实这两个选项对配置的影响非常大，最大的区别在于：</p>
+<blockquote>
+<ol>
+<li><p>如果使用–disableforcelegacy，则启动的是sssd进程，并且会自动创建并使用&#x2F;etc&#x2F;sssd&#x2F;sssd.conf文件</p>
+</li>
+<li><p>如果使用–enableforcelegacy，则启动的是nslcd进程，不会创建和使用&#x2F;etc&#x2F;sssd&#x2F;sssd.conf文件，命令行中的若干配置项会更新到&#x2F;etc&#x2F;nslcd.conf，&#x2F;etc&#x2F;pam.d&#x2F;system-auth 和&#x2F;etc&#x2F;pam.d&#x2F;password-auth等文件中</p>
+</li>
+</ol>
+</blockquote>
+<p>总之，在安装新环境时，建议首选–disableforcelegacy，它会让authconfig将配置（特别是ldap相关的）信息写到&#x2F;etc&#x2F;sssd&#x2F;sssd.conf文件的[domain&#x2F;default]中，如该sssd.conf文件不存在，authconfig还会自动创建该文件。</p>
+<ul>
+<li>–updateall</li>
+</ul>
+<p>该选项的作用是将命令行中的各项配置更新到对应服务的配置文件中，与之类似的是–update参数，它们的区别在于–updateall会更新全部配置。我们建议大家使用–updateall而不是–update，因为这样可以保证始终以authconfig命令给出的配置为准，避免手动修改一些配置文件。网上有很多文章告诉读者在使用了authconfig命令后还要再去修改&#x2F;etc&#x2F;pam.d&#x2F;system-auth 和&#x2F;etc&#x2F;pam.d&#x2F;password-auth等文件，都是因为没有使用–updateall导致的，这种做法不能说有错，但确实是有隐患的。典型的例子是：这些文章会要求读者手动修改&#x2F;etc&#x2F;pam.d&#x2F;system-auth 和&#x2F;etc&#x2F;pam.d&#x2F;password-auth两个文件中与pam_sss.so和pam_ldap.so有关的4个配置项，但其实这些配置会有很大概率在下次执行authconfig命令时被覆盖掉。</p>
+<p>正确控制pam_sss.so和pam_ldap.so相关配置项的做法是：在每次执行authconfig时，总是使用–enableforcelegacy和–updateall两个选项，通过enable或disable ldapauth与sssdauth可以精确控制与pam_sss.so和pam_ldap.so有关的四项配置，具体逻辑是：</p>
+<blockquote>
+<p>–enableldapauth：将会在&#x2F;etc&#x2F;pam.d&#x2F;system-auth和&#x2F;etc&#x2F;pam.d&#x2F;password-auth追加pam_ldap.so相关的4项配置<br>–disableldapauth：将会在&#x2F;etc&#x2F;pam.d&#x2F;system-auth和&#x2F;etc&#x2F;pam.d&#x2F;password-auth移除pam_ldap.so相关的4项配置<br>–enablesssdauth：将会在&#x2F;etc&#x2F;pam.d&#x2F;system-auth和&#x2F;etc&#x2F;pam.d&#x2F;password-auth追加pam_sss.so相关的4项配置<br>–disablesssdauth：将会在&#x2F;etc&#x2F;pam.d&#x2F;system-auth和&#x2F;etc&#x2F;pam.d&#x2F;password-auth移除pam_sss.so相关的4项配置</p>
+</blockquote>
+<p>再次提醒一下，以上情形只在启用了–enableforcelegacy和–updateall的前提下才有效。由于我们使用了–disableforcelegacy，所以不必手动修改&#x2F;etc&#x2F;pam.d&#x2F;system-auth和&#x2F;etc&#x2F;pam.d&#x2F;password-auth两个文件，只需要简单执行上面的authconfig命令即可。authconfig命令执行完毕后，可以通过下面的命令查看一下当前配置，从输出的信息可以判断出哪些认证模块被启用哪些没有：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">authconfig --<span class="built_in">test</span></span><br></pre></td></tr></table></figure>
+
+<p>备注：针对CentOS 8，应该使用authselect替换authconfig进行配置，本文使用的演示环境不支持authselect，故不再单独介绍。</p>
+<h4 id="4-4-其他必要配置项"><a href="#4-4-其他必要配置项" class="headerlink" title="4.4 其他必要配置项"></a>4.4 其他必要配置项</h4><p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
+<p>尽管authconfig命令配合–disableforcelegacy选项可以自动生成&#x2F;etc&#x2F;sssd&#x2F;sssd.conf文件，但是authconfig还是不能涵盖sssd.conf中的所有配置，以下几项配置无法通过authconfig参数设置，但必须要在sssd.conf中提供：</p>
+<figure class="highlight properties"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">ldap_default_bind_dn</span> = <span class="string">cn=sssd,ou=services,dc=example,dc=com</span></span><br><span class="line"><span class="attr">ldap_default_authtok_type</span> = <span class="string">password</span></span><br><span class="line"><span class="attr">ldap_default_authtok</span> = <span class="string">Admin1234!</span></span><br></pre></td></tr></table></figure>
+
+<p>ldap_default_bind_dn用于指定SSSD的bind dn，我们已经在第一步先行创建好了这个DN，如果想简化操作，可以直接使用admin。ldap_default_authtok_type用于指明定bind dn的认证方式，这里使用的是密码认证，ldap_default_authtok是用来配置bind dn的密码。此外，还有一些与ldap有关的配置项是用于账号检索的，它们是：</p>
+<figure class="highlight properties"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">ldap_user_object_class</span> = <span class="string">posixAccount</span></span><br><span class="line"><span class="attr">ldap_user_name</span> = <span class="string">uid</span></span><br><span class="line"><span class="attr">ldap_user_uid_number</span> = <span class="string">uidNumber</span></span><br></pre></td></tr></table></figure>
+
+<p>上述三项给出的值本身就是这些配置项的默认值，所以并不需要显式配置，这些默认值适用于绝大多数情况，仅当SSSD同步不到你想要的账号时，才可能需要适当修改一下相应的值。</p>
+<p>接下来两项是用户登录后与环境有关的配置项：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">override_homedir = /home/%u</span><br><span class="line">default_shell = /bin/bash</span><br></pre></td></tr></table></figure>
+
+<p>“override_homedir &#x3D; &#x2F;home&#x2F;%u”用于配置LDAP用户登录Linux后的home目录，当用户初次登录时，系统会根据这里的配置为用户创建home目录，其中%u表示用户名。自动创建home目录的功能是通过安装oddjob-mkhomedir实现的，这个安装包中有一个名为pam_oddjob_mkhomedir.so的库，authconfig命令就是利用这个库创建home目录的。</p>
+<p>“default_shell &#x3D; &#x2F;bin&#x2F;bash”用于配置同步的LDAP用户在Linux下的默认 shell ，这里我们统一使用bash shell。</p>
+<p>此外，如果配置过程中出现错误，详细的日志信息对排查错误非常重要，此时，可以通过以下的配置项提升日志输出的详细度：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">debug_level = 9</span><br></pre></td></tr></table></figure>
+
+<p>最后，我们可以使用如下命令，将authconfig生成的内容与需要额外添加的内容合并，生成一份完整的配置：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">tee</span> /etc/sssd/sssd.conf&lt;&lt;<span class="string">EOF</span></span><br><span class="line"><span class="string">[sssd]</span></span><br><span class="line"><span class="string">services = nss, pam, autofs</span></span><br><span class="line"><span class="string">domains = default</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">[domain/default]</span></span><br><span class="line"><span class="string">autofs_provider = ldap</span></span><br><span class="line"><span class="string">ldap_schema = rfc2307bis</span></span><br><span class="line"><span class="string">krb5_realm = CN-NORTH-1.COMPUTE.INTERNAL</span></span><br><span class="line"><span class="string">ldap_search_base = dc=example,dc=com</span></span><br><span class="line"><span class="string">krb5_server = ip-10-0-1-90.cn-north-1.compute.internal:88</span></span><br><span class="line"><span class="string">id_provider = ldap</span></span><br><span class="line"><span class="string">auth_provider = ldap</span></span><br><span class="line"><span class="string">chpass_provider = ldap</span></span><br><span class="line"><span class="string">ldap_uri = ldap://ip-10-0-0-70.cn-north-1.compute.internal</span></span><br><span class="line"><span class="string">ldap_id_use_start_tls = False</span></span><br><span class="line"><span class="string">cache_credentials = True</span></span><br><span class="line"><span class="string">ldap_tls_reqcert = never</span></span><br><span class="line"><span class="string">ldap_tls_cacertdir = /etc/openldap/cacerts</span></span><br><span class="line"><span class="string">ldap_default_bind_dn = cn=sssd,ou=services,dc=example,dc=com</span></span><br><span class="line"><span class="string">ldap_default_authtok_type = password</span></span><br><span class="line"><span class="string">ldap_default_authtok = Admin1234!</span></span><br><span class="line"><span class="string">override_homedir = /home/%u</span></span><br><span class="line"><span class="string">default_shell = /bin/bash</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">[nss]</span></span><br><span class="line"><span class="string">homedir_substring = /home</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">[pam]</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">[autofs]</span></span><br><span class="line"><span class="string">EOF</span></span><br><span class="line"></span><br><span class="line"><span class="built_in">chmod</span> 600 /etc/sssd/sssd.conf </span><br></pre></td></tr></table></figure>
+
+<p>关于更多sssd.conf文件的配置项可参考： <a target="_blank" rel="noopener" href="https://linux.die.net/man/5/sssd.conf">https://linux.die.net/man/5/sssd.conf</a> </p>
+<h4 id="4-5-配置SSH"><a href="#4-5-配置SSH" class="headerlink" title="4.5 配置SSH"></a>4.5 配置SSH</h4><p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
+<p>如果允许SSSD同步的用户SSH登录服务器，需要对SSH做一些必要配置，具体操作是打开&#x2F;etc&#x2F;ssh&#x2F;sshd_config文件，将“UsePAM no”和“PasswordAuthentication no”注释掉（如果有的话），并设置“UsePAM yes”和“PasswordAuthentication yes”：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#UsePAM no</span></span><br><span class="line">UsePAM <span class="built_in">yes</span></span><br><span class="line"><span class="comment">#PasswordAuthentication no</span></span><br><span class="line">PasswordAuthentication <span class="built_in">yes</span></span><br></pre></td></tr></table></figure>
+
+<p>或执行如下脚本：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cp</span> -f /etc/ssh/sshd_config /etc/ssh/sshd_config.$(<span class="built_in">date</span> +%s)</span><br><span class="line"></span><br><span class="line">items=(UsePAM PasswordAuthentication)</span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> item <span class="keyword">in</span> <span class="variable">$&#123;items[@]&#125;</span>; <span class="keyword">do</span></span><br><span class="line">    searchExp=<span class="string">&quot;^\s*[#]\?\s*<span class="variable">$&#123;item&#125;</span>\s*\(yes\|no\)$&quot;</span></span><br><span class="line">    <span class="comment"># 所有待删除的行号</span></span><br><span class="line">    lineNums=($(grep -n -e <span class="string">&quot;<span class="variable">$searchExp</span>&quot;</span> /etc/ssh/sshd_config | <span class="built_in">cut</span> -d: -f1))</span><br><span class="line">    <span class="comment"># 生成sed行表达式</span></span><br><span class="line">    <span class="built_in">printf</span> -v linesExp <span class="string">&quot;%sd;&quot;</span> <span class="string">&quot;<span class="variable">$&#123;lineNums[@]&#125;</span>&quot;</span></span><br><span class="line">    <span class="comment"># 删除所有行</span></span><br><span class="line">    sed -i -e <span class="string">&quot;<span class="variable">$linesExp</span>&quot;</span> /etc/ssh/sshd_config</span><br><span class="line">    <span class="comment"># 在原第一行处插入新配置（为了保持配置项出现在合适的位置）</span></span><br><span class="line">    sed <span class="string">&quot;<span class="variable">$&#123;lineNums[0]&#125;</span>i <span class="variable">$&#123;item&#125;</span> yes&quot;</span> -i /etc/ssh/sshd_config</span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="4-6-重启服务"><a href="#4-6-重启服务" class="headerlink" title="4.6 重启服务"></a>4.6 重启服务</h4><p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
+<p>完成上述所有操作后，需要激活并重启以下服务：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">systemctl <span class="built_in">enable</span> sssd oddjobd</span><br><span class="line">systemctl restart sssd oddjobd sshd</span><br><span class="line">systemctl status sssd oddjobd sshd</span><br></pre></td></tr></table></figure>
+
+<h4 id="4-7-登录验证"><a href="#4-7-登录验证" class="headerlink" title="4.7 登录验证"></a>4.7 登录验证</h4><p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
+<p>服务重启后，LDAP的账号数据就可以经SSSD同步至本地Linux主机了，以“user1”用户为例，可以使用命令：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">id</span> user1</span><br></pre></td></tr></table></figure>
+
+<p>如果命令打印出了user1的相关信息，则表示SSSD已经可以和OpenLDAP正常通信了，同时也可以切换到user1用户上验证：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">su -l user1</span><br></pre></td></tr></table></figure>
+
+<p>最后，就是使用SSH进行登录验证了，读者可以使用自己熟悉的SSH客户端工具以 <code>user1</code> 为用户名，以 <code>Admin1234!</code> 为密码进行SSH登录验证。至此，我们已经完成本文的预定目标，实现了集成方案示意图中的第③、④两步。</p>
+<h3 id="附录：常见错误"><a href="#附录：常见错误" class="headerlink" title="附录：常见错误"></a>附录：常见错误</h3><p>当遇到配置无效或配置中出现错误的时候，可以重点留意如下日志文件中的错误信息：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">/var/log/secure</span><br><span class="line">/var/log/sssd/sssd_default.log</span><br></pre></td></tr></table></figure>
+
+<p>以下是一些常见的错误和处理方法：</p>
+<ul>
+<li>启动SSSD服务时报错：SSSD couldn’t load the configuration database [2]: No such file or directory.</li>
+</ul>
+<p>原因：&#x2F;etc&#x2F;sssd&#x2F;sssd.conf文件不存在。可以使用authconfig命令配合–disableforcelegacy选项自动生成sssd.conf文件</p>
+<ul>
+<li>SSH登录时报错：pam_sss(sshd:auth): received for user …: 6 (Permission denied)</li>
+</ul>
+<p>原因：如果OpenLDAP没有启用TLS，则必须要在sssd.conf文件中显式地配置 <code>ldap_tls_reqcert = never</code> </p>
+<ul>
+<li>&#x2F;var&#x2F;log&#x2F;sssd&#x2F;sssd_default.log文件报错：User [xxx] filtered out! (primary gid out of range)</li>
+</ul>
+<p>原因是在LDAP中查看用户的GID是0，这是使用LdapAdmin创建用户时，不选Group时自动赋予的值，由于0是root group的GID，不在允许的GID范围内。解决方法明确设置一个合理值，例如大于1000的随机值，或者取一个实际存在的GID。</p>
+<ul>
+<li>用户登录后不能创建Home目录</li>
+</ul>
+<p>如果在authconfig中使用了–enablemkhomedir，是会创建home目录的，但如果没有在&#x2F;etc&#x2F;sssd&#x2F;sssd.conf中显式地配置override_homedir，默认的home目录其实是在根目录下。所以，要同时保证启用了–enablemkhomedir，并在&#x2F;etc&#x2F;sssd&#x2F;sssd.conf中配置了：</p>
+<figure class="highlight properties"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">override_homedir</span> = <span class="string">/home/%u</span></span><br></pre></td></tr></table></figure>
+
+<hr>
+<p>关于作者：</p>
+<p>耿立超， 架构 师，多年系统开发与架构经验，对大数据、云计算、企业级应用、SaaS、分布式存储和领域驱动设计有丰富的实践经验，著有 《大数据平台架构与原型实现：数据中台建设实战》（ <a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">https://item.jd.com/12677623.html</a> ）一书，个人技术博客： <a href="/">https://laurence.enlightgram.com</a> </p>
+<hr>
+<p>关联阅读：</p>
+<p>集成OpenLDAP与Kerberos实现统一认证(一)：整合后台数据库<br><a href="/security/openldap-kerberos-1-backend-database/">https://laurence.enlightgram.com/security/openldap-kerberos-1-backend-database/</a> </p>
+<p>集成OpenLDAP与Kerberos实现统一认证(二)：基于SSSD同步LDAP账号<br><a href="/security/openldap-kerberos-2-sssd/">https://laurence.enlightgram.com/security/openldap-kerberos-2-sssd/</a> </p>
+<p>集成OpenLDAP与Kerberos实现统一认证(三)：基于SASL&#x2F;GSSAPI深度集成<br><a href="/security/openldap-kerberos-3-sasl-gssapi/">https://laurence.enlightgram.com/security/openldap-kerberos-3-sasl-gssapi/</a> </p>
+<hr>
+<p>参考资料：</p>
+<p>sssd.conf(5) - Linux man page<br><a target="_blank" rel="noopener" href="https://linux.die.net/man/5/sssd.conf">https://linux.die.net/man/5/sssd.conf</a> </p>
+<p>sssd.conf(5) - Linux man page (ldap part)<br><a target="_blank" rel="noopener" href="https://linux.die.net/man/5/sssd-ldap">https://linux.die.net/man/5/sssd-ldap</a> </p>
+<p>Red Hat Enterprise Linux 6 - Use of Authconfig Parameter FORCELEGACY:<br><a target="_blank" rel="noopener" href="https://support.hpe.com/hpesc/public/docDisplay?docId=c02791158&docLocale=en_US">https://support.hpe.com/hpesc/public/docDisplay?docId=c02791158&amp;docLocale=en_US</a> </p>
+<p>Understanding System Security Services Daemon (SSSD)<br><a target="_blank" rel="noopener" href="https://www.thegeekdiary.com/understanding-system-security-services-daemon-sssd/">https://www.thegeekdiary.com/understanding-system-security-services-daemon-sssd/</a> </p>
+<p>Configuring SSSD to use LDAP and require TLS authentication<br><a target="_blank" rel="noopener" href="https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/configuring_authentication_and_authorization_in_rhel/configuring-sssd-to-use-ldap-and-require-tls-authentication_configuring-authentication-and-authorization-in-rhel">https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux&#x2F;8&#x2F;html&#x2F;configuring_authentication_and_authorization_in_rhel&#x2F;configuring-sssd-to-use-ldap-and-require-tls-authentication_configuring-authentication-and-authorization-in-rhel</a> </p>
+<p>Simple steps to configure LDAPS with TLS certificates CentOS 7 Linux<br><a target="_blank" rel="noopener" href="https://www.golinuxcloud.com/configure-openldap-with-tls-certificates/">https://www.golinuxcloud.com/configure-openldap-with-tls-certificates/</a> </p>
+<p>simple steps to configure ldap client RHEL&#x2F;CentOS 8<br><a target="_blank" rel="noopener" href="https://www.golinuxcloud.com/ldap-client-rhel-centos-8/">https://www.golinuxcloud.com/ldap-client-rhel-centos-8/</a> </p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>集成 OpenLDAP 与 Kerberos 实现统一认证 (2)：基于 SSSD 同步 LDAP 账号</p><p><a href="https://laurence.enlightgram.com/security/openldap-kerberos-2-sssd/">https://laurence.enlightgram.com/security/openldap-kerberos-2-sssd/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2022-06-07</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/LDAP/">LDAP</a><a class="link-muted mr-2" rel="tag" href="/tags/Kerberos/">Kerberos</a><a class="link-muted mr-2" rel="tag" href="/tags/OpenLDAP/">OpenLDAP</a><a class="link-muted mr-2" rel="tag" href="/tags/SSSD/">SSSD</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/security/openldap-kerberos-3-sasl-gssapi/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">集成 OpenLDAP 与 Kerberos 实现统一认证 (3)：基于 SASL/GSSAPI 深度集成</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/security/openldap-kerberos-1-backend-database/"><span class="level-item">集成 OpenLDAP 与 Kerberos 实现统一认证 (1)：整合后台数据库</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-写作背景"><span class="level-left"><span class="level-item">1. 写作背景</span></span></a></li><li><a class="level is-mobile" href="#2-既定目标"><span class="level-left"><span class="level-item">2. 既定目标</span></span></a></li><li><a class="level is-mobile" href="#3-工作原理"><span class="level-left"><span class="level-item">3. 工作原理</span></span></a></li><li><a class="level is-mobile" href="#4-安装操作"><span class="level-left"><span class="level-item">4. 安装操作</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#4-1-创建SSSD的Bind-DN"><span class="level-left"><span class="level-item">4.1 创建SSSD的Bind DN</span></span></a></li><li><a class="level is-mobile" href="#4-2-安装软件包"><span class="level-left"><span class="level-item">4.2 安装软件包</span></span></a></li><li><a class="level is-mobile" href="#4-3-使用authconfig配置SSSD"><span class="level-left"><span class="level-item">4.3 使用authconfig配置SSSD</span></span></a></li><li><a class="level is-mobile" href="#4-4-其他必要配置项"><span class="level-left"><span class="level-item">4.4 其他必要配置项</span></span></a></li><li><a class="level is-mobile" href="#4-5-配置SSH"><span class="level-left"><span class="level-item">4.5 配置SSH</span></span></a></li><li><a class="level is-mobile" href="#4-6-重启服务"><span class="level-left"><span class="level-item">4.6 重启服务</span></span></a></li><li><a class="level is-mobile" href="#4-7-登录验证"><span class="level-left"><span class="level-item">4.7 登录验证</span></span></a></li></ul></li><li><a class="level is-mobile" href="#附录：常见错误"><span class="level-left"><span class="level-item">附录：常见错误</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

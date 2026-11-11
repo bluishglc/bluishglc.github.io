@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>使用 Playwright + GitHub Actions 完成一些页面自动化任务的初步探索(下) - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="书接上回，我们继续自动化反抄袭和反剽窃的行动（详情参见我的上一篇文章 《51CTO，一个抄袭剽窃的流氓网站！》 ）。在上一篇文章中，我们搭建了 MVP 项目，也以测试通过。现在，要着手解决登录问题了。 通过认证的方案汇总 我们所有操作的前提是要获取被访问网站的身份。梳理各种解决方案，可以分为这样几种： 第一种：完全自动化模拟登录，但因为大多数网站在登录过程中会设置图片验证环节，使得这种方式基本不太"><meta property="og:type" content="article"><meta property="og:title" content="使用 Playwright + GitHub Actions 完成一些页面自动化任务的初步探索(下)"><meta property="og:url" content="https://laurence.enlightgram.com/others/playwright-github-actions-2/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="书接上回，我们继续自动化反抄袭和反剽窃的行动（详情参见我的上一篇文章 《51CTO，一个抄袭剽窃的流氓网站！》 ）。在上一篇文章中，我们搭建了 MVP 项目，也以测试通过。现在，要着手解决登录问题了。 通过认证的方案汇总 我们所有操作的前提是要获取被访问网站的身份。梳理各种解决方案，可以分为这样几种： 第一种：完全自动化模拟登录，但因为大多数网站在登录过程中会设置图片验证环节，使得这种方式基本不太"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/others/playwright-github-actions-2/1.png"><meta property="article:published_time" content="2026-07-20T16:00:00.000Z"><meta property="article:modified_time" content="2026-11-11T02:50:16.399Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="GitHub"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/others/playwright-github-actions-2/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/others/playwright-github-actions-2/"},"headline":"使用 Playwright + GitHub Actions 完成一些页面自动化任务的初步探索(下)","image":["https://laurence.enlightgram.com/images/others/playwright-github-actions-2/1.png"],"datePublished":"2026-07-20T16:00:00.000Z","dateModified":"2026-11-11T02:50:16.399Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"书接上回，我们继续自动化反抄袭和反剽窃的行动（详情参见我的上一篇文章 《51CTO，一个抄袭剽窃的流氓网站！》 ）。在上一篇文章中，我们搭建了 MVP 项目，也以测试通过。现在，要着手解决登录问题了。 通过认证的方案汇总 我们所有操作的前提是要获取被访问网站的身份。梳理各种解决方案，可以分为这样几种： 第一种：完全自动化模拟登录，但因为大多数网站在登录过程中会设置图片验证环节，使得这种方式基本不太"}</script><link rel="canonical" href="https://laurence.enlightgram.com/others/playwright-github-actions-2/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">使用 Playwright + GitHub Actions 完成一些页面自动化任务的初步探索(下)</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/others/">其他</a></span><span class="level-item">发表于：<time dateTime="2026-07-20T16:00:00.000Z" title="2026-07-20 09:00:00">2026-07-20</time></span><span class="level-item">阅读用时：12 分钟 (约 1833 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/others/playwright-github-actions-2/1.png" alt="使用 Playwright + GitHub Actions 完成一些页面自动化任务的初步探索(下)" fetchpriority="high"></figure><div class="content"><p>书接上回，我们继续自动化反抄袭和反剽窃的行动（详情参见我的上一篇文章 <a href="/others/51cto-plagiarism/">《51CTO，一个抄袭剽窃的流氓网站！》</a> ）。在上一篇文章中，我们搭建了 MVP 项目，也以测试通过。现在，要着手解决登录问题了。</p>
+<h2 id="1-通过认证的方案汇总"><a href="#1-通过认证的方案汇总" class="headerlink" title="1. 通过认证的方案汇总"></a>1. 通过认证的方案汇总</h2><p>我们所有操作的前提是要获取被访问网站的身份。梳理各种解决方案，可以分为这样几种：</p>
+<ul>
+<li><p>第一种：完全自动化模拟登录，但因为大多数网站在登录过程中会设置图片验证环节，使得这种方式基本不太可行。有一些方案会调用第三方的 OCR API 试图攻克这一难题，理论上，对于部分类型的验证应该是有效的，但本文不会深究。</p>
+</li>
+<li><p>第二种：手动登录，将数据保留下来，供下次复用。Playwright 提供的 <code>context.storageState()</code> 方法就是为此设计的：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">await</span> context.<span class="title function_">storageState</span>(&#123;</span><br><span class="line">    <span class="attr">path</span>: <span class="string">&#x27;state.json&#x27;</span></span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>第三种：直接使用本地真实浏览器数据。Playwright 提供的</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> context =</span><br><span class="line">    <span class="keyword">await</span> chromium.<span class="title function_">launchPersistentContext</span>(</span><br><span class="line">        <span class="string">&#x27;C:\\Users\\你的用户名\\AppData\\Local\\Google\\Chrome\\User Data&#x27;</span>,</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="attr">channel</span>: <span class="string">&#x27;chrome&#x27;</span>,</span><br><span class="line">            <span class="attr">headless</span>: <span class="literal">false</span></span><br><span class="line">        &#125;</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>第四种：从浏览器中导出 cookie，然后在 Playwright 中复用</p>
+</li>
+</ul>
+<p>以上几种方法，第一种方法因验证码问题被排除，第二种方法在测试时发现会卡在验证码环节（验证码总是失败），第三种和第四种方法均可行，最后选择的是第四种方法。</p>
+<h2 id="2-导出-Cookie"><a href="#2-导出-Cookie" class="headerlink" title="2. 导出 Cookie"></a>2. 导出 Cookie</h2><p>既然我们选择了复用 cookie 的方案，那么第一步就是要把 cookie 准备好。这部分工作有些繁琐，并不容易实现，可以借助 AI 来辅助处理。首先，使用 浏览器 的 Cookie 插件将目标站点的 cookie 导出为 json 文件。我使用的工具是 Cookie Manager。但是，要注意的是，使用工具导出的 Cookie 一般都不会被 Playwright 直接接受，因为里面有一些字段不是 Playwright 认可的，并且还有很多项是与身份信息无关的，建议把导出的 json 交给 AI，说明诉求，请 AI 处理一下，就可以得到精简且有效的 cookie 信息了。这里就不方便展示详细的 cookie 信息了。</p>
+<h2 id="3-复用-Cookie-验证是否登录成功"><a href="#3-复用-Cookie-验证是否登录成功" class="headerlink" title="3. 复用 Cookie 验证是否登录成功"></a>3. 复用 Cookie 验证是否登录成功</h2><p>我们把处理好的 cookie 保存为 <code>cookie.json</code> ，放到工程 根目录 下，然后，修改我们在上一篇文章中的 <code>main.ts</code> 文件，使用 <code>await context.addCookies(cookies)</code> 把我们预先存储好的 cookie 文件加载上，然后访问一个只有在登录后才能访问的页面：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> &#123; chromium &#125; <span class="keyword">from</span> <span class="string">&#x27;playwright&#x27;</span>;</span><br><span class="line"><span class="keyword">import</span> &#123; readFile &#125; <span class="keyword">from</span> <span class="string">&#x27;fs/promises&#x27;</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">function</span> <span class="title function_">main</span>(<span class="params"></span>) &#123;</span><br><span class="line">    <span class="keyword">const</span> browser = <span class="keyword">await</span> chromium.<span class="title function_">launch</span>(&#123;</span><br><span class="line">        <span class="attr">headless</span>: <span class="literal">true</span></span><br><span class="line">    &#125;);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">const</span> context = <span class="keyword">await</span> browser.<span class="title function_">newContext</span>();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">const</span> cookies = <span class="title class_">JSON</span>.<span class="title function_">parse</span>(</span><br><span class="line">        <span class="keyword">await</span> <span class="title function_">readFile</span>(<span class="string">&#x27;cookie.json&#x27;</span>, <span class="string">&#x27;utf8&#x27;</span>)</span><br><span class="line">    );</span><br><span class="line"></span><br><span class="line">    <span class="keyword">await</span> context.<span class="title function_">addCookies</span>(cookies);</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">const</span> page = <span class="keyword">await</span> context.<span class="title function_">newPage</span>();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 打开登录页</span></span><br><span class="line">    <span class="keyword">await</span> page.<span class="title function_">goto</span>(<span class="string">&#x27;https://a/page/that/only/show/up/after/login&#x27;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// await page.waitForLoadState(&quot;networkidle&quot;);</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 等待目标内容加载完毕</span></span><br><span class="line">    <span class="keyword">await</span> page.<span class="title function_">waitForSelector</span>(<span class="string">&quot;.span_read&quot;</span>);</span><br><span class="line">    </span><br><span class="line">    <span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="keyword">await</span> page.<span class="title function_">content</span>());</span><br><span class="line"></span><br><span class="line">    <span class="keyword">await</span> browser.<span class="title function_">close</span>();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="title function_">main</span>().<span class="title function_">catch</span>(<span class="function"><span class="params">err</span> =&gt;</span> &#123;</span><br><span class="line">    <span class="variable language_">console</span>.<span class="title function_">error</span>(err);</span><br><span class="line">    process.<span class="title function_">exit</span>(<span class="number">1</span>);</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>注意，这里可能会遇到一个问题，那就是很多系统的页面并不是在请求 url 时就会加载的，而是在页面 load 完毕后，调用 js 发送 AJAX 请求后再渲染出来的，所以，如果只是单纯的使用 <code>page.goto(&#39;...&#39;)</code> 打开页面后就直接操纵页面的话，大概率是会失败的，如果把页面内容打印出来就会发现，HTML 内容与真实浏览器显示的相差很多。这时候，我们通常需要给页面加载留出一些等待时间，例如使用 <code>await page.waitForLoadState(&quot;networkidle&quot;)</code> ，但这个方法并不保险，很多时候在等待它延时结束后，目标内容可能还未渲染出来，所以，最保险的做法就是等待你需要操作的内容就绪，就如同上述代码所做的那样： <code>await page.waitForSelector(&quot;.span_read&quot;)</code> 。</p>
+<h2 id="4-选定操作目标，模拟点击操作"><a href="#4-选定操作目标，模拟点击操作" class="headerlink" title="4. 选定操作目标，模拟点击操作"></a>4. 选定操作目标，模拟点击操作</h2><p>当页面全部加载完毕后，就可以使用 Playwright 的 API 模拟用户操作了，这是 Playwright 功能最强大的地方，它对于页面的模拟操作简单而有效。首先，是要选定页面上的目标，在这一点，和几乎所有的页面 自动化测试 框架或爬虫工具一样，Playwright 也支持 CSS selector，这使得我们在选择操作目标时也变得极其容易，以下代码就展示了如何选择页面上所有 <code>class=&quot;span_read&quot;</code> 的元素：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> btns = page.<span class="title function_">locator</span>(<span class="string">&#x27;.span_read&#x27;</span>);</span><br></pre></td></tr></table></figure>
+
+<p>而以下代码则是选择第一个元素，然后模拟在它上面执行单击操作：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">await</span> btns.<span class="title function_">nth</span>(<span class="number">0</span>).<span class="title function_">click</span>();</span><br></pre></td></tr></table></figure>
+
+<h2 id="5-等待并确认点击是否已成功执行"><a href="#5-等待并确认点击是否已成功执行" class="headerlink" title="5. 等待并确认点击是否已成功执行"></a>5. 等待并确认点击是否已成功执行</h2><p>大多数情况下，在模拟点击之后，我们都需要等待并确认点击是否已成功执行，这么做有很现实的原因：</p>
+<ul>
+<li><p>脚本必须确保操作执行成功后才能进行下一步操作，否则页面会报错</p>
+</li>
+<li><p>下一步操作要在上一步执行成功后渲染出的 HTML 元素基础上执行</p>
+</li>
+</ul>
+<p>这里，我们列举两种判断上一个操作执行成功的方法。</p>
+<h3 id="5-1-根据-DOM-出现标志性元素判定执行成功"><a href="#5-1-根据-DOM-出现标志性元素判定执行成功" class="headerlink" title="5.1 根据 DOM 出现标志性元素判定执行成功"></a>5.1 根据 DOM 出现标志性元素判定执行成功</h3><p>假设我们点击了一个按钮，当它执行成功后，某个 DOM 元素里会填入 “完成” 字样，就像这样： 完成，这是后台执行完毕后在前台的反馈信息，它可以作为这个点击操作执行完毕的完美“标志”，如果我们要等待并确认点击是执行完毕，可以这样写：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">await</span> btn.<span class="title function_">click</span>();</span><br><span class="line"><span class="keyword">await</span> <span class="title function_">expect</span>(</span><br><span class="line">    page.<span class="title function_">locator</span>(<span class="string">&#x27;.done&#x27;</span>)</span><br><span class="line">).<span class="title function_">toHaveText</span>(<span class="string">&#x27;完成&#x27;</span>);</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-2-根据-DOM-标志性元素消失判定执行成功"><a href="#5-2-根据-DOM-标志性元素消失判定执行成功" class="headerlink" title="5.2 根据 DOM 标志性元素消失判定执行成功"></a>5.2 根据 DOM 标志性元素消失判定执行成功</h3><p>在另外一些场景里，当我们点击了一个按钮，在它执行成功后，某个 DOM 元素可能会被移除，这也是后台执行完毕后在前台的反馈信息，可以作为这个点击操作执行完毕的完美“标志”。如果我们要等待并确认点击操作执行完毕，可以这样写：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">await</span> btn.<span class="title function_">click</span>();</span><br><span class="line"><span class="comment">// 完成后会消失的元素</span></span><br><span class="line"><span class="keyword">const</span> flag = page.<span class="title function_">locator</span>(<span class="string">&#x27;.done&#x27;</span>);</span><br><span class="line"><span class="keyword">await</span> flag.<span class="title function_">waitFor</span>(&#123;</span><br><span class="line">    <span class="attr">state</span>: <span class="string">&#x27;detached&#x27;</span>,</span><br><span class="line">    <span class="attr">timeout</span>: <span class="number">30000</span></span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<h2 id="6-GitHub-Actions-工作流的注意事项"><a href="#6-GitHub-Actions-工作流的注意事项" class="headerlink" title="6. GitHub Actions 工作流的注意事项"></a>6. GitHub Actions 工作流的注意事项</h2><p>GitHub Actions 的工作流使用 yaml 文件描述，必须放置于工程根目录下的 <code>.github\workflows\</code> 文件夹下。代码提交后，GitHub 能自动识别出目录里的工作流描述文件，并能在 GitHub 项目页面的 Actions 标签中看到。不过，对于免费账号来说，GitHub Actions 工作流的延迟是很大的，很少能精准按照预定执行。晚几分钟甚至几十分钟都是常有的，在测试时需要等待足够长的时间。</p>
+<h2 id="7-小结"><a href="#7-小结" class="headerlink" title="7. 小结"></a>7. 小结</h2><p>这次的尝试比较简单，但 MVP 证明是可行的。不过，个人在开发脚本中有一个比较强烈的感受，那就是： <strong>Playwright 脚本的复用性一般都极差，因为它都是针对某一个特定页面编写的</strong> 。所以，我们也不打算给大家分享具体的脚本实现了，如果没有目标页面的结构做参照，解读脚本的操作无异于讲天书。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>使用 Playwright + GitHub Actions 完成一些页面自动化任务的初步探索(下)</p><p><a href="https://laurence.enlightgram.com/others/playwright-github-actions-2/">https://laurence.enlightgram.com/others/playwright-github-actions-2/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-07-20</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/GitHub/">GitHub</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/others/51cto-plagiarism/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">51CTO，一个抄袭剽窃的流氓网站！</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/others/playwright-github-actions-1/"><span class="level-item">使用 Playwright + GitHub Actions 完成一些页面自动化任务的初步探索(上)</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-通过认证的方案汇总"><span class="level-left"><span class="level-item">1. 通过认证的方案汇总</span></span></a></li><li><a class="level is-mobile" href="#2-导出-Cookie"><span class="level-left"><span class="level-item">2. 导出 Cookie</span></span></a></li><li><a class="level is-mobile" href="#3-复用-Cookie-验证是否登录成功"><span class="level-left"><span class="level-item">3. 复用 Cookie 验证是否登录成功</span></span></a></li><li><a class="level is-mobile" href="#4-选定操作目标，模拟点击操作"><span class="level-left"><span class="level-item">4. 选定操作目标，模拟点击操作</span></span></a></li><li><a class="level is-mobile" href="#5-等待并确认点击是否已成功执行"><span class="level-left"><span class="level-item">5. 等待并确认点击是否已成功执行</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#5-1-根据-DOM-出现标志性元素判定执行成功"><span class="level-left"><span class="level-item">5.1 根据 DOM 出现标志性元素判定执行成功</span></span></a></li><li><a class="level is-mobile" href="#5-2-根据-DOM-标志性元素消失判定执行成功"><span class="level-left"><span class="level-item">5.2 根据 DOM 标志性元素消失判定执行成功</span></span></a></li></ul></li><li><a class="level is-mobile" href="#6-GitHub-Actions-工作流的注意事项"><span class="level-left"><span class="level-item">6. GitHub Actions 工作流的注意事项</span></span></a></li><li><a class="level is-mobile" href="#7-小结"><span class="level-left"><span class="level-item">7. 小结</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

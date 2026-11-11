@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>GitHub 1.2 万星 Qt 项目 VNote 源码解读(七)：In-Place Preview 模式 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="VNote 支持 In-Place Preview 模式，可以翻译成：原地预览模式，就是在编辑窗口中，在图片、公式、图表、流程图代码的下方直接渲染出图形效果，目的应该是在纯编辑模式下也能及时看到需要效果，便于随时发现代码错误或调整内容。这个模式和 Typora 的即时渲染模式还不太一样，一个只它只渲染公式、图表、流程图这些需要在编辑过程中即时反馈效果的部分，另一点是它会同时显示代码和渲染效果，Ty"><meta property="og:type" content="article"><meta property="og:title" content="GitHub 1.2 万星 Qt 项目 VNote 源码解读(七)：In-Place Preview 模式"><meta property="og:url" content="https://laurence.enlightgram.com/qt/vnote-source-7-in-place-preview/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="VNote 支持 In-Place Preview 模式，可以翻译成：原地预览模式，就是在编辑窗口中，在图片、公式、图表、流程图代码的下方直接渲染出图形效果，目的应该是在纯编辑模式下也能及时看到需要效果，便于随时发现代码错误或调整内容。这个模式和 Typora 的即时渲染模式还不太一样，一个只它只渲染公式、图表、流程图这些需要在编辑过程中即时反馈效果的部分，另一点是它会同时显示代码和渲染效果，Ty"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/qt/vnote-source-7-in-place-preview/1.png"><meta property="article:published_time" content="2026-05-07T15:19:22.000Z"><meta property="article:modified_time" content="2026-11-06T07:30:18.610Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Markdown"><meta property="article:tag" content="Qt"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/qt/vnote-source-7-in-place-preview/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/qt/vnote-source-7-in-place-preview/"},"headline":"GitHub 1.2 万星 Qt 项目 VNote 源码解读(七)：In-Place Preview 模式","image":["https://laurence.enlightgram.com/images/qt/vnote-source-7-in-place-preview/1.png"],"datePublished":"2026-05-07T15:19:22.000Z","dateModified":"2026-11-06T07:30:18.610Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"VNote 支持 In-Place Preview 模式，可以翻译成：原地预览模式，就是在编辑窗口中，在图片、公式、图表、流程图代码的下方直接渲染出图形效果，目的应该是在纯编辑模式下也能及时看到需要效果，便于随时发现代码错误或调整内容。这个模式和 Typora 的即时渲染模式还不太一样，一个只它只渲染公式、图表、流程图这些需要在编辑过程中即时反馈效果的部分，另一点是它会同时显示代码和渲染效果，Ty"}</script><link rel="canonical" href="https://laurence.enlightgram.com/qt/vnote-source-7-in-place-preview/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">GitHub 1.2 万星 Qt 项目 VNote 源码解读(七)：In-Place Preview 模式</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item article-label">付费</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Qt/">Qt</a></span><span class="level-item">发表于：<time dateTime="2026-05-07T15:19:22.000Z" title="2026-05-07 08:19:22">2026-05-07</time></span><span class="level-item">阅读用时：12 分钟 (约 1842 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/qt/vnote-source-7-in-place-preview/1.png" alt="GitHub 1.2 万星 Qt 项目 VNote 源码解读(七)：In-Place Preview 模式" fetchpriority="high"></figure><div class="content"><div class="hbe hbe-container" id="hexo-blog-encrypt"
+     data-hbe-format="4"
+     data-wpm="密码错误, 请重新输入."
+     data-whm="密码错误, 请重新输入."
+     data-salt="9a40179c99b3e32db1fa5fb474c9ab6c1eb1fb382b3f597366c41a2f41d27337"
+     data-nonce="23abe148e122a67006cece18"
+     data-kdf-iterations="250000"
+     data-auto-save="true">
+  <script id="hbeData" type="hbeData">
+    08b077a960b05c156517bc16058ce5e2f1cfb48b22adce0da2a563104363bd9d357886c1274c85f1e76a722c2434c2ad21ff40945e287742f4ff4f27b02a9ce212fbada406494086d1429a141d9e275acdfe61f346e548f56d7b7f890fb2799510fb50cf7195f7acd4270a8c171f8696fc61a9da74ee5da5f6bd7e30bebd06b493af2ecceb33435716d83616779865e9d382b16f97822588c0c323d321fc0f4dac6a60d5eedb01ed927b05c9a2e013d0bc6a3fc4a656354a2e3ca195bc0494e5c4119645e04079a878a502bf174e81340def24eb3eb37a4298717cac543cf6f6911649031a8ab8010f55af65fa9a1c9155c897f2d4c7bcec3d043f7b4dc99306aa5127c664af3ba6540d6c24b40d5a447367da95e2cdb68af8e51c3a04d2886f1b313c7c325b5d1ede8694c11cd4672c06a00ad9e1175fafe71f6d97d7a8b831bfbfb4e7fa20748fb878f9aa71bb7e8e6151b9119054cca1b407a45ea5dd8c06cad18d0663720987c843b43a04ef66790a6accbe9bf9c42681044ee097eb322784132084e6e07f92df6c8035e6096594fb859815cbd4851c8959a3e771a228a9e44a7c325e3ff7764780a8c3f22536ce0a398965e85e7082d1e9f8848f0a4de654577f4b1393ba8f0d6e2f24667dc0fa4409eb817d7906691b2492dc2681833623f96005fc2fab6a8cb157740628212820110a649c1e02bf53b2d28c6e598dc3f1a63605f0ad4ca448d135b4b5921ec447ac68291ee8d2c7eb26f061ebd18bd127813048b22cbfdbda2238051b2647298cc42af1a8dfe71a5784363ef7af49fecbb6dec39834800f4c1f6c8bc8f2e23f215d87a3c4f5385fc59a738e1e602134db06310184c449cd86e99a71c49330919e202a61128e7e0c268cc33357001cba23f43b5064613f28c57ee120752e433f7337b0caadc7840b267ffc7996048bf558c80648803ddeac8f5e32164a21f649cc38e71c38702e8f0bf9406e14bf8bf5ad172586e8e45c4262a39c0d16c57de13d9d6c9ba72e7e5d569da9e4530b39b54575651dfb929131f5af8c2fe13d975124ca9a6c70e5419488b766ac4602f1c5adf9fe67c076033cafe58467bc57e2fa5584d2f03c8544f5b7625579fe751b7b525aa26b8aa7fda62ebb42ee98cb876fd31ef0ab287a3823481ac60c815f768d26ddddfd36b092390a9e46acb1e76cdeed6fe2edef72d42ace0dd41542e878b821e884ca076f778bcb12d509f960fe8f16bfbc9baaba37276b12def482ed848a71625ace6734064bd5eaa3b0d7c9a3c4617aea1efc4b7c23bdd29d7fa161be5acd55f280c7b3a6c47bb982dcab0831972dfa05f05c567875f839b892b2f4ad81c968177fd852dc505a300505725bd47c9eea2c872cd53d18cb3ca9bf64e7b8ce00130a173b2f581f04c4ba53255b200ee26740a684657544264ac12b02fa5917e3ba5f40b44a0b6f4eec8cce2f26a371aaf98167f81262ac42e52b8340917655a2c1c660e9a42a592e6049642482bbfd3ff8db4649ce52fb1d690d1152bd7d96edece0c3cbf3dae082df6b0edb9d102a679d1a68d84701da2a3e8699dc9075cf56755e6d9293f6ad63f791b88be079ffb15e670d712e492a4be526972208fdb4b2a0b3b9b67a1fee1d2368cfdd90eb9c31d83798d6651f5a9b1c5c52d370eff2841ce9b9d08497d7603e5ae74397852ba9fdd2563e6067058b7f47ec0c6015f943d4a1d55f5d1d0c6a2d08849d4775c0a549b5294debb0b580bd032b321587f6135f8d4e9582a3be0342e019a50c15ce5061c4599f76bb71910005f1cd8c430360de1acd2618b937df5ce110f8d5c59902b7532992ea01292a307840af7446616523c8f04bc683b39719062b72dc39e75a13e39bbb0fd181f878cf6c23c4bdff9afd3355fed968ff4d35dce02f1e1c9cace3a3eadbd8850a5c22f22294f1b5f47f266d3b89ec30c0c004e76d84bb96adf46e8b0e7f57881b96bf8be82af15cf345cd2ec215dbc48408a870c67786fe80949b655e8fcfac76d211f8ea0f8240f81062b199003abe0e552b63f1235c7421ad31fb34a594cce7ef6480831031023eaddb7d1f70374cf70660d5bccd3e56fd25dd7061bfb42aac1cfd7c2aa8633372bd9cd08bee5498a498061a509eae2eeba8d9cc8ea2f704cb50778124bacec7d5a564670a0667e9f51b1f199ed62bfaf800f5404f47eb1211b545a4fb3329769abae8b8a91855412dfc0290db4e18a3408beca7cc1011aa3413206e78dcf19a9e958d6837148de097c0312eb46cf05befef7ee366b4a1bb4ea9d0106507c370a93cf5114609595d523c9d6b9b4fb58553605997dfe740401fa824a90606c696ba1d933ebbc54c5cc64ddcabed1065978abeb2a0b94a70392984a9f1d830991c5fedaf195221481347947ecd4509cb6351d22f2f6b270cec8c6957892460c63883dba2b1cbcd7396952d457b42f2217225e9443a4ccb50fc0a3c56ccb9ffb3849792f994d6d6fb6920243ff7d5bba3701029bdf64df7bbb778ae0152560126a1564644cd6c1c6b7941f183eb0238b79d2c51a6c2b56ab84112c770374a27c2c857067f08efd65359c80233cd39e4d6dbce033cf6c592f249e64f65083225bb28aca09bd86941ddd99c910346a274c60a4376d5c9c3ca396002440206e86857eb5f937df5729cb8604ed1fd8643a7123c1aa625352fd731c6b316169c102a120f43bbb9e9432fd6ff7688c45466102ba9de80ddb9fd45a78cd14ea11e034db321f836873c2cbc2f28d5fc2f4c4af268bab13e75119ed6c80b8b3df5c6f76f45110996dc0dbb9203a6e9f0f7dc4a224401c6dfd39f29d1e0fdd07a2b5e9b88330452bf2f70264917ee13595acc12e6a273ea47516c89bfadacd12d1d208fab03bd797e96c46605bb9d3d2d49f23a70a32b5917766944b084d643f976a0100d92859827ae78544bea44a6ef371904157e6d75aa19d5c824ab34921a99026d8ce9879ce314c9aee105c01b14eef4c1fa08dd034049ba201a03320c8ac52de5e421ccbba42e06d2318c820c039547d5ae44cb92f45b81fe70eca9b21a13bc3956fe9d13e5f5d47752485c812b02fb49b5044cb3fdba002e25d4c0368fe5215a6c6aa3ae6b531b41fa64f590adbe0ebbdb805efb442070ee2f4f84264524bbab7dbbd87edbb29d5689c5d24aeb903a72d2527d75c3feadbadcf6ec4eca805edc43d4f85a9a382dc98ba9038811c8cf38d21e5fe8f91f73558889a1b9c91fa83bf925c2cec47d72656f166cf1e99dc96fb926db7a02774c799357e7a283e864f01bb32556db59f4143334cc4940ed21063be20780cbced89467ee093ab22490c49a89806aa538e7acf0d8de77a15ab24a6309fe3454b681f6fa0762d840fc3fff7bce3e11f9ef787d92cfd609b65455fdb356e75f8fbab2019dcc8c57587f8663135465dbaa69228764b886062f284567d1772e55d2a4b10371072fc4958a6442d5a3d604b97bc29c9385bf75b83065b53d6429217972e89536ac864d9e4a0db6f88d1b692ea83ece6c4e301c05e8787065ffbabb399b207d5e97559c6467483d4b21e327593949aecd75f22803e9faa6a82fecfe3a69de9cdfb8d1574af642cbbdc2a0dbed005d5ce55c24f4ee78cfae6827cc4f6465f6a21664b04b2fd0bb7a6c2b7c91253c6be039b85b4fdb20b25c31ca8dd8e96bed8d4fc362663ca732dd01bbf8e0f94ae567781de4f43691a6238cbca5a6680c6325cc776fc426154a7befdb9abca9f2243bfd223e3d5748c15aabd378603b1dfcad90bbbc44af154b980604c201dc857abf8c466a96fad0d9f191894ca8ac571f3a159231c6dc94678506d813ba4f5973fc37853575aea0553820ed4594ff8a74459b16f81d97a1cdd2aa66687427c0df02d47926917c4c0f7378839c62fbf09999bdc02523c3b72021bd659a8e64e6acc9291c40cbb96be64a184f04def6f39139fcead954c4d96953e9efae4df2168f310cceb92a911cac9ba32a674deed2aeab6d1f7bc9a14f770031954ff85555d872be8d5e79a149f585253501431e3cd7502cf0d57bde54a2acaf9fcdc8cbb17a1c2268f5b44822a8fd32761bd03a3f21f68693b274ddab55adf51b1b35319b0f197854750da748cec4e07a6c32a5b2e9d584a1f5a97661541e3a729d1a71a12da5ddae276c1e0cacd7ab81cd1f82d8fc0662d6b4b2d5097a0ec759d7fd5de3c0d332df0eed74b677482256e89d649e32c694bd87e573caf652173827e379accd3c7be4a27e82724fc44e56023238464c521da55aa92c325bbfb5361ffe6c8ec744a62a36ac0df4ed32c322b312539216bea95604a22d682a81aa03fba3f18a3a68bfe83513afabcce1ad903683e7d041edd94835c05c50c47cf80ce405021aafa089d5c7ccfa7c81bda7f49d84069026960c5d49a8ca36e0275d48843486c9c319096b3da7333182d025de06e97cabf1225d1da904eb5a449f4a59c816370e60a993ed935d6bf781a33dea0ca3aa14a074ec4d4917f80036500a5bc866f97606e8bd77dbfb599ac7aa130f602d7e1cfb82a2c7ce29d020385afe72c5c63ee8d1752fddbae75f6d1099c05ad0fd6cf168ccd87f5b25c60fcc5ffa4b2c21928f84beafdbd0d4688d5b6294ca34f42d3e458d9ee693044fca2dff20eb9f4c0e06c16c2d4fcf4fc44c959f56049b5620165b15983bdc7f05e759e3b1053fb832656d402da72770d721ca8fe3f4b4d8841a082da4083e927e23b1aba586aa29f88c40b02f3f4d5f0067d72e8e4e1526eb462649299b4aac7063d9db028df04e4d54ff5541f9db7289430457b14993004b1fc2d0d8b53f52b1a4b10563b77cef05db801c4cc431b20ab439ac7c6e1763bbb1830e44cbef2a2e0089f23d65ba50c11eaa9611268e11cdc984383afb3268ab10f05ec1b3d1b4304b78de5a314aef929524467423a5f4cc9f3bb7939b01c7ab334e65a28d99fe76a0d6798e90ef995836a3b894c3f32c0ad8a3f964b785db4fa05ee7e00182b8ea8f266d00602a66f6323e6bf3ca465946256e8089d66d86368e18ccfe3409051c0cad7a0d71ae565d8dfd5619bad6fe31250df8dfb8fbc404247131eae7a48fd280ea551abbbeab785a8bbbc6b401ba08cd1fe82c937ed8ecfecdcfcf5295665280da3d06c45021fa82c77af62ce0099af44d48c1388ad95697a5ff62db11d01cff3af2b47b91e9f4a36e616116b43c65cb6a46a4c647524e89032af85b9b63d7a744a3d7efbda0b106f60b2c98e48a9a017899031b983f8d6e20ad79ecaa7f4c7cd9c688deea78a777db552a2db4e96a3924b95cdf94cb98e969d5eff1061c5145d3065888bfb46953610173918e14d429cd8c1ebf9f280af4c15d9e671bb497825155f04e4adad21daa8ead0e1fc7e46e68971a235b39d5b6ddb03755b67b1221de34871ceaee3d4b44a6a03a7944509629d9c92bb63cafa9e6b2a39b8cdfb9e06fcfb4447bafd02a0f39ba5390079d3f77cc1a4bf367db181e64a470fea60c2ffd8f46ac8096186ef3aba9db8ca2f40f1020f3e9d865b7d45070d7b320c6d194bfde70f5e3172fc58e5ef92de645823a0c671a5a0763208f7f15e91214b245d1b5792a9fecec528ba3b478e5109e3dfb8ba854e5b8cb617e7a65eb33cd9d5cf40c6ad23caceb8b91655016b06264aa21964cbdf515bce59e1a44fd2505bfb50c0224c6c533b823fcf5e1ff82251d1e4323e8d2b7d71b10250cf4ca67148122e846e89c0da58234626ba964e34fbedce91022156e1a204a0057635fad33038b4b75cb0daa5737519d7310c91baf120fcb6c92875712521b38c4a4028ebfd5966cdfb92095ba3080ec46bea516ada7d489557f5e63467ae0e0220b840ade164070204256eb58b76e260bc397ea87999dcdfeb9c57af1fde1593f213c174a07a26d816ed336e21828cfb0d4935dbdfb0b912f8a49d0ac943446f1d1849e674942b71c53d80aff7106a2278ff54023e798e5eec0e8803733b3172a44537d7243088cee476ed62c084a188ad71cebb963ce6562cd04226cfb035e0a92ea96896e4d7558d9b06f86bf6a9bed8ad8d5a31e77301a9a819b4e83d6fa7f642895201d4d2d2d10a4d39b40c25d7cb51d4c6fa4f94a43bfc7111310b5c48cfbf764c694c01d89a82e8f9d178c648a8da6224fc17cc7be034a016a52c3bcaae6968cae1ea019cb452bfdddb520a960f2c29f25a61939d55d87300ab433dd49c3eb1cce5b24548a57881d1a3d923663f7052ca0509be68521ed90e63c93ad70d9be4b31c1b1694b5af4fd5656c857873fdbedbf6fc5a4d7ba8a9b8cc77ce30def47e94b6dfab1c73d1149f4bae6bf34e384bbafe4ce947dd459ded326678ecbbcf5e038784b24d5cf9dc1cc4601fef21b84313d253699ca041463a474b603362a6a22c968632157f084ca14ffbc3ce16540f7b80cf6075b23617f64a938bb2385d78c0ac8cf67d5edf897403b473e6e4301be945f1f5b9089130f0061da86f7f720a26da1c528871e990493b9bdbc5a0f22504e9e002104ba493d463d0ceba89ff2e47801a651546bb171f289f37dbe4fa595e7dd45384de689dc8b8f99c2a54981ffbee83c72dcff1bd83aa4458ac609504cc698cb1688e4be2716e75e515db96337ea02268ccc4be20fe4abc7e2eaf41df7b9ddd83b23ecb5b77fba140e0a85bebd38770351354e8436af07ef6879d01eadc71c1b15ca1fbac50bbcc674ece44ee0c5b4a91f637f4920ee449f8b704b8cff365c8c5f67c27213435de0960d2baba436163cbc229712792ca5a7aaf5f70d755757ad73c073959a8146bca67b682bf7bd57f20d2437929280ba6f98df174ef709bb71adb914fbd7f3bf51c6b418c26e84e66366d8447f8d2b8141e33e283309595f7a0231b26fd579fb9b08c16809ee2875c77e59628c0e74a58fb5e3a230cd7a172357e8accc187c20fc59eac022b9ad97bae02242def11e3fd9290e2bf162388d3ddedbd91dd5f5e737cd70daaa242c8a23ff4a40f55b855beff5853283b3570541f666dbfaaee7aef874b4ce3cbc6969279bacfa126252b0861eabfac2d84ee0010b3d98c638eb45a29e83f78523490631deeb9b2e539b8fca782462ba7bef4d84a9cd84ba4f8acc10ef7297319065f796c40abd22afa5464574c0b2d381fe00f819902e91e9ed6dffa7bea2749cb9b848dfde5a8d8bf6334cd4e67f76880bfa95f4dc9de84897ae463fb355a30fc138572703862ca5e73ae57dd3cff9d3d59287ee4f491e78a59f42cc1d6595c294e4e2c64ae912ea88e4209d4e6f0540a88e8c3fcbab64a1a73efb487890322ce1a05496528fcc83a1d32b8674db6cfaa6028347089b98ab7e1920a8c21160f5486d2033d7108f626fca0bbda7aaa398f6a192acb59a33b4941859b312785c740aa5dc8c71f794e66496c6651040ba47fc079361814af6ad13586557f2344a44aa5fac983e8530e39f2fb7203aeb13419475021766fff077437b16a5c7d31c5fd1bbdd227b8e288737b7feb2804ce1ec2409998ab3208b5d555d7ddbde22f71e11021d2b82eea06683131dc835f6c3e8f3096ca2a51caf7db05c8190d19ad4cea27e7a9bda9e16cdc1ff0f52da77f4dc7fb44470902cc58a7ef44a93f043cd08a606e87370f5dacf0ef36d15492d8d6407e7e236bb1562c5ba2d42587002ed0370288a79e009b100f4c06fb8332e2a4534e1c22f6970aa77b8b0a7e557769b629cd830601ecda7bf177d029b98c920c79d0060e75c64bc57991e820ae57f12fce947104af2fca7d29124f9c2157df1301508af70b17645e5a197f0f9968f23086d5c3b8373b7e5a1a31ae9f525842b28845401bcede9ddc0fb573ad2df4b188f708751f039a5daebbb07a1b62f7cfd1249273de3199baa2e78ac1e38ef388a3f35467186f66f907f0a084a65a93198bab7938cb3bf15b523ffd6b36b541ffc71b2e320857218dd844906933022463f9fcbece5fe52f8632c2aefa5fbee18c9f6ad82dde66ec3dbe5abfe0e84275516c6924aa7f33de5cdcd56996b40afc3178412f45721a05d0a0d097ad25ef57c259a955cafc8e7e8adf082185b13e165f4c2d276fa09a738c2c0864ddf2faa88b9fc4947820985fbaf3ed64aaccbf08556cc4fcf21d05fb58fa8df44a8dac93131a1132b0d0dfca194521cfad03cca5d2652c7ab5146a74701f1b6d16ffb087c2b133dce1fe889e28e3b3f19b1be97846610e23aae0ea68f3c713678ba4afc783bcea9d5ceae9601ece60eba22a04a138a96e9b2d9c3eab105a4c732433100c34e217918e990fc49aa90ba8ff074258219e4ad369f269925ed6ce486a8d84d262241e835087031dac0c80f5e433a5852974c39b93453ea3ff1388caa15bab48eadb93e1bae8c4c71be681387babc5ef197b8c8c3bb59c6f6f07dcf8bc6b82f73781dd28fb001cdcb7210442984aab31993e480c71cd6a09e64eb50f1ba17df3090e6c86f0d2c3ee3a2eaab83466383033fbf025155ecaaf7347db52dcf6253ffc88cf4b2a4c5ea79b2a45c241182a4770fc5e50ceb44e0122a4007546d5efb6f9884026ac843011c0b8ac3eb80e7d035f82cbd411347f939176efcc7d6f5e1b562a873a4a4e5b33b5f221bcbd8d155aac0507c4b113c1a19a12e66fba897cd0273ec18298cc16b135264341345fa069b1a689ad076eafe424691e5c28b91ae6b0fcd84737d71b02107b4b04c48af030f3bef804f3b516597cd8028d79e77dda1aed49cc000516c667b7252051536dabbba61f20b00f5fd129c58d789bbd969e53f808e98f5bed2cc8d84d9cf58c404ad5a11dc43233cc35c7362566bcb3600be89a4419beb2bcb3167dfe717f7129279a49d99b8f0286b404a5ca12664cf3774dd4c830461a040c2a8aaa7b8765a0e483e337ab4e39a8bf194724371a5dfa39c502ce82c9a5fb8971a6f0d04405215ba6dabc2a8455b54382ee6f0d7e7d383da9475237ceb4a455a0ac5a4200ebbe7400c216110b4e29e2a3dca3327ee2864374861646992410563f83a7dd83eda5f37a2c34e128ecd737064587dfcd6d61454fec1f6adbb988846c7158f00010b3ee6540393094f3fca6fc1079773765aad5539ec54f66aced337c466053533a54006675ed64fc1474a9b096be828b83d06a30027b5c7973b99f3f6d23f7fe98894bda47089a0a6a16add3cc26df02a0d38ae7cbeac28353a6f8bec1143b1ee3db894ee8950c75f9669d136a577a11df57f8f09cd9d6d39da8df4d375d1b9041e60dedd75cf6d19247415714bb61b190ec2640dc76cb426b10aae22111009fe2530da3a84136bb5acb69dc60d594a0aa87e5de125d2d63b8510579d510aa8ebd1ef979bf46bdd1ce4d7db0df498630d8f2aa31de17759edde7a077329cfbf038d53688b2f32dd0893b97ef4166150215afbcd65498a50ecba795e8404b385729aa33d7138327fe7c46a37ca242952e017b221f72f0616635b763630d78ae089942f7b1b1f562f5c56572441c53cb98bcdea80e9f2c4e1b1ea1b537a9a71795519795251badb29d77bb0e5b9b0dfb37c00921e961bcd90660f4bbec5f01ffeb3859928170dc7bd55298541601644a2aa2c9be6bddcbf415837dd784de60ff56615af5188519461d78a02ba7263005d60f45fa70fdeef8e68907e5d46fc3d98b9dc03cfadbe12571d83afb335a0af0ecc231d40b0b541a24af9ebfcbb743cfa04ab6d3dd5b394b5d0737d033b6f6fa7f570aa757202c6bd123bd8deb583976e818358a525aaa53296a94881edce127f5fc8d1252c7644dbc34f70688af12fecc8e0253689ca43bce435ed4f76e8873e710879b5fc18c6693967ea7c4e11403ff1f9c43cd2e889f171896b943a6a6dc4a43a3b73400327e4eae76607807b3039d1c62e3e7adcf87924392d060e0c10cf1036ed20f1455373351da31de8ab18586a1484478ff892255cefe7118024822f15f66e667908526df64a76ad9b0652b571fa5b61645a9f30d58b49cd2a2d7864258ed6157402ded11bf43213ce60fe2242e9ff05e8c59999d038f87906480d81318389c979fe286a1f0340f6bc83dd38b5b804a217b19f713491f542475040b379f89d2d0a7fce693f52a879dc1e0e6df27edf4e3efd1829383a23a357d279f284a0ba71e631926fbd49f96da812e3542678ecc4b4f26b495694feafc7c97dd9d4f38623b41c94e241fa0f3feae99c9b11b22b20beadfa245537646c0f8952efb6c74b23bcba0fbafd76d5c10d5cb6e012ecc0f693dd7f9be0d2b8f88a559de4608b79c9c38cbef897ac393ebacc4671a1b2edc6404f7acbc87486172124adff3716ffb8cdbc9522feefb4ed7531cd63075e32260b27a309dddc653c0165ecc7f178f6a0609b1b2bd874a1c2a6ddba2ec9f634dd1b7378538cde6898c4e423ec1e8ce3c9681c384516e56436568198ee77c59fb3fd87e059929bcf649da9e13c0cc5aac9af05bdbc3b5a53a9732a86e424e10b313cbcdb2bd5087179701844058c94c3db81a96c2b45bfe77cbb921912e3c1e1080914db37066b7a9bd02eaf8a3cf9a15d911faa7054d6ee4107bfd35fb15d35a7c97e59fadcbbb3065edb75e34d400a6d46acb3416a61547c49d76f72e079c6d9775a68cbc61545273993c1cb9d5082b6f65bca68404e1415dea1cda08dfa6386634b6cd04aba6134598dc0a015e38a84944da9ca0b78616220b1a65b48cb86ad734a4c15ac03275db74f5b50becc2f71151150b781ed33cbaaa62e10f2c266b4d29e9e237e4255b60eacc20b9cd9cf1c2e9b16e7e6cc8f65a2ef32f95ba69bf10a6e46efb76525225779a820336461d11d501bb58ea319fef54ad4088e7503eb0cecd428dccd161bb493977790dee6a9baa89a5a06c9cf539f827d81e67bd3e1e62b6449e2b584d6414931f556a2a87d2b8fddb3cd2fd3bdab696ff00f7808d9821202830918f9fad9289132aadc14761ae7eac4b6767410c2dcd13abf11d0df15fa68af5b0a7954f738a7b33e6dca846afc337915d47c343fff423782a106fdbb5f174583b30f0a45d88b69bad0a0eb866758c26a3db428c7f497357118ba007ce7c039fc4afcc039c7dcf952a28fef366186ee6926d9cc329c469c091581a55b0e912715ac214c744b40fc01e30a0457cd712325d07e696fd0116e0c0018edc8ff070e6899874bf367a48ccb3f713cb46c8b24a1f76e93b49a593a83c7d37ff5610a6394b13d3f5a9a1b8f49b7535b5e957f41ad62ca01d15e1f16df316df17b771139b328a7654107beee6e7c33685c354a7508c04d71750b18b11177fff8290e0f2fdad0f2d0892343ccb169f73c3a434334712b6c9a5294dd7976499a7f3df263d49d102abb462052d110387394ae96fb1343db40395b3badfd6eae1c0a5a08d2a334d834ad39ce2f72811d5011a15319ba6cf3af34abc3d8f94253f12f6c024faa871b8c06410f22f15534ef0cc83df61710519715e05305fb1e4f1a61da933809e0e3e6e14daf305818aadb3329595c3c7d31b66053da9690ebbc01eb0eb606327c7faa04ce8179284ffa8f92194f22d7254722dfcb456749e17347ee2c0917f1fe37360786445b26722377f674a3381463b780044736b96085d5eb2c259070031b64b3e7d0408e36fbcc3d9b4b062e93411af10d458dce4c0d4855854c43107ec262b4d0b071882dc0b3230523d0d0fdd0d7c053a927e9ca17f5ed8a28d1de602666f45c9808f9334aabf973e6d0f90f48f76992d8aa48aaebdb31dd98f1abb2389dff8cff2f4e81b1dfcb35f20b73d75c3e40d78e94cc5c24971ab42b160403c0b37f671942ea7eefbf4ec5b51a454ebb4cdd9a605ccab5474cf2177046a2d875e3856259ad5bddf287e4c9f5e6a304a8eb17257afd8d0956fc95e2d56d27c8490ae8604a0da903742f342ab0faca169327b1920b8e22a91765c9a936981413bc78de5f941be5848bf6b795b846eb7fb49f8cfa35c3daeb8a163d94d49f4375aaf9193a759283b0b570a7a6b00d461849522984992fd301d4dff9a21dc846202cb36549ef78e504e2c7d5f1e5415064fd843d1b827d7f5ca5d22e52789155cf048fc11f00de681e34c3f923fd91e1c912f7c75462fae56046242f71bcd817a2af32c023af203b9f09058f5da76e501f3b6f1e70f3333c2f4171bc33aef08a8f48050046c9bf532f906c5f049cb375c373cb0858bc14310bd0e00445dab5f012362498e33f97d4b283410adfe63decc809ad4900b58180aabf6aea89ce95356a977e1dd9d488588c45b4f342f32f80bd5ac690a498a7b83d2db0d16eb848f0b4ca243dd9f599cd350393398d65aad935c1d082c14d0182cdae56dd718f2f4cc9bce058b56b881ed7b327817c89fceee20c4fda5a3e092b2dd19f9f5f8c4b0019b320b46fc408ad3e4897c92960cd41b2ad14776814d1e7ad0bb930a904035c6ac5fecebf5ce73d9ea61be1d48d1d3acff28e4c3dc6cbcbf18d8d53d4f934595327d6f88177d048a6c0db1adef549e161c4f37e1648a3702813e0508066a974e0fed96649445faf325b13b0ffb68369798cdf657bb83d7a90a8cc0dba8ef1e31a5f3bb91b8ca14f682c79e78ec50ef1406b753818274742191017472f2f2b668fb6736439a55d880eb2807678bdf3568eebd63b692a87301d50e9fee86dfa5c452203706f7a08f8c07f8e878acb198e91bc4db7ddf9826517484f6f6516b54d733e97f5b061c5ee9f2ceaaa3cd73a8c6ab3a5aa0cc838b3016dc7c41a30eb7d7bfd1015880df690cc90b34c196897cf1ba9f4c4b270901984c4f66943f47c0fe81905ab66d7030c60989dac9d0a15b69c236931e438ad69c893cf82df6db978ef725ead81a624d5ae25491caa0617cc326672c0485fa6a446d581603b9038879918e62bdae02a08d04d5b91e6df97c1a02a581c2a0d3cd292c4afefe838564738c0e8a4f9ef30dfbc48f5364cc59ad1320f37392984902e22aa55d68fadebc26a5781e152083b4f490e2dd9f4d74aad2eb4f3c889db34a47b0819caf58e71d2ca75155c01b43de1de180635d25e87f16400ca8c442d0f6be5b64aa80b6683577093b2fe316ab5451cae805cc1545b0fc5da8db069bcc65fdd41801649deffec3e840658236182f3fc8599ee8e37f4230c3314738a7b1d961a7cc2e49511f9457c691b580280057a294c19f68df49e50afc6076255f2747e4ef217c1a4a0a666c9d0ffdd91ad1077b9f21dfb4943a400051340360c21f370b4b7a9cb4ad72013d40aa110e0ebcc45dfe1417927a0cb4b6a1fedd9e5142ff418be06b5203da326446eadf2bf03458b2c929c64e58d54fe89affdfd08583a112a27265a595c13d55f3869572dd107fca95286b8bfb25220fc548306a2733f52259082a98594b1eca6ed69a04c63378e883286e2bd53e2ea4a406c4017488791f88e868e3ef472b00e695ee6a96b6ee4dd18c663d80a53634346d6c5cc38bce89d74e831b4a5ec45d9105c0b2b2fac32cea1603af1b8b3a555f31d136ac0b58b37c0dad7f6ea0c5bfa887d4565a322e2d79ca6126b2ff74357c34f4a5eb93c8e3cb6e36787d0c7a6a3bbebc780a9d44368b791a116929a973ee56dc8a6b1067aefd1827b897b0db2255d4e0e06955c81b86dbf4150e97418b6f1db4e56a675c26b1c9055d4b61849c85fd1009189c738a64cac356c3f85ea98e8540830155fe539d1340203339d3cc9ff6d2cc3627ba861da8d5899b76334f34759401ddfd77abfd2f68997d2b16fb9719125b3010c9d54f10dc34b4f73f639db351c44fca0348ab1817a3fee104004afaabb7ffa0e713a2cb8b50c09769801d5e52b2a933b7318cbeaed74978cfade0185147652589ac5ed3527c6ee395dc367d2e9804c3dade163c37641214d79914df2b23af467985f757a9e0cb1104589a2622edde1bd72dbb3e99319c77503cd3958d66227061b54016af1ed77eea941092d630fa772e3518831822848500b703d90c59fc7674dbcf68aadd99c0b86a1f16af15cb493b2737bfe3b9d92fa72a78c7e18d91ff687d3b531ffc3f61d395620a26666ed8a41d96c386bfe29f557af1a76057e2ae65201eb0e1528433aa197cd2057b117756078fa9f0a0c48eaf0613eaee54fb046f4d3d6f0659f938969a3a93e6e20d2e6c107fbf5c66ab3ffcf676fa1ef9e553c54072c79f09f7ff8357f3ebbd8da3f6dd5be2c600737ef89f1d7719781579bdf57b4f83514ba7bacb03d145f7f8bf4d66ea5694f0341ca85ba65d0df21e6b379d421e425cd78551830bd0cfa1d467ee97c92282bae397a4458f16caa7c59193c87e5ce19cbf9a684f2a0f33b78c3933b830e04b24c4e682fe5d2d6f0ecec1bff95ba41d0724bf263c28dab9e79886c135390fd57c37b8282490dc85c620ba7d9e163496c5ed57a559f525107236d9eafd5987c63f63fb43be16e7a0914a608e338fd39b900c7a0ba2d5f391d3b0de9e33f75bea0c9bcc71bc7716689ec982663a1773a6288d4e05447319f01b196b76e6722dfd5ea113ae92ca5e8f17faaf070c665cb2e78813c454c217b60c60647edc89a5430760e17aa86ce5931166a99460a83e5da7e404a597c0753a77e27f3396a08d6b54ed7a2b7e8169e
+  </script>
+  <div class="hbe-preview"><p>VNote 支持 <code>In-Place Preview</code> 模式，可以翻译成：原地预览模式，就是在编辑窗口中，在图片、公式、图表、流程图代码的下方直接渲染出图形效果，目的应该是在纯编辑模式下也能及时看到需要效果，便于随时发现代码错误或调整内容。这个模式和 Typora 的即时渲染模式还不太一样，一个只它只渲染公式、图表、流程图这些需要在编辑过程中即时反馈效果的部分，另一点是它会同时显示代码和渲染效果，Typora 的即时渲染是一边编辑一边就渲染了，不会展示原生文本。</p>
+<p>此外，这将是本系列的最后一篇文章，本文也没有把 In-Place Preview 模式介绍完。回看这个 基于 Qt 开发的 Markdown 编辑器 ，尽管经过多年的积累，它的功能已非常丰富，但难掩它在技术上的一种“陈旧”感，这种感觉主要来自于 C++，当我们去看一些使用新型语言（如 Rust）实现的同类型工具时，这种感觉尤为强烈。此外，关于 VNote 这个项目本身而言，有不少地方的设计都有改进的空间。当我最初发现它使用全量更新的方式去渲染文本时，老实说，和我的期望是有落差的。最后，还是希望这个软件能一直走下去。</p>
+<h2 id="1-实现原理"><a href="#1-实现原理" class="headerlink" title="1. 实现原理"></a>1. 实现原理</h2><p>VNote 的 In-Place Preview 模式是一个看似“神奇”，实则“直白”，执行链路“复杂”的过程：</p>
+<ul>
+<li><p>看似“神奇”：不同于 MarkdownViewer（一个 QWebEngine）可以自已渲染各种图表和公式，MarkdownEditor 作为一个 editor 是没有渲染能力的，但它确实能呈现图表和公式，这是为什么说它“神奇”；</p>
+</li>
+<li><p>实则“直白”：MarkdownEditor 呈现图表和公式的方法其实是把它们的原始 Markdown 文本传送到了 MarkdownViewer 对应的前端 Js 环境进行渲染的，然后把渲染出的图片数据 set 回 adapter，后端就可以拿到渲染后的纯图片数据了，然后 MarkdownEditor 实际嵌入的是这个从前台获取的静态图片；</p>
+</li>
+<li><p>执行链路“复杂”：完成上述过程要跨越前后台多个 C++、Js 类，使用了多次信号发射和响应，整个执行链路冗长且极其隐匿（不直观）（这会部分实现有待改进）</p>
+</li>
+</ul>
+</div><div class="hbe-preview-end"><span>试读结束</span></div><div class="hbe hbe-content">
+    <form id="hbeForm" class="hbe hbe-form">
+      <div class="hbe hbe-input hbe-input-default">
+      <div class="hbe-qrcode-field"><img class="hbe-qrcode not-gallery-item" src="&#x2F;images&#x2F;profile&#x2F;wechat-qrcode.jpg" alt="QR code"><input class="hbe hbe-input-field hbe-input-field-default" type="password" id="hbePass" placeholder="在此输入文章密码..."></div>
+      <label class="hbe hbe-input-label hbe-input-label-default" for="hbePass">
+        <span class="hbe hbe-input-label-content hbe-input-label-content-default">本文为付费阅读内容，扫描下方二维码，关注作者微信公众号：“十万公里通票”，搜索文章《2026年度付费文章》，付费后可在文章中获得解锁密码。</span>
+      </label>
+    </div>
+      <button class="hbe hbe-button button is-small is-size-7" type="submit">解锁全文</button>
+      <div class="hbe hbe-error" role="alert" aria-live="polite"></div>
+    </form>
+  </div>
+</div>
+<script data-pjax>(function(){var f=document.getElementById("hbePass");if(f){var focus=f.focus;f.focus=function(){focus.call(f,{preventScroll:true});};}}());</script><script data-pjax>(function(){if(window.__hbeToc){return;}window.__hbeToc=true;window.addEventListener("hexo-blog-decrypt",function(){if(!document.querySelector("#toc .menu")){return;}document.querySelectorAll("#toc .menu").forEach(function(m){var c=m.cloneNode(true);c.querySelectorAll("a[data-href]").forEach(function(a){a.setAttribute("href",a.getAttribute("data-href"));a.removeAttribute("data-href");});m.replaceWith(c);});var s=document.createElement("script");s.src="/js/toc.js";document.body.appendChild(s);});}());</script><script data-pjax src="/lib/hbe.a3b9f59caa.js"></script><link href="/css/hbe.style.css" rel="stylesheet" type="text/css"><span hidden data-yearly-password="2026"></span><script data-pjax src="&#x2F;js&#x2F;yearly_password.js"></script></div><div class="article-licensing box"><div class="licensing-title"><p>GitHub 1.2 万星 Qt 项目 VNote 源码解读(七)：In-Place Preview 模式</p><p><a href="https://laurence.enlightgram.com/qt/vnote-source-7-in-place-preview/">https://laurence.enlightgram.com/qt/vnote-source-7-in-place-preview/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-05-07</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Markdown/">Markdown</a><a class="link-muted mr-2" rel="tag" href="/tags/Qt/">Qt</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/rust/rust-enum/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Rust 语言特性：枚举</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/cpp/cpp-enum-as-index/"><span class="level-item">C++ 编程技巧：使用 Enum 作为数组 / 容器索引</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-实现原理"><span class="level-left"><span class="level-item">1. 实现原理</span></span></a></li><li><a class="level is-mobile" href="#2-开关逻辑"><span class="level-left"><span class="level-item">2. 开关逻辑</span></span></a></li><li><a class="level is-mobile" href="#3-起点与分支"><span class="level-left"><span class="level-item">3. 起点与分支</span></span></a></li><li><a class="level is-mobile" href="#4-生成-CodeBlock-预览的流程"><span class="level-left"><span class="level-item">4. 生成 CodeBlock 预览的流程</span></span></a></li><li><a class="level is-mobile" href="#5-生成-Math-预览的流程"><span class="level-left"><span class="level-item">5. 生成 Math 预览的流程</span></span></a></li><li><a class="level is-mobile" href="#6-生成-ImageLink-预览的流程"><span class="level-left"><span class="level-item">6. 生成 ImageLink 预览的流程</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

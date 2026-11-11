@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>CDC 数据实时同步入湖的技术、架构和方案汇总 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="近期，对 “实时摄取 CDC 数据同步到数据湖” 这一技术主题作了一系列深入的研究和验证，目前这部分工作已经告一段落，本文把截止目前（2024年5月）的研究结果和重要结论做一下梳理和汇总。为了能给出针对性的技术方案，我们收敛了一下话题，对一些技术选型做了限制，在数据库这一侧，主要以 MySQL 作为示例进行介绍和演示（理论上，PG 等其他主流数据库均可行），在数据湖这一侧，我们重点关注的是 Apa"><meta property="og:type" content="article"><meta property="og:title" content="CDC 数据实时同步入湖的技术、架构和方案汇总"><meta property="og:url" content="https://laurence.enlightgram.com/hudi/cdc-to-lake-solutions/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="近期，对 “实时摄取 CDC 数据同步到数据湖” 这一技术主题作了一系列深入的研究和验证，目前这部分工作已经告一段落，本文把截止目前（2024年5月）的研究结果和重要结论做一下梳理和汇总。为了能给出针对性的技术方案，我们收敛了一下话题，对一些技术选型做了限制，在数据库这一侧，主要以 MySQL 作为示例进行介绍和演示（理论上，PG 等其他主流数据库均可行），在数据湖这一侧，我们重点关注的是 Apa"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/hudi/cdc-to-lake-solutions/2.png"><meta property="article:published_time" content="2024-05-27T16:20:18.000Z"><meta property="article:modified_time" content="2026-11-11T02:50:16.349Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="数据湖"><meta property="article:tag" content="CDC"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/hudi/cdc-to-lake-solutions/2.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/hudi/cdc-to-lake-solutions/"},"headline":"CDC 数据实时同步入湖的技术、架构和方案汇总","image":["https://laurence.enlightgram.com/images/hudi/cdc-to-lake-solutions/2.png"],"datePublished":"2024-05-27T16:20:18.000Z","dateModified":"2026-11-11T02:50:16.349Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"近期，对 “实时摄取 CDC 数据同步到数据湖” 这一技术主题作了一系列深入的研究和验证，目前这部分工作已经告一段落，本文把截止目前（2024年5月）的研究结果和重要结论做一下梳理和汇总。为了能给出针对性的技术方案，我们收敛了一下话题，对一些技术选型做了限制，在数据库这一侧，主要以 MySQL 作为示例进行介绍和演示（理论上，PG 等其他主流数据库均可行），在数据湖这一侧，我们重点关注的是 Apa"}</script><link rel="canonical" href="https://laurence.enlightgram.com/hudi/cdc-to-lake-solutions/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">CDC 数据实时同步入湖的技术、架构和方案汇总</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Hudi/">Hudi</a></span><span class="level-item">发表于：<time dateTime="2024-05-27T16:20:18.000Z" title="2024-05-27 09:20:18">2024-05-27</time></span><span class="level-item">阅读用时：15 分钟 (约 2180 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/hudi/cdc-to-lake-solutions/2.png" alt="CDC 数据实时同步入湖的技术、架构和方案汇总" fetchpriority="high"></figure><div class="content"><p>近期，对 “实时摄取 CDC 数据同步到数据湖” 这一技术主题作了一系列深入的研究和验证，目前这部分工作已经告一段落，本文把截止目前（2024年5月）的研究结果和重要结论做一下梳理和汇总。为了能给出针对性的技术方案，我们收敛了一下话题，对一些技术选型做了限制，在数据库这一侧，主要以 MySQL 作为示例进行介绍和演示（理论上，PG 等其他主流数据库均可行），在数据湖这一侧，我们重点关注的是 Apache Hudi。</p>
+<h2 id="1-方案-架构"><a href="#1-方案-架构" class="headerlink" title="1. 方案 架构"></a>1. 方案 架构</h2><p>首先，我们认为在链路上引入 Kafka 是很有必要的，这在架构上会有很大的弹性和灵活性，所以我们讨论的所有方案都是先将 CDC 数据接入到 Kafka，然后再从 Kafka 读取 CDC 数据并写入到 Hudi 表中，没有调研从数据库直接落地到数据湖的方案。因此，这一主题的技术架构基本上可以分为两个相对独立的部分：</p>
+<ul>
+<li><p><strong>前半程：{ 数据库 &#x3D;&gt; Kafka } 的 CDC 数据采集</strong></p>
+</li>
+<li><p><strong>后半程：{ Kafka &#x3D;&gt; 数据湖 } 的 CDC 数据写入</strong></p>
+</li>
+</ul>
+<p>在这套方案的架构上，有一个显著的差异，或者说挑战：不管是前半程还是后半程，都有两种可能的模式：</p>
+<ul>
+<li><p><strong>单表单作业：使用一个作业将一张表同步到 Kafka ，再使用一个作业读取 Kafka 数据并写入一张 Hudi 表</strong></p>
+</li>
+<li><p><strong>多表单作业：使用一个作业将整库 &#x2F; 多表同步到 Kafka ，再使用一个作业读取 Kafka 数据并同时写入多张 Hudi 表</strong></p>
+</li>
+</ul>
+<p>如果是单表单作业模式，方案已经已经非常成熟了，但是这种模式不适合大中型场景，应用范围有限，应该说，最好的实现方式是：多表单作业，但目前来看，这一方式实现起来还有一定的挑战，我们后文会详细介绍。</p>
+<h2 id="2-技术堆栈"><a href="#2-技术堆栈" class="headerlink" title="2. 技术堆栈"></a>2. 技术堆栈</h2><p>从技术选型上看，整个链路可能会包含这样几类组件：</p>
+<ul>
+<li><p><strong>CDC 数据采集组件：Flink CDC、Kafka Connect</strong></p>
+</li>
+<li><p><strong>Schema Registry组件：Confluent Schema Registry 或 不设置</strong></p>
+</li>
+<li><p><strong>Hudi 表数据写入组件：Flink Hudi Connector、HoodieMultiTableStreamer</strong></p>
+</li>
+</ul>
+<p>除了搭配使用多个 开源 组件形成一套完整的解决方案外，还有一些一站式的解决方案，例如：阿里云实时计算Flink版的 <a target="_blank" rel="noopener" href="https://www.alibabacloud.com/help/zh/flink/use-cases/synchronize-data-from-all-tables-in-a-mysql-database-to-kafka">MySQL整库同步Kafka</a> 功能，开源工具 Dinky 的 <a target="_blank" rel="noopener" href="https://www.dinky.org.cn/docs/next/practical_guide/cdcsource_practice/cdcsource_mysqlcdc2hudi">MySQLCDC 整库到 Hudi</a> 等</p>
+<h2 id="3-关键差异"><a href="#3-关键差异" class="headerlink" title="3. 关键差异"></a>3. 关键差异</h2><p>在整个链路中，我们需要考虑多个关键技术点的实现，评估它们的利弊，这些技术点包括：</p>
+<ul>
+<li><p><strong>在 { 数据库 &#x3D;&gt; Kafka } 的 CDC 数据采集过程中，是一张表对应一个作业，占用一个数据库链接还是整库 &#x2F; 多表对应一个作业，占用一个数据库链接？</strong></p>
+</li>
+<li><p><strong>在 { Kafka &#x3D;&gt; 数据湖 } 的 CDC 数据写入过程中，是一个 Topic 对应一个作业还是多个 Topic 对应一个作业？</strong></p>
+</li>
+<li><p><strong>在整个链路中是通过集成一个 Schema Registry 来注册并获取每张表的 Schema 信息？还是靠建表语句（Flink SQL）？或是类型推断（Spark）？</strong></p>
+</li>
+</ul>
+<p>这些关键技术点叠加不同的技术组件会形成复杂多样的技术组合，并各有各的优缺点。</p>
+<h2 id="4-值得期待的方案"><a href="#4-值得期待的方案" class="headerlink" title="4. 值得期待的方案"></a>4. 值得期待的方案</h2><p>个人认为：在仅依赖主流开源产品原生机制和特性的前提下（即：不引入第三方非主流依赖和付费功能与产品），最值得期待的方案应该是：</p>
+<blockquote>
+<p><strong>Flink CDC ( API 整库 &#x2F; 多表同步，分流写入多个 Topic ，集成 Schema Registry ) &#x3D;&gt; Kafka &#x3D;&gt; HoodieMultiTableStreamer &#x3D;&gt; Hudi</strong> </p>
+</blockquote>
+<p>前半程的功能除了还不能和 Schema Registry 对接外，其他都已经实现，即使不能自动向 Schema Registry 自动注册 Schema，还可以手动注册，这不是一个 Block Issue ；后半程的功能其实应该已经支持了，但是，截止当前最新版本 ( Hudi <code>0.14.1</code> )，HoodieMultiTableStreamer 在处理 Debezium CDC 数据时依然有问题，需要再等待一段时间。</p>
+<p>这套方案值得期待的原因在于：后半程 CDC 数据写入 Hudi 表的工作依赖的是 Hudi 的原生组件 HoodieMultiTableStreamer ，尽管目前它还不成熟，但未来是很值得期待的，这比自己编写和维护解析 CDC 数据并写入 Hudi 表要明智的多。至于前半程 Flink CDC 是否会集成 Schema Registry，目前没有查到确切信息，但如前所述，没有也不会是很大的问题，无非是手动注册一个 Schema。不过从长远来看，Schema Registry 会在实时链路中扮演越来越重要的角色。</p>
+<h2 id="5-当前的务实方案"><a href="#5-当前的务实方案" class="headerlink" title="5. 当前的务实方案"></a>5. 当前的务实方案</h2><p>在 HoodieMultiTableStreamer 工具完善之前的这段时间里，个人认为：在不引入任何第三方依赖的前提下，目前最为可靠和实用的解决方案应该是：</p>
+<blockquote>
+<p><strong>Flink CDC ( API 整库 &#x2F; 多表同步，分流写入多个 Topic ) &#x3D;&gt; Kafka &#x3D;&gt; Flink Hudi Connector &#x3D;&gt; Hudi</strong> </p>
+</blockquote>
+<p>这一方案的优势在于：前半程是整库 &#x2F; 多表同步，对数据库影响较小，后半程使用 Flink Hudi Connector 读取 Kafka 数据写入 Hudi 表，其中，在创建 Hudi 表时，使用 Flink SQL 的 <code>create table ... with ... like ...</code> 子句可以极大简化建表语句（建表其实就是提供 Schema 的过程），总体上的代码量并不大。这个方案不太完美的地方在于：从 Kafka &#x3D;&gt; Hudi 还是要一张表对应一个 Flink 作业，不过，对于一般用户来说，这未必会带来很多麻烦。 这一方案具体实现代码已经在 <a href="/flink/flink-cdc-whole-database-to-kafka/">《Flink CDC 整库 &#x2F; 多表同步至 Kafka 方案（附源码）》</a> 一文中给出。</p>
+<p>此外，关于后半程 { Kafka &#x3D;&gt; Hudi } 的写入还有一种实现方案：使用 Spark 的 <code>foreachBatch</code> 自行编程实现 Hudi 的多表写入，各个表的 Hudi 配置也是需要配置文件提供，至于 Schema 信息可以利用 Spark 的 Schema 推断自动生成，不必显式配置，但是这种方式多少是有些类型不安全的，本系列文章没有展开讨论，网上有现成方案可供参考。长远来说，个人还是更看好 HoodieMultiTableStreamer + Confluent Schema Registry 的组合。</p>
+<h2 id="6-具体方案汇总"><a href="#6-具体方案汇总" class="headerlink" title="6. 具体方案汇总"></a>6. 具体方案汇总</h2><p>以下是近期研究和检验过的六个主要的解决方案及其它们的优势、不足和评价：</p>
+<p><strong><a href="/flink/flink-cdc-whole-database-to-kafka/">《Flink CDC 整库 &#x2F; 多表同步至 Kafka 方案（附源码）》</a></strong> </p>
+<ul>
+<li><p>优势</p>
+<ul>
+<li><p>{ 数据库 &#x3D;&gt; Kafka } 只有一个作业，只占用一个连接</p>
+</li>
+<li><p>多表公用一个 Topic 还是 一张表对应一个 Topic 可选</p>
+</li>
+<li><p>使用 Flink SQL 的 <code>create table ... with ... like ...</code> 子句一定程度上简化了 Hudi 的建表工作</p>
+</li>
+</ul>
+</li>
+<li><p>不足</p>
+<ul>
+<li>Kafka &#x3D;&gt; Hudi 还是必须要一张表一个 Flink 作业</li>
+</ul>
+</li>
+<li><p>评价</p>
+<ul>
+<li>实用，但还有提升空间</li>
+</ul>
+</li>
+</ul>
+<p><strong><a href="/hudi/cdc-mysql-kafka-connect-hudi-flink/">《CDC 实时入湖方案：MySQL &gt; Kafka Connect &gt; Kafka ＆ Schema Registry &gt; Hudi ( Flink Connector ) 》</a></strong> </p>
+<ul>
+<li><p>优势</p>
+<ul>
+<li>前半程有 Schema Registry 参与，提供 Schema 的注册、获取和变更管理</li>
+</ul>
+</li>
+<li><p>不足</p>
+<ul>
+<li>{ 数据库 &#x3D;&gt; Kafka } 和 { Kafka &#x3D;&gt; 数据湖 } 两端都是一张表一个作业&#x2F;数据库连接</li>
+</ul>
+</li>
+<li><p>评价</p>
+<ul>
+<li>整体链路完全打通，但只能应用于表数量不多的中小型场景</li>
+</ul>
+</li>
+</ul>
+<p><strong><a href="/hudi/cdc-kafka-connect-hoodiemultitablestreamer/">《CDC 实时入湖方案：MySQL &gt; Kafka Connect &gt; Kafka ＆ Schema Registry &gt; Hudi ( HoodieMultiTableStreamer ) 》</a></strong> </p>
+<ul>
+<li><p>优势</p>
+<ul>
+<li>全程有 Schema Registry 参与，提供 Schema 的注册、获取和变更管理</li>
+</ul>
+</li>
+<li><p>不足</p>
+<ul>
+<li><p>{ 数据库 &#x3D;&gt; Kafka } 是一张表一个作业&#x2F;数据库连接</p>
+</li>
+<li><p>目前版本的 HoodieMultiTableStreamer 有缺陷</p>
+</li>
+</ul>
+</li>
+<li><p>评价</p>
+<ul>
+<li>整体链路尚未完全打通，需要等待 Hudi 的后续版本修复 Bug</li>
+</ul>
+</li>
+</ul>
+<p><strong><a href="/hudi/cdc-mysql-flink-cdc-hudi-flink/">《CDC 实时入湖方案：MySQL &gt; Flink CDC &gt; Kafka ＆ Schema Registry &gt; Hudi ( Flink Connector ) 》</a></strong> </p>
+<ul>
+<li><p>优势</p>
+<ul>
+<li>前半程有 Schema Registry 参与，提供 Schema 的注册、获取和变更管理</li>
+</ul>
+</li>
+<li><p>不足</p>
+<ul>
+<li>{ 数据库 &#x3D;&gt; Kafka } 和 { Kafka &#x3D;&gt; 数据湖 } 两端都是一张表一个作业&#x2F;数据库连接</li>
+</ul>
+</li>
+<li><p>评价</p>
+<ul>
+<li>整体链路完全打通，但只能应用于表数量不多的中小型场景</li>
+</ul>
+</li>
+</ul>
+<p><strong><a href="/hudi/cdc-flink-cdc-hoodiemultitablestreamer/">《CDC 实时入湖方案：MySQL &gt; Flink CDC &gt; Kafka ＆ Schema Registry &gt; Hudi ( HoodieMultiTableStreamer ) 》</a></strong> </p>
+<ul>
+<li><p>优势</p>
+<ul>
+<li>全程有 Schema Registry 参与，提供 Schema 的注册、获取和变更管理</li>
+</ul>
+</li>
+<li><p>不足</p>
+<ul>
+<li><p>{ 数据库 &#x3D;&gt; Kafka } 是一张表一个作业&#x2F;数据库连接</p>
+</li>
+<li><p>目前版本的 HoodieMultiTableStreamer 有缺陷</p>
+</li>
+</ul>
+</li>
+<li><p>评价</p>
+<ul>
+<li>整体链路尚未完全打通，需要等待 Hudi 的后续版本修复 Bug</li>
+</ul>
+</li>
+</ul>
+<p><strong><a href="/hudi/cdc-flink-kafka-hudi/">《CDC 实时入湖方案：MySQL &gt; Flink CDC &gt; Kafka &gt; Hudi》</a></strong> </p>
+<ul>
+<li><p>优势</p>
+<ul>
+<li>链路最简单，实现起来最容易</li>
+</ul>
+</li>
+<li><p>不足</p>
+<ul>
+<li>{ 数据库 &#x3D;&gt; Kafka } 和 { Kafka &#x3D;&gt; 数据湖 } 两端都是一张表一个作业&#x2F;数据库连接</li>
+</ul>
+</li>
+<li><p>评价</p>
+<ul>
+<li>整体链路完全打通，但只能应用于表数量不多的中小型场景</li>
+</ul>
+</li>
+</ul>
+</div><div class="article-licensing box"><div class="licensing-title"><p>CDC 数据实时同步入湖的技术、架构和方案汇总</p><p><a href="https://laurence.enlightgram.com/hudi/cdc-to-lake-solutions/">https://laurence.enlightgram.com/hudi/cdc-to-lake-solutions/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2024-05-27</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E6%95%B0%E6%8D%AE%E6%B9%96/">数据湖</a><a class="link-muted mr-2" rel="tag" href="/tags/CDC/">CDC</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/cpp/cpp-preprocessor-and-includes/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">C++基础：预处理器和头文件包含</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/hudi/hoodiemultitablestreamer-configuration/"><span class="level-item">Hudi 多表摄取工具 HoodieMultiTableStreamer 配置方法与示例</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-方案-架构"><span class="level-left"><span class="level-item">1. 方案 架构</span></span></a></li><li><a class="level is-mobile" href="#2-技术堆栈"><span class="level-left"><span class="level-item">2. 技术堆栈</span></span></a></li><li><a class="level is-mobile" href="#3-关键差异"><span class="level-left"><span class="level-item">3. 关键差异</span></span></a></li><li><a class="level is-mobile" href="#4-值得期待的方案"><span class="level-left"><span class="level-item">4. 值得期待的方案</span></span></a></li><li><a class="level is-mobile" href="#5-当前的务实方案"><span class="level-left"><span class="level-item">5. 当前的务实方案</span></span></a></li><li><a class="level is-mobile" href="#6-具体方案汇总"><span class="level-left"><span class="level-item">6. 具体方案汇总</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

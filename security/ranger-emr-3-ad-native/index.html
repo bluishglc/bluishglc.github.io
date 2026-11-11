@@ -1,0 +1,1032 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Apache Ranger 与 AWS EMR 自动化安装与集成 (3)：Windows AD + EMR-Native Ranger - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="In this article, we will introduce the solution against “Scenario 2: Windows AD + EMR-Native Ranger”. The same to previous article, we will introduce the soltuion artitecture, give detailed installati"><meta property="og:type" content="article"><meta property="og:title" content="Apache Ranger 与 AWS EMR 自动化安装与集成 (3)：Windows AD + EMR-Native Ranger"><meta property="og:url" content="https://laurence.enlightgram.com/security/ranger-emr-3-ad-native/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="In this article, we will introduce the solution against “Scenario 2: Windows AD + EMR-Native Ranger”. The same to previous article, we will introduce the soltuion artitecture, give detailed installati"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/security/ranger-emr-3-ad-native/1.jpeg"><meta property="article:published_time" content="2022-12-17T23:11:59.000Z"><meta property="article:modified_time" content="2026-11-11T03:37:39.394Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="AD"><meta property="article:tag" content="EMR"><meta property="article:tag" content="Ranger"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/security/ranger-emr-3-ad-native/1.jpeg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/security/ranger-emr-3-ad-native/"},"headline":"Apache Ranger 与 AWS EMR 自动化安装与集成 (3)：Windows AD + EMR-Native Ranger","image":["https://laurence.enlightgram.com/images/security/ranger-emr-3-ad-native/1.jpeg"],"datePublished":"2022-12-17T23:11:59.000Z","dateModified":"2026-11-11T03:37:39.394Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"In this article, we will introduce the solution against “Scenario 2: Windows AD + EMR-Native Ranger”. The same to previous article, we will introduce the soltuion artitecture, give detailed installati"}</script><link rel="canonical" href="https://laurence.enlightgram.com/security/ranger-emr-3-ad-native/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Apache Ranger 与 AWS EMR 自动化安装与集成 (3)：Windows AD + EMR-Native Ranger</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Security/">Security</a></span><span class="level-item">发表于：<time dateTime="2022-12-17T23:11:59.000Z" title="2022-12-17 15:11:59">2022-12-17</time></span><span class="level-item">阅读用时：36 分钟 (约 5433 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>In this article, we will introduce the solution against “Scenario 2: Windows AD + EMR-Native Ranger”. The same to previous article, we will introduce the soltuion artitecture, give detailed installation step descriptions and verify installed environment. This article address is <a href="/security/ranger-emr-3-ad-native/">https://laurence.enlightgram.com/security/ranger-emr-3-ad-native/</a> , for reprint please indicate the source. This article was initally published at <a target="_blank" rel="noopener" href="https://dzone.com/articles/apache-ranger-aws-emr-automated-installation-3">DZone</a> .</p>
+<h3 id="1-Solution-Overview"><a href="#1-Solution-Overview" class="headerlink" title="1. Solution Overview"></a>1. Solution Overview</h3><h4 id="1-1-Solution-Architecture"><a href="#1-1-Solution-Architecture" class="headerlink" title="1.1 Solution Architecture"></a>1.1 Solution Architecture</h4><p> <img src="/../../images/security/ranger-emr-3-ad-native/1.jpeg" alt="请添加图片描述"></p>
+<p>In this solution, Windows AD plays authentication provider, all user accounts data store on it, Ranger plays authorization controller, because we select emr-native ranger solution which strongly depends on Kerberos, so a Kerberos KDC is required. in this solution, we recommend choosing cluster dedicated KDC created by EMR instead of external KDC, this can help us save the job of installing Kerberos. If you have an existing KDC, this solution also support.</p>
+<p>To unify user accounts data, Windows AD and Kerberos must be integrated together, the best integration way is one-way cross-realm trust (Windows AD realm trusts Kerberos KDC realm), this is also a build-in feature of EMR. For Ranger, it will sync accounts data from Windows AD so as to grant privileges against user accounts from Windows AD, meanwhile, emr cluster need install a series of ranger plugins, these plugins will check with ranger server to assure if current user has permission to perform an action. And emr cluster will also sync accounts data from Windows AD via SSSD so as a user can login nodes of emr cluster and submit jobs.</p>
+<h4 id="1-2-Authentication-in-Detail"><a href="#1-2-Authentication-in-Detail" class="headerlink" title="1.2 Authentication in Detail"></a>1.2 Authentication in Detail</h4><p>Let’s deep dive into authentication part. Generally, we will finish following jobs, some are done by the installer, some are emr build-in feature, no manual operations.</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/2.jpeg" alt="请添加图片描述"></p>
+<p>① Install Windows AD;<br>② Install SSSD on all nodes of emr cluster (If enable cross-realm trust, no manual operations);<br>③ Enable cross-realm trust (some jobs will be done by as.ps1 file when installing Windows AD, some jobs are will be done when emr cluster creating if cross-realm trust enabled.)<br>④ Configure SSH, enable users login with Windows AD account (If enable cross-realm trust, no manual operations);<br>⑤ Configure SSH, enable users login with Kerberos account via GSSAPI (If enable cross-realm trust, no manual operations);</p>
+<h4 id="1-3-Authorization-in-Detail"><a href="#1-3-Authorization-in-Detail" class="headerlink" title="1.3 Authorization in Detail"></a>1.3 Authorization in Detail</h4><p>For authorization, Ranger is absolutely the leading role, if we deep dive into it, its architecture looks as following:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/3.jpeg" alt="请添加图片描述"></p>
+<p>The installer will finish following jobs:</p>
+<p>① Install MySQL as Policy DB for Ranger;<br>② Install Solr as Audit Store for Ranger;<br>③ Install Ranger Admin;<br>④ Install Ranger UserSync;<br>⑤ Install EMRFS(S3) Ranger Plugin；<br>⑥ Install Spark Ranger Plugin；<br>⑦ Install Hive Ranger Plugin；<br>⑧ Install Trino Ranger Plugin (NOT available yet at the time writing)</p>
+<h3 id="2-Installation-Integration"><a href="#2-Installation-Integration" class="headerlink" title="2. Installation &amp; Integration"></a>2. Installation &amp; Integration</h3><p>Generally, the installation &amp; integration process can be divided into 3 stages: 1. Prerequisites -&gt; 2. All-In-One Install -&gt; 3. Create EMR Cluster, the following diagram illustrates the progress in detail:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/4.jpeg" alt="请添加图片描述"></p>
+<p>At stage 1, we need do some preparatory work; At stage 2, we start to install and integrate, here are 2 options at this stage: one is all-in-one installation driven by a command -line based workflow, the other is step-by-step installation. For most cases, all-in-one installation is always the best choice, however, sometimes, your installation workflow may be interrupted by unforeseen errors, if you want to continue installing from last failed step, please try step-by-step installation. Or sometimes, you want to re-try a step with different argument values to find the right one, step-by-step is also better choice; At stage 3, we need create an emr cluster by ourselves with output artifacts in stage 2, i.e., iam roles and emr security configuration.</p>
+<p>As a design principle, the installer does NOT include any actions to create an emr cluster, you should always create your cluster by yourself, because an emr cluster in practice could have any unpredictable complex settings, i.e., application-specific (hdfs, yarn, etc.) configuration, step scripts, bootstrap scripts and so on, it is unadvised to couple ranger’s installation with emr cluster’s creation.</p>
+<p>However, there is a little bit overlapping on execution sequence between stage 2 and 3. When creating an emr cluster based on emr-native ranger, it is required to provide a copy of security configuration and ranger-specific iam roles, they must be available before creating an emr cluster, and besides, during creating cluster, it also need interact with the ranger server (server address is assigned in security configuration); On the other hand, some operations in all-in-one installation need perform on all nodes of cluster or KDC, this requires an emr cluster must be ready. To solve this circular dependency, the installer output some artifacts first depended by emr cluster, then indicate users to create their own cluster with these artifacts, meanwhile, installation progress will be pending, and keep monitoring target cluster’s status, once it’s ready, installation progress will resume and continue to perform rest actions.</p>
+<p>Notes：</p>
+<ol>
+<li><p>The installer will treat local host as ranger server to install everything of Ranger, for non-ranger operations, it will initiate remote operations via SSH. So, you can just stay on ranger server to execute command lines, no need to switch among multiple hosts.</p>
+</li>
+<li><p>For the sake of Kerberos, all host address must use FQDN, Both IP and hostname without domain name are unaccepted.</p>
+</li>
+</ol>
+<h4 id="2-1-Prerequisites"><a href="#2-1-Prerequisites" class="headerlink" title="2.1 Prerequisites"></a>2.1 Prerequisites</h4><h5 id="2-1-1-VPC-Constraints"><a href="#2-1-1-VPC-Constraints" class="headerlink" title="2.1.1 VPC Constraints"></a>2.1.1 VPC Constraints</h5><p>To enable cross-realm trust, a series of constraints are imposed on VPC, before installing, please ensure the hostname of ec2 instance is no more than 15 characters. This is a limitation from Windows AD, however, as aws assigns DNS hostnames based on IPv4 address, this limitation propagates to VPC. If the CIDR of VPC can constraint IPv4 address is no more than 9 characters, the assigned DNS hostnames can be limited within 15 characters. With the limitation, a recommended CIDR setting of VPC is <code>10.0.0.0/16</code> .</p>
+<p>Although we can change default hostname after ec2 instances available, however, the hostname will be used when the computers join the Windows AD directory, this happened during emr cluster creating, a post modifications on hostname does NOT work(Technically, a possible workaround is to put modifying hostname actions into bootstrap scripts, but we didn’t try it, for changing hostname, please refer to <a target="_blank" rel="noopener" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/set-hostname.html">https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/set-hostname.html</a> .</p>
+<p>for other cautions, please refer to emr official doc: <a target="_blank" rel="noopener" href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-kerberos-cross-realm.html#emr-kerberos-ad-network">https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-kerberos-cross-realm.html#emr-kerberos-ad-network</a> </p>
+<h5 id="2-1-2-Create-Windows-AD-Server"><a href="#2-1-2-Create-Windows-AD-Server" class="headerlink" title="2.1.2 Create Windows AD Server"></a>2.1.2 Create Windows AD Server</h5><p>In this section, we will create a Windows AD server with powershell scripts. First, create an ec2 instance with <code>Windows Server 2019 Base</code> image (2016 is also tested and supported), then login with Administrator account, download the Windows AD installation scripts file from <a target="_blank" rel="noopener" href="https://github.com/bluishglc/ranger-emr-cli-installer/releases/download/v2.0/ad.ps1">https://github.com/bluishglc/ranger-emr-cli-installer/releases/download/v2.0/ad.ps1</a> , save to desktop.</p>
+<p>Next, press “Win + R” to open a run dialog, copy following command line and replace parameter values with your own settings:</p>
+<figure class="highlight batch"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Powershell.exe -NoExit -ExecutionPolicy Bypass -File <span class="variable">%USERPROFILE%</span>\Desktop\ad.ps1 -DomainName &lt;<span class="built_in">replace</span>-with-your-domain&gt; -Password &lt;<span class="built_in">replace</span>-with-your-password&gt; -TrustedRealm &lt;<span class="built_in">replace</span>-with-your-realm&gt;</span><br></pre></td></tr></table></figure>
+
+<p>The ad.ps1 has pre-defined default parameter values: the domain name is <code>example.com</code> , password is <code>Admin1234!</code> , trusted realm is <code>COMPUTE.INTERNAL</code> . As a quick-start, you can just right-click the <code>ad.ps1</code> file and select <code>Run with PowerShell</code> to execute it. (Note that you can NOT run this powershell scripts by right-click “Run with PowerShell” on us-east-1, because its default trusted realm is <code>EC2.INTERNAL</code> , so you should set <code>-TrustedRealm EC2.INTERNAL</code> explicitly via above command line.)</p>
+<p>After scripts executed, the compute will ask for restarting, this is forced by Windows. We should wait for the computer to restart then re-login as Administrator so as subsequent commands in the scripts file go on executing. Be sure to RE-LOGIN, otherwise a part of scripts have no chance to execute.</p>
+<p>After re-login, we can open “Active Directory Users and Computers” from Start Menu -&gt; Windows Administrative Tools -&gt; Active Directory Users and Computers or enter <code>dsa.msc</code> from “Run” dialog to check created AD, if everything goes well, we can get a following AD directory:<br> <img src="/../../images/security/ranger-emr-3-ad-native/5.jpeg" alt="请添加图片描述"></p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/6.jpeg" alt="请添加图片描述"></p>
+<p>Next, we need check DNS setting, invalid DNS setting will result in installation failure. A common error when running scripts is “Ranger Server can’t solve DNS of Cluster Nodes”, this problem is usually caused by incorrect DNS forwarder setting. We can open “DNS Manager” from Start Menu -&gt; Windows Administrative Tools -&gt; DNS or enter <code>dnsmgmt.msc</code> from “Run” dialog, then open tab “Forwarders”. Normally，there is a record which IP address should be <code>10.0.0.2</code> :</p>
+<p><img src="/../../images/security/ranger-emr-3-ad-native/7.jpeg" alt="请添加图片描述"></p>
+<p><code>10.0.0.2</code> is the default DNS server address for <code>10.0.0.0/16</code> network in VPC, according to VPC document: <a target="_blank" rel="noopener" href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-dns.html">https://docs.aws.amazon.com/vpc/latest/userguide/vpc-dns.html</a> , it says:</p>
+<blockquote>
+<p>The Amazon DNS server does not reside within a specific subnet or Availability Zone in a VPC. It’s located at the address 169.254.169.253 (and the reserved IP address at the base of the VPC IPv4 network range, plus two) and fd00:ec2::253. For example, the Amazon DNS Server on a 10.0.0.0&#x2F;16 network is located at 10.0.0.2. For VPCs with multiple IPv4 CIDR blocks, the DNS server IP address is located in the primary CIDR block.</p>
+</blockquote>
+<p>The forwarder’s IP address usually comes from “Domain name servers” of your VPC’s “DHCP Options Set”, its default value is <code>AmazonProvidedDNS</code> . If you changed it, when creating Windows AD, the forwarder’s IP will become your changed value. It is probably happened when re-install Windows AD in a VPC, if you didn’t recover “Domain name servers” to <code>AmazonProvidedDNS</code> before re-install, the forwarder’s IP is always the address of previous Windows AD server, it may NOT exist anymore, that’s why ranger server or cluster nodes can’t solve DNS. So, we can simply change forwarder IP to default value, i.e., 10.0.0.2 in 10.0.0.0&#x2F;16 network.</p>
+<p>The other DNS related configuration is IPv4 DNS setting, usually, its default setting is OK, just attach it here as reference(in cn-north-1 region):</p>
+<p><img src="/../../images/security/ranger-emr-3-ad-native/8.jpeg" alt="请添加图片描述"></p>
+<h5 id="2-1-3-Create-DHCP-Options-Set-and-Attach-To-VPC"><a href="#2-1-3-Create-DHCP-Options-Set-and-Attach-To-VPC" class="headerlink" title="2.1.3 Create DHCP Options Set and Attach To VPC"></a>2.1.3 Create DHCP Options Set and Attach To VPC</h5><p>A cross-realm trust requires that the KDCs can reach one another over the network and resolve each other’s domain names. So it is required to set the Windows AD as DNS server in “DHCP Options Sets” of VPC. The following command line will complete this job ( <strong>run following scripts on a Linux host which has installed aws cli</strong> ):</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on a host which has installed aws cli</span></span><br><span class="line"><span class="built_in">export</span> REGION=<span class="string">&#x27;&lt;change-to-your-region&gt;&#x27;</span></span><br><span class="line"><span class="built_in">export</span> VPC_ID=<span class="string">&#x27;&lt;change-to-your-vpc-id&gt;&#x27;</span></span><br><span class="line"><span class="built_in">export</span> DNS_IP=<span class="string">&#x27;&lt;change-to-your-dns-ip&gt;&#x27;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># solve domain name based on region</span></span><br><span class="line"><span class="keyword">if</span> [ <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> = <span class="string">&quot;us-east-1&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">    <span class="built_in">export</span> DOMAIN_NAME=<span class="string">&quot;ec2.internal&quot;</span></span><br><span class="line"><span class="keyword">else</span></span><br><span class="line">    <span class="built_in">export</span> DOMAIN_NAME=<span class="string">&quot;<span class="variable">$REGION</span>.compute.internal&quot;</span></span><br><span class="line"><span class="keyword">fi</span></span><br><span class="line">                </span><br><span class="line"><span class="comment"># create dhcp options and return id</span></span><br><span class="line">dhcpOptionsId=$(aws ec2 create-dhcp-options \</span><br><span class="line">    --region <span class="variable">$REGION</span> \</span><br><span class="line">    --dhcp-configurations <span class="string">&#x27;&#123;&quot;Key&quot;:&quot;domain-name&quot;,&quot;Values&quot;:[&quot;&#x27;</span><span class="string">&quot;<span class="variable">$DOMAIN_NAME</span>&quot;</span><span class="string">&#x27;&quot;]&#125;&#x27;</span> <span class="string">&#x27;&#123;&quot;Key&quot;:&quot;domain-name-servers&quot;,&quot;Values&quot;:[&quot;&#x27;</span><span class="string">&quot;<span class="variable">$DNS_IP</span>&quot;</span><span class="string">&#x27;&quot;]&#125;&#x27;</span> \</span><br><span class="line">    --tag-specifications <span class="string">&quot;ResourceType=dhcp-options,Tags=[&#123;Key=Name,Value=WIN_DNS&#125;]&quot;</span> \</span><br><span class="line">    --no-cli-pager \</span><br><span class="line">    --query <span class="string">&#x27;DhcpOptions.DhcpOptionsId&#x27;</span> \</span><br><span class="line">    --output text)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># attach the dhcp options to target vpc</span></span><br><span class="line">aws ec2 associate-dhcp-options \</span><br><span class="line">    --dhcp-options-id <span class="variable">$dhcpOptionsId</span> \</span><br><span class="line">    --vpc-id <span class="variable">$VPC_ID</span></span><br></pre></td></tr></table></figure>
+
+<p>The following is a snapshort of created DHCP options from aws web console:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/9.jpeg" alt="请添加图片描述"></p>
+<p>The “Domain name” - <code>cn-north-1.compute.internal</code> will be the “domain name” part of long hostname (FQDN). Usually, for <code>us-east-1</code> region, please specify <code>ec2.internal</code> ; for other regions, specify <code>&lt;region&gt;.compute.internal</code> . Note that do NOT set the domain name of Windows AD to it, i.e., <code>example.com</code> in our example, they are 2 different things, otherwise the cross-realm trust will fail. The “Domain name server” - <code>10.0.7.240</code> is the private IP of the Windows AD server. And the following is a snapshot of VPC which has attached this DHCP options set:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/10.jpeg" alt="请添加图片描述"></p>
+<h5 id="2-1-4-Create-EC2-Instances-as-Ranger-Server"><a href="#2-1-4-Create-EC2-Instances-as-Ranger-Server" class="headerlink" title="2.1.4 Create EC2 Instances as Ranger Server"></a>2.1.4 Create EC2 Instances as Ranger Server</h5><p>Next, we need prepare an EC2 instance as the server of Ranger, please select <code>Amazon Linux 2</code> image and guarantee network connections among instances and the cluster to be created are reachable.</p>
+<p>As a best practice, it’s recommended to add ranger server into <code>ElasticMapReduce-master</code> security group, because Ranger is very close to emr cluster, it can be regarded as a non-emr-build-in master service. For Windows AD, we have to make sure its ports 389 is reachable from ranger and all nodes of emr cluster to be created, or to be simple, you also add Windows AD into <code>ElasticMapReduce-master</code> security group.</p>
+<h5 id="2-1-5-Download-Installer"><a href="#2-1-5-Download-Installer" class="headerlink" title="2.1.5 Download Installer"></a>2.1.5 Download Installer</h5><p>After EC2 instances are ready, pick the ranger server, login via ssh, run following commands to download installer package:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> yum -y install git</span><br><span class="line">git <span class="built_in">clone</span> https://github.com/bluishglc/ranger-emr-cli-installer.git</span><br></pre></td></tr></table></figure>
+
+<h5 id="2-1-6-Upload-SSH-Key-File"><a href="#2-1-6-Upload-SSH-Key-File" class="headerlink" title="2.1.6 Upload SSH Key File"></a>2.1.6 Upload SSH Key File</h5><p>As mentioned before, the installer is based on local host (ranger server), to perform remote installing actions on emr cluster, SSH private key is required, so we should upload it to ranger server, and keep the file path, it will be the value of variable <code>SSH_KEY</code> .</p>
+<h5 id="2-1-7-Export-Environment-Specific-Variables"><a href="#2-1-7-Export-Environment-Specific-Variables" class="headerlink" title="2.1.7 Export Environment-Specific Variables"></a>2.1.7 Export Environment-Specific Variables</h5><p>During installing, following environment-specific arguments will be passed more than once, it’s recommended to export them first, then all command lines just refer these variables instead of literals.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> REGION=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> ACCESS_KEY_ID=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SECRET_ACCESS_KEY=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SSH_KEY=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> AD_HOST=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>The following is comments of above variables:</p>
+<ul>
+<li><p>REGION: Aws Region, i.e., cn-north-1, us-east-1 and so on.</p>
+</li>
+<li><p>ACCESS_KEY_ID: Aws access key id of your IAM account. Be sure your account has enough privileges, it’s better having admin permissions.</p>
+</li>
+<li><p>SECRET_ACCESS_KEY: Aws secret access key of your IAM account.</p>
+</li>
+<li><p>SSH_KEY: Ssh private key file path on local host you just uploaded</p>
+</li>
+<li><p>AD_HOST: FQDN of AD server</p>
+</li>
+<li><p>VPC_ID: The id of VPC</p>
+</li>
+</ul>
+<p>Please carefully replace above variables’ value according to your environment and remember to use FQDN as hostname. The following is a copy of example:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> REGION=<span class="string">&#x27;cn-north-1&#x27;</span></span><br><span class="line"><span class="built_in">export</span> ACCESS_KEY_ID=<span class="string">&#x27;&lt;change-to-your-access-key-id&gt;&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SECRET_ACCESS_KEY=<span class="string">&#x27;&lt;change-to-your-secret-access-key&gt;&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SSH_KEY=<span class="string">&#x27;/home/ec2-user/key.pem&#x27;</span></span><br><span class="line"><span class="built_in">export</span> AD_HOST=<span class="string">&#x27;example.com&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="2-2-All-In-One-Installation"><a href="#2-2-All-In-One-Installation" class="headerlink" title="2.2 All-In-One Installation"></a>2.2 All-In-One Installation</h4><h5 id="2-2-1-Quick-Start"><a href="#2-2-1-Quick-Start" class="headerlink" title="2.2.1 Quick Start"></a>2.2.1 Quick Start</h5><p>Now, let’s start an all-in-one installation, execute this command line:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;ad&#x27;</span> \</span><br><span class="line">    --ad-host <span class="string">&quot;<span class="variable">$AD_HOST</span>&quot;</span> \</span><br><span class="line">    --ad-domain <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --ad-base-dn <span class="string">&#x27;cn=users,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ad-user-object-class <span class="string">&#x27;person&#x27;</span> \</span><br><span class="line">    --enable-cross-realm-trust <span class="string">&#x27;true&#x27;</span> \</span><br><span class="line">    --trusting-realm <span class="string">&#x27;EXAMPLE.COM&#x27;</span> \</span><br><span class="line">    --trusting-domain <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --trusting-host <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --ranger-plugins <span class="string">&#x27;emr-native-emrfs,emr-native-spark,emr-native-hive&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>For parameters specification of above command line, please refer to appendix. If everything goes well, the command line will execute step from 2.1 to 2.6 in workflow diagram, this may spend 10 minutes or more depending on the bandwidth of your network, then it will suspend and indicate user to create emr cluster with the 2 artifacts:</p>
+<p>Ⓐ An ec2 instance profile named <code>EMR_EC2_RangerRole</code><br>Ⓑ An emr security configuration named <code>Ranger@&lt;YOUR-RANGER-HOST-FQDN&gt;</code> </p>
+<p>They are just created by command line in step 2.2 &amp; 2.4, and you can find them from emr web console when creating cluster. The following is a snapshot of command line for this moment:</p>
+<p>![请添加图片描述](<a target="_blank" rel="noopener" href="https://img-blog.csdnimg.cn/e4ee7e37ef574f04a3ab79ca60fda1a7.jpeg">https://img-blog.csdnimg.cn/e4ee7e37ef574f04a3ab79ca60fda1a7.jpeg</a></p>
+<p>Next, we should switch to emr web console to create a cluster, be sure to select ec2 instance profile and security configuration prompted in command line console. As for Kerberos &amp; Cross-Realm Trust, please fill and make a note of following items:</p>
+<ul>
+<li><p>Realm: the realm of Kerberos, note that for region <code>us-east-1</code> , default realm is <code>EC2.INTERNAL</code> ; for other regions, default realm is <code>COMPUTE.INTERNAL</code> ; you can assign other realm name, but <strong>be sure the entered realm name and the trusted realm name passed to <code>ad.ps1</code> as parameter are the same value</strong> .</p>
+</li>
+<li><p>KDC admin password: the password of kadmin.</p>
+</li>
+<li><p>Active Directory domain join user: this is an AD account with enough privileges which can add cluster nodes into windows domain, this is a required action to enable cross-realm trust, emr relies on this account to finish this job. If the Windows AD is installed by <code>ad.ps1</code> , an account named <code>domain-admin</code> will be automatically created for this purpose, so we fill “domain-admin” here, you can also assign other account, but be sure it is existing and has enough privileges.</p>
+</li>
+<li><p>Active Directory domain join password: the password of “Active Directory domain join user”</p>
+</li>
+</ul>
+<p>The following is a snapshot of emr web console for this moment:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/11.jpeg" alt="请添加图片描述"></p>
+<p>Once the emr cluster starts to create, the cluster id will be certain, we need copy the id, then go back to command line terminal, enter “y” for cli prompt “Have you created the cluster? [y&#x2F;n]: “(you don’t need wart for the cluster to become completely ready), then the command line will ask you to:</p>
+<p>① Enter the cluster id.<br>② Confirm if let Hue integrate with LDAP or not. if yes, after cluster is ready, the installer will update emr configuration with Hue specific setting, be careful that this action will overwrite emr existing configuration.</p>
+<p>Finally, enter “y” to confirm all inputs, the installation process will resume and if assigned emr cluster is not ready yet, the command line will keep monitoring until it goes into “WAITING” status, the following is a snapshot for this moment of the command line:</p>
+<p>![image_1gag7jt4n1jvkb0qi311sht7kd32.png-55.1kB][15]</p>
+<p>When cluster is ready (status is “WAITING”), the command line will continue to execute step 2.8 of workflow, and end with an “ALL DONE!!” message.</p>
+<h5 id="2-2-2-Customization"><a href="#2-2-2-Customization" class="headerlink" title="2.2.2 Customization"></a>2.2.2 Customization</h5><p>Now, all-in-one installation is done, next, we introduce more about customization. Generally, this installer follows the principle of “Convention over Configuration”, most parameters are preset by default values, an equivalent version with full parameter list of above command line is as following:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;ad&#x27;</span> \</span><br><span class="line">    --ad-host <span class="string">&quot;<span class="variable">$AD_HOST</span>&quot;</span> \</span><br><span class="line">    --ad-domain <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --ad-base-dn <span class="string">&#x27;cn=users,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ad-user-object-class <span class="string">&#x27;person&#x27;</span> \</span><br><span class="line">    --enable-cross-realm-trust <span class="string">&#x27;true&#x27;</span> \</span><br><span class="line">    --trusting-realm <span class="string">&#x27;EXAMPLE.COM&#x27;</span> \</span><br><span class="line">    --trusting-domain <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --trusting-host <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --ranger-plugins <span class="string">&#x27;emr-native-emrfs,emr-native-spark,emr-native-hive&#x27;</span> \</span><br><span class="line">    --java-home <span class="string">&#x27;/usr/lib/jvm/java&#x27;</span> \</span><br><span class="line">    --skip-install-mysql <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --skip-install-solr <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --skip-configure-hue <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --ranger-host $(hostname -f) \</span><br><span class="line">    --ranger-version <span class="string">&#x27;2.1.0&#x27;</span> \</span><br><span class="line">    --mysql-host $(hostname -f) \</span><br><span class="line">    --mysql-root-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --mysql-ranger-db-user-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --solr-host $(hostname -f) \</span><br><span class="line">    --ranger-bind-dn <span class="string">&#x27;cn=ranger,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ranger-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --hue-bind-dn <span class="string">&#x27;cn=hue,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --hue-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --sssd-bind-dn <span class="string">&#x27;cn=sssd,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --sssd-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --restart-interval 30</span><br></pre></td></tr></table></figure>
+
+<p>The full-parameters version gives us a complete perspective of all custom options. In following scenarios, you may change some options’ value:</p>
+<ol>
+<li><p>If you want to change default organization name <code>dc=example,dc=com</code> or default password <code>Admin1234!</code> , please run full-parameters version, and replace them with your own values.</p>
+</li>
+<li><p>If you need integrate with external facilities, i.e., an existing MySQL, Solr, please add corresponding <code>--skip-xxx-xxx</code> options and set it <code>true</code> .</p>
+</li>
+<li><p>If you have other pre-defined bind dn for hue, ranger and sssd, please add corresponding <code>--xxx-bind-dn</code> and <code>--xxx-bind-password</code> options to set them. Note that the bind dn for hue, ranger and sssd will be created automatically when installing Windows AD, but they are FIXED with naming pattern <code>cn=hue|ranger|sssd,ou=services,&lt;your-base-dn&gt;</code> not the given value of “–xxx-bind-dn” option, so if you assign other dn with “–xxx-bind-dn” option, you MUST create this dn by yourself in advance. The reason this install does NOT create the dn assigned by “–xxx-bind-dn” option is that a dn actually is a tree path, to create it, we must create all nodes in the path, it is not cost-effective to implement such small but complicated function.</p>
+</li>
+<li><p>All-in-one installation will update emr configuration for Hue so as users can login Hue with Windows AD accounts, if you have other customized emr configuration, please append <code>--skip-configure-hue &#39;true&#39;</code> in command line to skip updating configuration, then manually append hue configuration into your json, otherwise your pre-defined configuration will be overwritten.</p>
+</li>
+</ol>
+<h4 id="2-3-Step-By-Step-Installation"><a href="#2-3-Step-By-Step-Installation" class="headerlink" title="2.3 Step-By-Step Installation"></a>2.3 Step-By-Step Installation</h4><p>As an alternative, you can also select step-by-step installation instead of all-in-one installation. we give the command line of each step, as for comments for each parameter, please refer to appendix.</p>
+<h5 id="2-3-1-Init-EC2"><a href="#2-3-1-Init-EC2" class="headerlink" title="2.3.1 Init EC2"></a>2.3.1 Init EC2</h5><p>This step will finish some fundamental jobs, i.e., install aws cli, jdk, and so on.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh init-ec2 \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="2-3-2-Create-IAM-Roles"><a href="#2-3-2-Create-IAM-Roles" class="headerlink" title="2.3.2 Create IAM Roles"></a>2.3.2 Create IAM Roles</h5><p>This step will create 3 iam roles which are required for EMR.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh create-iam-roles \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="2-3-3-Create-Ranger-Secrets"><a href="#2-3-3-Create-Ranger-Secrets" class="headerlink" title="2.3.3 Create Ranger Secrets"></a>2.3.3 Create Ranger Secrets</h5><p>This step will create SSL&#x2F;TLS related keys, certificates and keystores for Ranger, because emr-native ranger requires SSL&#x2F;TLS connections to server. These artifacts will upload to aws secrets manager and referred by emr security configuration.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh create-ranger-secrets \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="2-3-4-Create-EMR-Security-Configuration"><a href="#2-3-4-Create-EMR-Security-Configuration" class="headerlink" title="2.3.4 Create EMR Security Configuration"></a>2.3.4 Create EMR Security Configuration</h5><p>This step will create a copy of emr security configuration, the configuration includes Kerberos and Ranger related information, when creating cluster, emr will read them and get corresponding resources, i.e., secrets, and also interact with the ranger server which address is assigned in the security configuration.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh create-emr-security-configuration \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;ad&#x27;</span> \</span><br><span class="line">    --trusting-realm <span class="string">&#x27;EXAMPLE.COM&#x27;</span> \</span><br><span class="line">    --trusting-domain <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --trusting-host <span class="string">&#x27;example.com&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="2-3-5-Install-Ranger"><a href="#2-3-5-Install-Ranger" class="headerlink" title="2.3.5 Install Ranger"></a>2.3.5 Install Ranger</h5><p>This step will install all server-side components of Ranger, including MySQL, Solr, Ranger Admin and Ranger UserSync.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install-ranger \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;ad&#x27;</span> \</span><br><span class="line">    --ad-domain <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --ad-host <span class="string">&quot;<span class="variable">$AD_HOST</span>&quot;</span> \</span><br><span class="line">    --ad-base-dn <span class="string">&#x27;cn=users,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ad-user-object-class <span class="string">&#x27;person&#x27;</span> \</span><br><span class="line">    --ranger-bind-dn <span class="string">&#x27;cn=ranger,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ranger-bind-password <span class="string">&#x27;Admin1234!&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="2-3-6-Install-Ranger-Plugins"><a href="#2-3-6-Install-Ranger-Plugins" class="headerlink" title="2.3.6 Install Ranger Plugins"></a>2.3.6 Install Ranger Plugins</h5><p>This step will install emrfs, spark and hive plugins from ranger server side. There is the other half job which install these plugins (actually they are EMR Secret Agent, EMR Record Server and so on) on agent side, however, it will be done automatically by emr when creating cluster.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install-ranger-plugins \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;ad&#x27;</span> \</span><br><span class="line">    --ranger-plugins <span class="string">&#x27;emr-native-emrfs,emr-native-spark,emr-native-hive&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="2-3-7-Create-EMR-Cluster"><a href="#2-3-7-Create-EMR-Cluster" class="headerlink" title="2.3.7 Create EMR Cluster"></a>2.3.7 Create EMR Cluster</h5><p>For step-by-step installation, there is no interactive process for creating emr cluster, so just feel free to create cluster on emr web console. but we have to wait for the cluster is completely ready (in “WAITING” status), then export emr cluster id:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> EMR_CLUSTER_ID=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>The following is a copy of example:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> EMR_CLUSTER_ID=<span class="string">&#x27;	j-1UU8LVVVCBZY0&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="2-3-8-Update-Hue-Configuration"><a href="#2-3-8-Update-Hue-Configuration" class="headerlink" title="2.3.8 Update Hue Configuration"></a>2.3.8 Update Hue Configuration</h5><p>This step will update hue configuration of emr, as highlighted in all-in-one installation, if you have other customized emr configuration, please skip this step, but you can still manually merge generated json file for hue configuration by command line into your own json.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh update-hue-configuration \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;ad&#x27;</span> \</span><br><span class="line">    --ad-host <span class="string">&quot;<span class="variable">$AD_HOST</span>&quot;</span> \</span><br><span class="line">    --ad-domain <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --ad-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ad-user-object-class <span class="string">&#x27;person&#x27;</span> \</span><br><span class="line">    --hue-bind-dn <span class="string">&#x27;cn=hue,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --hue-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --emr-cluster-id <span class="string">&quot;<span class="variable">$EMR_CLUSTER_ID</span>&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="3-Verification"><a href="#3-Verification" class="headerlink" title="3. Verification"></a>3. Verification</h3><p>After installation &amp; integration is completed, it’s time to check if ranger works or not. The verification jobs are divided into 3 parts which are against hive, emrfs(s3) and spark.</p>
+<p>First, let us open ranger web console, the address is: <code>https://&lt;YOUR-RANGER-HOST&gt;:6182</code> , the default admin account&#x2F;password is: <code>admin/admin</code> . After login, we should open “Users&#x2F;Groups&#x2F;Roles” page first, check if example users on Windows AD are already synchronized to ranger as following:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/12.jpeg" alt="请添加图片描述"></p>
+<h4 id="3-1-Hive-Access-Control-Verification"><a href="#3-1-Hive-Access-Control-Verification" class="headerlink" title="3.1 Hive Access Control Verification"></a>3.1 Hive Access Control Verification</h4><p>Usually, there are a set of pre-defined policies for hive plugin after installation, to eliminate interference, keep verification simple, let’s REMOVE them first:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/13.jpeg" alt="请添加图片描述"></p>
+<p>Any policy changes on ranger web console will sync to agent side (emr cluster nodes) within 30 seconds, we can run following commands on master node to check if local policy file is updated:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on master node of emr cluster</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> &#123;1..10&#125;; <span class="keyword">do</span></span><br><span class="line">    <span class="built_in">printf</span> <span class="string">&quot;\n%100s\n\n&quot;</span>|<span class="built_in">tr</span> <span class="string">&#x27; &#x27;</span> <span class="string">&#x27;=&#x27;</span></span><br><span class="line">    <span class="built_in">sudo</span> <span class="built_in">stat</span> /etc/hive/ranger_policy_cache/hiveServer2_hive.json</span><br><span class="line">    <span class="built_in">sleep</span> 3</span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
+
+<p>Once local policy file is up to date, removing-all-policies action become effective, then login Hue with Windows AD account “example-user-1” created by installer, open hive editor, enter following sql (remember to replace “ranger-test” with your own bucket) to create a test table (change ‘ranger-test’ to your own bucket name):</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- run in hue hive editor</span></span><br><span class="line"><span class="keyword">create table</span> ranger_test (</span><br><span class="line">  id <span class="type">bigint</span></span><br><span class="line">)</span><br><span class="line"><span class="type">row</span> format delimited</span><br><span class="line">stored <span class="keyword">as</span> textfile location <span class="string">&#x27;s3://ranger-test/&#x27;</span>;</span><br></pre></td></tr></table></figure>
+
+<p>then, run it and an error occurs:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/14.jpeg" alt="请添加图片描述"></p>
+<p>It shows example-user-1 is blocked by database-related permissions, this proves hive plugin is working, then we go back to ranger, add a hive policy named “all - database, table, column” as following:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/15.jpeg" alt="请添加图片描述"></p>
+<p>It grants example-user-1 all privileges on all databases, tables and columns, then check policy file again on master node with previous command line, once updated, go back to Hue, re-run that sql, we will get another error at this time:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/16.jpeg" alt="请添加图片描述"></p>
+<p>As shown, the sql is blocked when reading “s3:&#x2F;&#x2F;ranger-test”, actually, example-user-1 has no permissions to access any URL, including “s3:&#x2F;&#x2F;”. We need grant url-related permissions to this user, so go back to ranger again, add a hive policy named “all - url” as following:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/17.jpeg" alt="请添加图片描述"></p>
+<p>It grants example-user-1 all privileges on any url, including “s3:&#x2F;&#x2F;”, then check policy file again, and switch to Hue, run that sql third time, it will go well as following:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/18.jpeg" alt="请添加图片描述"></p>
+<p>At the end, to prepare for next EMRFS &#x2F; Spark verification, we need insert some example data into the table, and also double check if example-user-1 has full read &amp; write permissions on the table:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">insert into</span> ranger_test(id) <span class="keyword">values</span>(<span class="number">1</span>);</span><br><span class="line"><span class="keyword">insert into</span> ranger_test(id) <span class="keyword">values</span>(<span class="number">2</span>);</span><br><span class="line"><span class="keyword">insert into</span> ranger_test(id) <span class="keyword">values</span>(<span class="number">3</span>);</span><br><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> ranger_test;</span><br></pre></td></tr></table></figure>
+
+<p>The execution result is:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/19.jpeg" alt="请添加图片描述"></p>
+<p>By now, hive access control verifications are passed.</p>
+<h4 id="3-2-EMRFS-S3-Access-Control-Verification"><a href="#3-2-EMRFS-S3-Access-Control-Verification" class="headerlink" title="3.2 EMRFS (S3) Access Control Verification"></a>3.2 EMRFS (S3) Access Control Verification</h4><p>Login Hue with account “example-user-1”, open scala editor, enter following spark codes:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"># run in scala editor of hue</span><br><span class="line">spark.read.csv(<span class="string">&quot;s3://ranger-test/&quot;</span>).show;</span><br></pre></td></tr></table></figure>
+
+<p>This line of codes try to read files on S3, but it will run into following errors:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/20.jpeg" alt="请添加图片描述"></p>
+<p>It shows example-user-1 has no permission on s3 bucket “ranger-test”. This proves emrfs plugin is working, it successfully blocked unauthorized s3 access. Let’s login ranger, add an emrfs policy named “all - ranger-test” as following:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/21.jpeg" alt="请添加图片描述"></p>
+<p>It will grant example-user-1 all privileges on “ranger-test” bucket. Similar to checking hive policy file, we can also run following command to check if emrfs policy file is updated:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on master node of emr cluster</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> &#123;1..10&#125;; <span class="keyword">do</span></span><br><span class="line">    <span class="built_in">printf</span> <span class="string">&quot;\n%100s\n\n&quot;</span>|<span class="built_in">tr</span> <span class="string">&#x27; &#x27;</span> <span class="string">&#x27;=&#x27;</span></span><br><span class="line">    <span class="built_in">sudo</span> <span class="built_in">stat</span> /emr/secretagent/ranger_policy_cache/emrS3RangerPlugin_emrfs.json</span><br><span class="line">    <span class="built_in">sleep</span> 3</span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
+
+<p>After updated, go back to Hue, re-run previous spark codes, it will succeed as following:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/22.jpeg" alt="请添加图片描述"></p>
+<p>By now, emrfs access control verifications are passed.</p>
+<h4 id="3-3-Spark-Access-Control-Verification"><a href="#3-3-Spark-Access-Control-Verification" class="headerlink" title="3.3 Spark Access Control Verification"></a>3.3 Spark Access Control Verification</h4><p>Login Hue with account “example-user-1”, open scala editor, enter following spark codes:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"># run in scala editor of hue</span><br><span class="line">spark.sql(<span class="string">&quot;select * from ranger_test&quot;</span>).show</span><br></pre></td></tr></table></figure>
+
+<p>This line of codes try to ranger_test table via spark sql, but it will run into following errors:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/23.jpeg" alt="请添加图片描述"></p>
+<p>It shows current user has no permission on default database. This proves spark plugin is working, it successfully blocked unauthorized database&#x2F;tables access.</p>
+<p>Let’s login ranger, add a spark policy named “all - database, table, column” as following:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/24.jpeg" alt="请添加图片描述"></p>
+<p>It will grant example-user-1 all privileges on all databases&#x2F;tables&#x2F;columns. Similar to checking hive policy file, we can also run following command to check if spark policy file is updated:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on master node of emr cluster</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> &#123;1..10&#125;; <span class="keyword">do</span></span><br><span class="line">    <span class="built_in">printf</span> <span class="string">&quot;\n%100s\n\n&quot;</span>|<span class="built_in">tr</span> <span class="string">&#x27; &#x27;</span> <span class="string">&#x27;=&#x27;</span></span><br><span class="line">    <span class="built_in">sudo</span> <span class="built_in">stat</span> /etc/emr-record-server/ranger_policy_cache/emrSparkRangerPlugin_spark.json </span><br><span class="line">    <span class="built_in">sleep</span> 3</span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
+
+<p>After updated, go back to Hue, re-run previous spark codes, it will succeed as following:</p>
+<p> <img src="/../../images/security/ranger-emr-3-ad-native/25.jpeg" alt="请添加图片描述"></p>
+<p>By now, spark access control verifications are passed.</p>
+<h3 id="4-Appendix"><a href="#4-Appendix" class="headerlink" title="4. Appendix"></a>4. Appendix</h3><p>The following is parameter specification:</p>
+<table>
+<thead>
+<tr>
+<th align="left">Parameter</th>
+<th align="left">Comment</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">–region</td>
+<td align="left">the aws region.</td>
+</tr>
+<tr>
+<td align="left">–access-key-id</td>
+<td align="left">the aws access key id of your IAM account.</td>
+</tr>
+<tr>
+<td align="left">–secret-access-key</td>
+<td align="left">the aws secret access key of your IAM account.</td>
+</tr>
+<tr>
+<td align="left">–ssh-key</td>
+<td align="left">the ssh private key file path.</td>
+</tr>
+<tr>
+<td align="left">–solution</td>
+<td align="left">the solution name, accepted values ‘open-source’ or ‘emr-native’.</td>
+</tr>
+<tr>
+<td align="left">–auth-provider</td>
+<td align="left">the authentication provider, accepted values ‘ad’ or ‘openldap’.</td>
+</tr>
+<tr>
+<td align="left">–openldap-host</td>
+<td align="left">the FQDN of openldap host.</td>
+</tr>
+<tr>
+<td align="left">–openldap-base-dn</td>
+<td align="left">the base dn of openldap, for example: ‘dc&#x3D;example,dc&#x3D;com’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–openldap-root-cn</td>
+<td align="left">the cn of root account, for example: ‘admin’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–openldap-root-password</td>
+<td align="left">the password of root account, for example: ‘Admin1234!’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–ranger-bind-dn</td>
+<td align="left">the bind dn for ranger, for example: ‘cn&#x3D;ranger,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–ranger-bind-password</td>
+<td align="left">the password of ranger bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–openldap-user-dn-pattern</td>
+<td align="left">the dn pattern for ranger to search users on OpenLDAP, for example: ‘uid&#x3D;{0},ou&#x3D;users,dc&#x3D;example,dc&#x3D;com’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–openldap-group-search-filter</td>
+<td align="left">the filter for ranger to search groups on OpenLDAP, for example: ‘(member&#x3D;uid&#x3D;{0},ou&#x3D;users,dc&#x3D;example,dc&#x3D;com)’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–openldap-user-object-class</td>
+<td align="left">the user object class for ranger to search users, for example: ‘inetOrgPerson’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–hue-bind-dn</td>
+<td align="left">the bind dn for hue, for example: ‘cn&#x3D;hue,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–hue-bind-password</td>
+<td align="left">the password of hue bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–example-users</td>
+<td align="left">the example users to be created on OpenLDAP &amp; Kerberos so as to demo ranger’s feature, this parameter is optional, if omitted, no example users will be created.</td>
+</tr>
+<tr>
+<td align="left">–ranger-bind-dn</td>
+<td align="left">the bind dn for ranger, for example: ‘cn&#x3D;ranger,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–ranger-bind-password</td>
+<td align="left">the password of bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–hue-bind-dn</td>
+<td align="left">the bind dn for hue, for example: ‘cn&#x3D;hue,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–hue-bind-password</td>
+<td align="left">the password of hue bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–sssd-bind-dn</td>
+<td align="left">the bind dn for sssd, for example: ‘cn&#x3D;sssd,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–sssd-bind-password</td>
+<td align="left">the password of sssd bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–ranger-plugins</td>
+<td align="left">the ranger plugins to be installed, comma separated for multiple values. for example: ‘emr-native-emrfs,emr-native-spark,emr-native-hive’, change it according to your env.</td>
+</tr>
+<tr>
+<td align="left">–skip-configure-hue</td>
+<td align="left">skip to configure hue, accepted values ‘true’ or ‘false’, dafault value is ‘false’.</td>
+</tr>
+<tr>
+<td align="left">–skip-migrate-kerberos-db</td>
+<td align="left">skip to migrate kerberos database, accepted values ‘true’ or ‘false’, dafault value is ‘false’.</td>
+</tr>
+</tbody></table>
+<p>Related Reading:</p>
+<table>
+<thead>
+<tr>
+<th align="left">Apache Ranger and AWS EMR Automated Installation Series</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a href="/security/ranger-emr-1-overview/">Apache Ranger and AWS EMR Automated Installation Series (1): Solutions Overview</a></td>
+</tr>
+<tr>
+<td align="left"><a href="/security/ranger-emr-2-openldap-native/">Apache Ranger and AWS EMR Automated Installation Series (2): OpenLDAP + EMR-Native Ranger</a></td>
+</tr>
+<tr>
+<td align="left"><a href="/security/ranger-emr-3-ad-native/">Apache Ranger and AWS EMR Automated Installation Series (3): Windows AD + EMR-Native Ranger</a></td>
+</tr>
+<tr>
+<td align="left"><a href="/security/ranger-emr-4-openldap-open-source/">Apache Ranger and AWS EMR Automated Installation Series (4): OpenLDAP + Open-Source Ranger</a></td>
+</tr>
+<tr>
+<td align="left"><a href="/security/ranger-emr-5-ad-open-source/">Apache Ranger and AWS EMR Automated Installation Series (5): Windows AD + Open-Source Ranger</a></td>
+</tr>
+</tbody></table>
+</div><div class="article-licensing box"><div class="licensing-title"><p>Apache Ranger 与 AWS EMR 自动化安装与集成 (3)：Windows AD + EMR-Native Ranger</p><p><a href="https://laurence.enlightgram.com/security/ranger-emr-3-ad-native/">https://laurence.enlightgram.com/security/ranger-emr-3-ad-native/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2022-12-17</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/AD/">AD</a><a class="link-muted mr-2" rel="tag" href="/tags/EMR/">EMR</a><a class="link-muted mr-2" rel="tag" href="/tags/Ranger/">Ranger</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/hadoop/hiveserver2-and-metastore/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">HiveServer2 和 HiveMetastore 梳理</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/python/jupyter-soft-unicode-error/"><span class="level-item">启动Jupyter报错：ImportError: cannot import name ‘soft_unicode‘ from ‘markupsafe‘</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-Solution-Overview"><span class="level-left"><span class="level-item">1. Solution Overview</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#1-1-Solution-Architecture"><span class="level-left"><span class="level-item">1.1 Solution Architecture</span></span></a></li><li><a class="level is-mobile" href="#1-2-Authentication-in-Detail"><span class="level-left"><span class="level-item">1.2 Authentication in Detail</span></span></a></li><li><a class="level is-mobile" href="#1-3-Authorization-in-Detail"><span class="level-left"><span class="level-item">1.3 Authorization in Detail</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-Installation-Integration"><span class="level-left"><span class="level-item">2. Installation &amp; Integration</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-1-Prerequisites"><span class="level-left"><span class="level-item">2.1 Prerequisites</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-1-1-VPC-Constraints"><span class="level-left"><span class="level-item">2.1.1 VPC Constraints</span></span></a></li><li><a class="level is-mobile" href="#2-1-2-Create-Windows-AD-Server"><span class="level-left"><span class="level-item">2.1.2 Create Windows AD Server</span></span></a></li><li><a class="level is-mobile" href="#2-1-3-Create-DHCP-Options-Set-and-Attach-To-VPC"><span class="level-left"><span class="level-item">2.1.3 Create DHCP Options Set and Attach To VPC</span></span></a></li><li><a class="level is-mobile" href="#2-1-4-Create-EC2-Instances-as-Ranger-Server"><span class="level-left"><span class="level-item">2.1.4 Create EC2 Instances as Ranger Server</span></span></a></li><li><a class="level is-mobile" href="#2-1-5-Download-Installer"><span class="level-left"><span class="level-item">2.1.5 Download Installer</span></span></a></li><li><a class="level is-mobile" href="#2-1-6-Upload-SSH-Key-File"><span class="level-left"><span class="level-item">2.1.6 Upload SSH Key File</span></span></a></li><li><a class="level is-mobile" href="#2-1-7-Export-Environment-Specific-Variables"><span class="level-left"><span class="level-item">2.1.7 Export Environment-Specific Variables</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-2-All-In-One-Installation"><span class="level-left"><span class="level-item">2.2 All-In-One Installation</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-2-1-Quick-Start"><span class="level-left"><span class="level-item">2.2.1 Quick Start</span></span></a></li><li><a class="level is-mobile" href="#2-2-2-Customization"><span class="level-left"><span class="level-item">2.2.2 Customization</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-3-Step-By-Step-Installation"><span class="level-left"><span class="level-item">2.3 Step-By-Step Installation</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-3-1-Init-EC2"><span class="level-left"><span class="level-item">2.3.1 Init EC2</span></span></a></li><li><a class="level is-mobile" href="#2-3-2-Create-IAM-Roles"><span class="level-left"><span class="level-item">2.3.2 Create IAM Roles</span></span></a></li><li><a class="level is-mobile" href="#2-3-3-Create-Ranger-Secrets"><span class="level-left"><span class="level-item">2.3.3 Create Ranger Secrets</span></span></a></li><li><a class="level is-mobile" href="#2-3-4-Create-EMR-Security-Configuration"><span class="level-left"><span class="level-item">2.3.4 Create EMR Security Configuration</span></span></a></li><li><a class="level is-mobile" href="#2-3-5-Install-Ranger"><span class="level-left"><span class="level-item">2.3.5 Install Ranger</span></span></a></li><li><a class="level is-mobile" href="#2-3-6-Install-Ranger-Plugins"><span class="level-left"><span class="level-item">2.3.6 Install Ranger Plugins</span></span></a></li><li><a class="level is-mobile" href="#2-3-7-Create-EMR-Cluster"><span class="level-left"><span class="level-item">2.3.7 Create EMR Cluster</span></span></a></li><li><a class="level is-mobile" href="#2-3-8-Update-Hue-Configuration"><span class="level-left"><span class="level-item">2.3.8 Update Hue Configuration</span></span></a></li></ul></li></ul></li><li><a class="level is-mobile" href="#3-Verification"><span class="level-left"><span class="level-item">3. Verification</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#3-1-Hive-Access-Control-Verification"><span class="level-left"><span class="level-item">3.1 Hive Access Control Verification</span></span></a></li><li><a class="level is-mobile" href="#3-2-EMRFS-S3-Access-Control-Verification"><span class="level-left"><span class="level-item">3.2 EMRFS (S3) Access Control Verification</span></span></a></li><li><a class="level is-mobile" href="#3-3-Spark-Access-Control-Verification"><span class="level-left"><span class="level-item">3.3 Spark Access Control Verification</span></span></a></li></ul></li><li><a class="level is-mobile" href="#4-Appendix"><span class="level-left"><span class="level-item">4. Appendix</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

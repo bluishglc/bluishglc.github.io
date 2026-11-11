@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>AKKA-HTTP DSL源码解读 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="--- 目录 --- 正文 AKKA- HTTP 的DSL设计简洁而优雅，让人禁不住想一窥其内部的实现，而其浓浓的函数式编程风格也是学习函数式编程很好的参考，因此，这部分代码非常值得仔细咀嚼一番。我们先看一个DSL的应用代码示例（本文原文出处: https://laurence.enlightgram.com/scala/akka-http-dsl-source/ 转载请注明出处。）： 示例代码"><meta property="og:type" content="article"><meta property="og:title" content="AKKA-HTTP DSL源码解读"><meta property="og:url" content="https://laurence.enlightgram.com/scala/akka-http-dsl-source/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="--- 目录 --- 正文 AKKA- HTTP 的DSL设计简洁而优雅，让人禁不住想一窥其内部的实现，而其浓浓的函数式编程风格也是学习函数式编程很好的参考，因此，这部分代码非常值得仔细咀嚼一番。我们先看一个DSL的应用代码示例（本文原文出处: https://laurence.enlightgram.com/scala/akka-http-dsl-source/ 转载请注明出处。）： 示例代码"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/profile/thumbnail.png"><meta property="article:published_time" content="2016-11-18T21:29:06.000Z"><meta property="article:modified_time" content="2026-11-11T03:37:39.387Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="HTTP"><meta property="article:tag" content="Scala"><meta property="article:tag" content="Akka"><meta property="article:tag" content="函数式编程"><meta property="article:tag" content="DSL"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/profile/thumbnail.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/scala/akka-http-dsl-source/"},"headline":"AKKA-HTTP DSL源码解读","image":["https://laurence.enlightgram.com/images/profile/thumbnail.png"],"datePublished":"2016-11-18T21:29:06.000Z","dateModified":"2026-11-11T03:37:39.387Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"--- 目录 --- 正文 AKKA- HTTP 的DSL设计简洁而优雅，让人禁不住想一窥其内部的实现，而其浓浓的函数式编程风格也是学习函数式编程很好的参考，因此，这部分代码非常值得仔细咀嚼一番。我们先看一个DSL的应用代码示例（本文原文出处: https://laurence.enlightgram.com/scala/akka-http-dsl-source/ 转载请注明出处。）： 示例代码"}</script><link rel="canonical" href="https://laurence.enlightgram.com/scala/akka-http-dsl-source/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">AKKA-HTTP DSL源码解读</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Scala/">Scala</a></span><span class="level-item">发表于：<time dateTime="2016-11-18T21:29:06.000Z" title="2016-11-18 13:29:06">2016-11-18</time></span><span class="level-item">阅读用时：25 分钟 (约 3726 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><hr>
+<p><strong>目录</strong> </p>
+<hr>
+<p><strong>正文</strong> </p>
+<p>AKKA- HTTP 的DSL设计简洁而优雅，让人禁不住想一窥其内部的实现，而其浓浓的函数式编程风格也是学习函数式编程很好的参考，因此，这部分代码非常值得仔细咀嚼一番。我们先看一个DSL的应用代码示例（本文原文出处: <a href="/scala/akka-http-dsl-source/">https://laurence.enlightgram.com/scala/akka-http-dsl-source/</a> 转载请注明出处。）：</p>
+<h2 id="示例代码"><a href="#示例代码" class="headerlink" title="示例代码"></a>示例代码</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> akka.actor.<span class="type">ActorSystem</span></span><br><span class="line"><span class="keyword">import</span> akka.http.scaladsl.<span class="type">Http</span></span><br><span class="line"><span class="keyword">import</span> akka.http.scaladsl.model._</span><br><span class="line"><span class="keyword">import</span> akka.http.scaladsl.server.&#123;<span class="type">Directive0</span>, <span class="type">Route</span>&#125;</span><br><span class="line"><span class="keyword">import</span> akka.http.scaladsl.server.<span class="type">Directives</span>._</span><br><span class="line"><span class="keyword">import</span> akka.stream.<span class="type">ActorMaterializer</span></span><br><span class="line"><span class="keyword">import</span> scala.io.<span class="type">StdIn</span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">WebServer</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">main</span></span>(args: <span class="type">Array</span>[<span class="type">String</span>]) &#123;</span><br><span class="line">        <span class="keyword">implicit</span> <span class="keyword">val</span> system = <span class="type">ActorSystem</span>(<span class="string">&quot;my-system&quot;</span>)</span><br><span class="line">        <span class="keyword">implicit</span> <span class="keyword">val</span> materializer = <span class="type">ActorMaterializer</span>()</span><br><span class="line">        <span class="comment">// needed for the future flatMap/onComplete in the end</span></span><br><span class="line">        <span class="keyword">implicit</span> <span class="keyword">val</span> executionContext = system.dispatcher</span><br><span class="line">        <span class="keyword">val</span> route =</span><br><span class="line">            path(<span class="string">&quot;hello&quot;</span>) &#123;</span><br><span class="line">                get &#123;</span><br><span class="line">                    complete(<span class="string">&quot;Say hello to akka-http&quot;</span>)</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        <span class="keyword">val</span> bindingFuture = <span class="type">Http</span>().bindAndHandle(route, <span class="string">&quot;localhost&quot;</span>, <span class="number">8080</span>)</span><br><span class="line">        println(<span class="string">s&quot;Server online at http://localhost:8080/\nPress RETURN to stop...&quot;</span>)</span><br><span class="line">        <span class="type">StdIn</span>.readLine() <span class="comment">// let it run until user presses return</span></span><br><span class="line">        bindingFuture</span><br><span class="line">            .flatMap(_.unbind()) <span class="comment">// trigger unbinding from the port</span></span><br><span class="line">            .onComplete(_ =&gt; system.terminate()) <span class="comment">// and shutdown when done</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们主要关注的是变量 <code>route</code> 的定义，它用AKKA-HTTP提供的DSL定义了一个非常简单的路由，作为一个使用者，你不得不感叹这套DSL定义地非常优雅。我们的代码走读就要从这个 <code>route</code> 的定义开始了。为了更容易理解，我们把 <code>route</code> 的定义改写成更加直白的形式，两种形式是完全等价的：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> akka.actor.<span class="type">ActorSystem</span></span><br><span class="line"><span class="keyword">import</span> akka.http.scaladsl.<span class="type">Http</span></span><br><span class="line"><span class="keyword">import</span> akka.http.scaladsl.model._</span><br><span class="line"><span class="keyword">import</span> akka.http.scaladsl.server.&#123;<span class="type">Directive0</span>, <span class="type">Route</span>, <span class="type">StandardRoute</span>&#125;</span><br><span class="line"><span class="keyword">import</span> akka.http.scaladsl.server.<span class="type">Directives</span>._</span><br><span class="line"><span class="keyword">import</span> akka.stream.<span class="type">ActorMaterializer</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> scala.io.<span class="type">StdIn</span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">WebServer</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">main</span></span>(args: <span class="type">Array</span>[<span class="type">String</span>]) &#123;</span><br><span class="line">        <span class="keyword">implicit</span> <span class="keyword">val</span> system = <span class="type">ActorSystem</span>(<span class="string">&quot;my-system&quot;</span>)</span><br><span class="line">        <span class="keyword">implicit</span> <span class="keyword">val</span> materializer = <span class="type">ActorMaterializer</span>()</span><br><span class="line">        <span class="comment">// needed for the future flatMap/onComplete in the end</span></span><br><span class="line">        <span class="keyword">implicit</span> <span class="keyword">val</span> executionContext = system.dispatcher</span><br><span class="line"></span><br><span class="line">        <span class="keyword">val</span> complete1: <span class="type">StandardRoute</span> = complete(<span class="string">&quot;Say hello to akka-http&quot;</span>);</span><br><span class="line">        <span class="keyword">val</span> route1: <span class="type">Route</span> = get(complete1)</span><br><span class="line">        <span class="keyword">val</span> path1: <span class="type">Directive0</span> = path(<span class="string">&quot;hello&quot;</span>)</span><br><span class="line">        <span class="keyword">val</span> route: <span class="type">Route</span> = path1.apply(route1)</span><br><span class="line"></span><br><span class="line">        <span class="keyword">val</span> bindingFuture = <span class="type">Http</span>().bindAndHandle(route, <span class="string">&quot;localhost&quot;</span>, <span class="number">8080</span>)</span><br><span class="line">        println(<span class="string">s&quot;Server online at http://localhost:8080/\nPress RETURN to stop...&quot;</span>)</span><br><span class="line">        <span class="type">StdIn</span>.readLine() <span class="comment">// let it run until user presses return</span></span><br><span class="line">        bindingFuture</span><br><span class="line">            .flatMap(_.unbind()) <span class="comment">// trigger unbinding from the port</span></span><br><span class="line">            .onComplete(_ =&gt; system.terminate()) <span class="comment">// and shutdown when done</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Directive的创建"><a href="#Directive的创建" class="headerlink" title="Directive的创建"></a>Directive的创建</h2><h3 id="调用堆栈"><a href="#调用堆栈" class="headerlink" title="调用堆栈"></a>调用堆栈</h3><p>让我们从 <code>get</code> 方法说起， <code>get</code> 不是一个接受 <code>StandardRoute</code> 类 型参数的函数，而是一个无参数的函数，它返回 <code>Directive0</code> ，而后面的这个 <code>StandardRoute</code> 类型参列表实际上是 <code>Directive0</code> 的 <code>apply</code> 方法的参数！ <code>get</code> 这个 <code>Directive</code> 的创建过程其实是非常曲折的！它的调用关系是： <code>akka.http.scaladsl.server.directives.MethodDirectives#get</code> -&gt; <code>akka.http.scaladsl.server.directives.MethodDirectives#_get</code> -&gt; <code>akka.http.scaladsl.server.directives.MethodDirectives#method</code> -&gt; <code>akka.http.scaladsl.server.directives.MethodDirectives#extractMethod</code> -&gt; <code>akka.http.scaladsl.server.directives.MethodDirectives#_extractMethod</code> -&gt; <code>akka.http.scaladsl.server.directives.BasicDirectives#extract</code> -&gt; <code>akka.http.scaladsl.server.directives.BasicDirectives#textract</code> -&gt; <code>akka.http.scaladsl.server.Directive#apply</code> , 为了便于阅读，我们先把 <code>_extractMethod</code> ， <code>extract</code> ， <code>textract</code> 和 <code>apply</code> 这些方法放到一起：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// akka.http.scaladsl.server.directives.MethodDirectives#get</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">get</span></span>: <span class="type">Directive0</span> = _get</span><br><span class="line"></span><br><span class="line"><span class="comment">// akka.http.scaladsl.server.directives.MethodDirectives#_get</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> _get    : <span class="type">Directive0</span> = method(<span class="type">GET</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// akka.http.scaladsl.server.directives.MethodDirectives#method</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">method</span></span>(httpMethod: <span class="type">HttpMethod</span>): <span class="type">Directive0</span> =</span><br><span class="line">    extractMethod.flatMap[<span class="type">Unit</span>] &#123;</span><br><span class="line">        <span class="keyword">case</span> `httpMethod` ⇒ pass</span><br><span class="line">        <span class="keyword">case</span> _            ⇒ reject(<span class="type">MethodRejection</span>(httpMethod))</span><br><span class="line">    &#125; &amp; cancelRejections(classOf[<span class="type">MethodRejection</span>])</span><br><span class="line"></span><br><span class="line"><span class="comment">// akka.http.scaladsl.server.directives.MethodDirectives#extractMethod</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">extractMethod</span></span>: <span class="type">Directive1</span>[<span class="type">HttpMethod</span>] = _extractMethod</span><br><span class="line"></span><br><span class="line"><span class="comment">// akka.http.scaladsl.server.directives.MethodDirectives#_extractMethod</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> _extractMethod: <span class="type">Directive1</span>[<span class="type">HttpMethod</span>] =</span><br><span class="line">    <span class="type">BasicDirectives</span>.extract(_.request.method) <span class="comment">//ctx=&gt;ctx.request.method</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// akka.http.scaladsl.server.directives.BasicDirectives#extract    </span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">extract</span></span>[<span class="type">T</span>](f: <span class="type">RequestContext</span> ⇒ <span class="type">T</span>): <span class="type">Directive1</span>[<span class="type">T</span>] =</span><br><span class="line">    textract(ctx ⇒ <span class="type">Tuple1</span>(f(ctx)))    </span><br><span class="line"></span><br><span class="line"><span class="comment">// akka.http.scaladsl.server.directives.BasicDirectives#textract    </span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">textract</span></span>[<span class="type">L</span>: <span class="type">Tuple</span>](f: <span class="type">RequestContext</span> ⇒ <span class="type">L</span>): <span class="type">Directive</span>[<span class="type">L</span>] =</span><br><span class="line">    <span class="type">Directive</span> &#123; inner ⇒ ctx ⇒ inner(f(ctx))(ctx) &#125; </span><br><span class="line"></span><br><span class="line"><span class="comment">// akka.http.scaladsl.server.Directive#apply</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">apply</span></span>[<span class="type">T</span>: <span class="type">Tuple</span>](f: (<span class="type">T</span> ⇒ <span class="type">Route</span>) ⇒ <span class="type">Route</span>): <span class="type">Directive</span>[<span class="type">T</span>] =</span><br><span class="line">    <span class="keyword">new</span> <span class="type">Directive</span>[<span class="type">T</span>] &#123; <span class="function"><span class="keyword">def</span> <span class="title">tapply</span></span>(inner: <span class="type">T</span> ⇒ <span class="type">Route</span>) = f(inner) &#125;    </span><br><span class="line"></span><br><span class="line"><span class="comment">// akka.http.scaladsl.server.Directive#addByNameNullaryApply</span></span><br><span class="line"><span class="keyword">implicit</span> <span class="function"><span class="keyword">def</span> <span class="title">addByNameNullaryApply</span></span>(directive: <span class="type">Directive0</span>): (⇒ <span class="type">Route</span>) ⇒ <span class="type">Route</span> =</span><br><span class="line">r ⇒ directive.tapply(_ ⇒ r) <span class="comment">//t=&gt;r</span></span><br><span class="line"><span class="comment">//t没有用到，使用_忽略参数，所以我们可以看到，这个隐式转换要做的工作是：</span></span><br><span class="line"><span class="comment">//把一个传递进来的路由变成了它的内部路由！这个传递进来的路由就是complete1！！</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="一个分支"><a href="#一个分支" class="headerlink" title="一个分支"></a>一个分支</h3><p>当代码代码在执行到 <code>akka.http.scaladsl.server.directives.MethodDirectives#method</code> 时还有一个分支，即里面的 <code>flatMap</code> 方法，它是通过一个隐式转换，为生成的 <code>Directive</code> 添加逻辑,相应的调用堆栈如下： <code>akka.http.scaladsl.server.directives.MethodDirectives#method</code> -&gt; <code>akka.http.scaladsl.server.Directive.SingleValueModifiers#flatMap</code> -&gt; <code>akka.http.scaladsl.server.Directive#tflatMap</code> </p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// akka.http.scaladsl.server.directives.MethodDirectives#method</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">method</span></span>(httpMethod: <span class="type">HttpMethod</span>): <span class="type">Directive0</span> =</span><br><span class="line">    extractMethod.flatMap[<span class="type">Unit</span>] &#123;</span><br><span class="line">        <span class="keyword">case</span> `httpMethod` ⇒ pass</span><br><span class="line">        <span class="keyword">case</span> _            ⇒ reject(<span class="type">MethodRejection</span>(httpMethod))</span><br><span class="line">    &#125; &amp; cancelRejections(classOf[<span class="type">MethodRejection</span>])</span><br><span class="line"></span><br><span class="line"><span class="comment">// akka.http.scaladsl.server.Directive.SingleValueModifiers#flatMap</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">flatMap</span></span>[<span class="type">R</span>: <span class="type">Tuple</span>](f: <span class="type">T</span> ⇒ <span class="type">Directive</span>[<span class="type">R</span>]): <span class="type">Directive</span>[<span class="type">R</span>] =</span><br><span class="line">  underlying.tflatMap &#123; <span class="keyword">case</span> <span class="type">Tuple1</span>(value) ⇒ f(value) &#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// akka.http.scaladsl.server.Directive#tflatMap</span></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">tflatMap</span></span>[<span class="type">R</span>: <span class="type">Tuple</span>](f: <span class="type">L</span> ⇒ <span class="type">Directive</span>[<span class="type">R</span>]): <span class="type">Directive</span>[<span class="type">R</span>] =</span><br><span class="line">    <span class="type">Directive</span>[<span class="type">R</span>] &#123; inner ⇒ tapply &#123; values ⇒ f(values) tapply inner &#125; &#125;</span><br></pre></td></tr></table></figure>
+
+<p>上面代码的逻辑相对比较清晰，隐式转换为 <code>Direcitve</code> 添加了一个方法 <code>flatMap</code> ，这个方法构造了一个偏函数，这个偏函数接受一个 <code>Tuple</code> ，提取出其中的值传递给传入的函数参数f进行调用。函数参数f的工作判断根据传入的值（HTTP元素）是否与本 <code>Directive</code> 创建时声明的HTTP元素一致，如果一致，让请求通过（不做任何事情），否则，拒绝请求（尝试新的路由）。</p>
+<h3 id="回到主干"><a href="#回到主干" class="headerlink" title="回到主干"></a>回到主干</h3><p>主调用堆栈里一连串的方法调用的解释是：我们现在要针对HTTP请求的方法（Get&#x2F;Put&#x2F;Post等等）创建一个 <code>Directive</code> , <code>_extractMethod</code> 告诉了程序如何从请求上下文里获取当前“HTTP请求方法”的方法。 <code>extract</code> 做的工作是：因为通行的创建 <code>Directive</code> 的方法要求提供的是一个 <code>Tuple</code> ，所以 <code>extract</code> 只是简单地把获取的“HTTP请求方法”封装成一个 <code>Tuple</code> 。 <code>textract</code> 开始真正地去创建这个 <code>Directive</code> ，一个 <code>Directive</code> 最 主要的 成分是它会包裹一个内部的路由( <code>inner</code> route)，所谓的“路由”是指这样一个函数：它接受一个请求上下文然后产出一个结果（或完成或拒绝或是失败等等），这个函数，也可以叫”处理过程”被称之为“路由”。那什么是”内部路由”呢？”内部路由”实际上就是从当前这个 <code>Directive</code> 携带的一个些“值”（这些“值”就是一些HTTP元素，比如： <code>HttpMethod</code> , <code>HttpHeader</code> 等，这些值会封装在一个 <code>Tuple</code> 里），“内部路由”就是以这个 <code>Directive</code> 的内部HTTP元素为“依据”，从接受请求到得到一个路由结果的操作！对应到代码上，就是在构建 <code>Directive</code> 实例时传递的函数参数 <code>inner</code> , 即类型是 <code>T ⇒ Route</code> 。一个非常值得注意的地方是：直到我们创建出这个 <code>Directive</code> 实例后，内部路由的具体实现(即 <code>inner</code> 的“值”)可是不直到的，它还是以一个函数参数的形式存在的。</p>
+<p>让我们从 <code>_extractMethod</code> 开始，逐一解读：</p>
+<hr>
+<p>代码：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// akka.http.scaladsl.server.directives.MethodDirectives#_extractMethod</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> _extractMethod: <span class="type">Directive1</span>[<span class="type">HttpMethod</span>] =</span><br><span class="line">    <span class="type">BasicDirectives</span>.extract(_.request.method)</span><br><span class="line"><span class="comment">//上述代码等同于：</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> _extractMethod: <span class="type">Directive1</span>[<span class="type">HttpMethod</span>] =</span><br><span class="line">    <span class="type">BasicDirectives</span>.extract(ctx=&gt;ctx.request.method)</span><br></pre></td></tr></table></figure>
+
+<p>解读：</p>
+<p>我将试图创建一个面向 <code>HttpMethod</code> 的 <code>Directive1</code> ，现在有一个现成的方法，它只要我提供一个函数就可以直接创建出这个 <code>Directive</code> 了，这个函数要能从一个 <code>RequestContext</code> 里面提取出一个 <code>HttpMethod</code> 。针对这个要求传入的函数，我给了它我的实现,即:从当前的 <code>RequestContext</code> 中取出当前的 <code>request</code> 中的 <code>method</code> 即可。至此，我的工作完成，了解更多细节请参考我委托的函数。</p>
+<hr>
+<p>代码：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// akka.http.scaladsl.server.directives.BasicDirectives#extract    </span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">extract</span></span>[<span class="type">T</span>](f: <span class="type">RequestContext</span> ⇒ <span class="type">T</span>): <span class="type">Directive1</span>[<span class="type">T</span>] =</span><br><span class="line">    textract(ctx ⇒ <span class="type">Tuple1</span>(f(ctx)))   </span><br></pre></td></tr></table></figure>
+
+<p>解读：</p>
+<p>我将试图创建一个面向任意HTTP元素的 <code>Directive1</code> ，首先，我需要你提供给我一个函数，这个函数要能从一个 <code>RequestContext</code> 里面提取出对应的HTTP元素，我将利用这个函数得到这个HTTP元素，然后，现在有一个现成的方法，它只要我提供一个函数就可以直接创建出这个 <code>Directive</code> 了，这个函数要能从一个 <code>RequestContext</code> 里面提取出一个 <code>Tuple1</code> 。针对这个要求传入的函数，我给了它我的实现，即：利用传入的函数得到HTTP元素，把这个HTTP元素包裹成一个 <code>Tuple1</code> 并返回就可以了。</p>
+<hr>
+<p>代码：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// akka.http.scaladsl.server.directives.BasicDirectives#textract    </span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">textract</span></span>[<span class="type">L</span>: <span class="type">Tuple</span>](f: <span class="type">RequestContext</span> ⇒ <span class="type">L</span>): <span class="type">Directive</span>[<span class="type">L</span>] =</span><br><span class="line">    <span class="type">Directive</span> &#123; inner ⇒ ctx ⇒ inner(f(ctx))(ctx) &#125; </span><br></pre></td></tr></table></figure>
+
+<p>解读：</p>
+<p><code>extract</code> 方法只是把HTTP元素封装到了一个Tuple里，我才是真正负责创建 <code>Directive</code> 的通用的标准方法。我将试图创建一个包含一个 <code>Tuple</code> 的 <code>Directive</code> （Tuple里的元素都是HTTP元素）。首先，我需要你提供给我一个函数，这个函数要能从一个 <code>RequestContext</code> 里面提取出封装了对应HTTP元素的 <code>Tuple</code> ，我将利用这个函数得到这个 <code>Tuple</code> ，显然，这个工作extract方法已经如实地完成了，然后，我将利用 <code>Directive</code> 的 <code>apply</code> 方法来创建这个 <code>Directive</code> 实例。为此我们需要先看一下apply方法的实现：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// akka.http.scaladsl.server.Directive#apply</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">apply</span></span>[<span class="type">T</span>: <span class="type">Tuple</span>](f: (<span class="type">T</span> ⇒ <span class="type">Route</span>) ⇒ <span class="type">Route</span>): <span class="type">Directive</span>[<span class="type">T</span>] =</span><br><span class="line">    <span class="keyword">new</span> <span class="type">Directive</span>[<span class="type">T</span>] &#123; <span class="function"><span class="keyword">def</span> <span class="title">tapply</span></span>(inner: <span class="type">T</span> ⇒ <span class="type">Route</span>) = f(inner) &#125;    </span><br></pre></td></tr></table></figure>
+
+<p><code>apply</code> 方法要求传入一个函数，这是一个高阶函数，它需要先利用另一个函数，这个函数接受一个 <code>Tuple</code> ，返回一个 <code>Route</code> ，它自己也返回一个 <code>Route</code> ， <code>Route</code> 是这样一种类型 <code>type Route = RequestContext ⇒ Future[RouteResult]</code> 。为了更加容易地理解代码，我们先把类型展开，这样看起来会更加清晰：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">f: (<span class="type">T</span> ⇒ <span class="type">Route</span>) ⇒ <span class="type">Route</span></span><br><span class="line">f: ((<span class="type">T</span> ⇒ (<span class="type">RequestContext</span> ⇒ <span class="type">Future</span>[<span class="type">RouteResult</span>])) =&gt;(<span class="type">RequestContext</span> ⇒ <span class="type">Future</span>[<span class="type">RouteResult</span>])</span><br></pre></td></tr></table></figure>
+
+<p>针对这个需要传入的高阶函数 <code>f</code> ，我给出了我的实现：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">inner ⇒ ctx ⇒ inner(f(ctx))(ctx) </span><br></pre></td></tr></table></figure>
+
+<p>对照函数 <code>f</code> 的声明，我们来一一核实实现代码中的每一个元素和类型，此处代码简短，却处处是函数式编程的浓郁味道，让我们慢慢地分析：</p>
+<ul>
+<li><p><code>inner</code> 是apply方法函数参数 <code>f</code> 的 <strong>参数</strong> ，它本身是一个函数，它的类型应该是 <code>T ⇒ Route</code> 也就是 <code>T ⇒ (RequestContext ⇒ Future[RouteResult])</code></p>
+</li>
+<li><p><code>ctx ⇒ inner(f(ctx))(ctx)</code> 是apply方法函数参数 <code>f</code> 的 <strong>返回值</strong> ，它本身是一个函数，它的类型应该是 <code>Route</code> 也就是 <code>RequestContext ⇒ Future[RouteResult]</code></p>
+</li>
+</ul>
+<p>让我们来推导一下 <code>ctx ⇒ inner(f(ctx))(ctx)</code> 的类型， <code>ctx</code> 是 <code>RequestContext</code> 类型，没有任何问题， <code>inner(f(ctx))(ctx)</code> 的类型呢？已知 <code>inner</code> 的类型是 <code>T ⇒ (RequestContext ⇒ Future[RouteResult]))</code> ， <code>inner(f(ctx))(ctx)</code> 是柯里化处理， <code>f(ctx)</code> 的类型是T，所以 <code>inner(f(ctx))</code> 的类型是 <code>RequestContext ⇒ Future[RouteResult]</code> ,传递 <code>ctx</code> 参数之后，返回值的类型就是 <code>Future[RouteResult]</code> ,即： <code>inner(f(ctx))(ctx)</code> 的类型是 <code>Future[RouteResult]</code> ，所以， <code>ctx ⇒ inner(f(ctx))(ctx)</code> 的类型就是： <code>RequestContext ⇒ Future[RouteResult]</code> ！</p>
+<h2 id="深入解读"><a href="#深入解读" class="headerlink" title="深入解读"></a>深入解读</h2><p><code>apply</code> 方法看上去很难理解，这也许是函数式编程的原因，但是读懂它是非常重要的，实际上它声明需要的这个函数 <code>f: (T ⇒ Route) ⇒ Route</code> 正是对Directive和Route之间微妙关系的一种揭示。函数参数 <code>T ⇒ Route</code> 被称之为内部路由，它通常是在Directive实例创建之后，在嵌套子Directive的时候传入的。在嵌套子Directive的时候会进行一个隐式转化，从而把Directive转换为一个路由，这一点后面我们会提到。</p>
+<p><code>f: (T ⇒ Route) ⇒ Route</code> 这个函数类型设计是非常“tricky”的！它的参数也是一个函数，类型是 <code>T ⇒ Route</code> ，注意： <code>T</code> 的数据是来自当前的 <code>Directive</code> 的！第一个 <code>Route</code> 是外面传进来的子 <code>Directive</code> 的路由，第二个Route是在基于当前 <code>Directive</code> 的某些值封装一些逻辑附加到传进来的路由之上返回的新的路由。这个路由还将继续传递给后续的 <code>Directive</code> 进行接力，不断附加逻辑上去。</p>
+<p>所以每一个内部路由，也就是 <code>inner</code> ，要做的就是根据当前 <code>Directive</code> 提供的“信息”封装路由相关的逻辑然后附加到已有的路由上，附加之后返回的新的路由就 <code>f</code> 的执行结果，一个新的 <code>Route</code> ，这种接受旧路由返回新路由的设计确保路由可以层层附加逻辑并传递下去！</p>
+<p><code>Route</code> 是面向一个HTTP请求在处理流程上不断累加起来的一系列的“指令”的组合， <code>Directive</code> 是解读一个HTTP请求时提取出来的一个一个的“指令”。 <code>Directive</code> 有很多种，每一种都含有一些特定的信息，比如path,method等等，每个Directive在构建的时候，都会把自己的这些信息“写”到路由上（内部路由），它写的并不是这些信息本身，而是从上下文里得到这些信息的“方法”！它从不往路由上“堆砌”值，它往路由上堆砌的是“逻辑”！这是函数式编程的风格和做法。在我们展示的这个例子里， <code>complete</code> 是 <code>get</code> 的内部路由， <code>get</code> 在 <code>complete</code> 的路由基础上添加了自己的“指令”：提取当前HTTP请求的请求方法（Get？Put？等等）。当路由“行进”到该指令时，就会取得当前HTTP请求的请求方法，然后和指令声明的get方法进行比对，如果请求的刚好是get方法，那就从这个指令继续向下路由，如果不是，就要询问一个其他的兄弟指令了。</p>
+<p>我们来看最后一个问题：在 <code>val route1: Route = get(complete1)</code> 这行代码里， <code>get</code> 返回的是一个 <code>Directive0</code> ,而它的 <code>apply</code> 方法声明要接受的参数是 <code>(⇒ Route) ⇒ Route</code> ，而我们传入的参数 <code>complete1</code> 是一个Route，这显然无法工作，所以这里必定发生了隐式转化，这个转换是： <code>akka.http.scaladsl.server.Directive.addByNameNullaryApply</code> </p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">implicit</span> <span class="function"><span class="keyword">def</span> <span class="title">addByNameNullaryApply</span></span>(directive: <span class="type">Directive0</span>): (⇒ <span class="type">Route</span>) ⇒ <span class="type">Route</span> =</span><br><span class="line">    r ⇒ directive.tapply(_ ⇒ r)</span><br></pre></td></tr></table></figure>
+
+<p>首先要明确的是这个隐式转换返回的是一个函数，类型是 <code>(⇒ Route) ⇒ Route</code> ，需要注意的是 <code>(⇒ Route)</code> 是 “call-by-name”的语法，和 <code>(()⇒ Route) ⇒ Route</code> 完全两码事。也就是说这个隐式转化是要把一个 <code>Directive0</code> 的实例转换成一个函数，这个函数接受一个 <code>Route</code> 型的参数，返回一个 <code>Route</code> 型的结果，但是参数是”call-by-name”的。</p>
+<p>所以函数字面量 <code>r ⇒ directive.tapply(_ ⇒ r)</code> 完全等同于这样一个函数：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">f</span></span>(r: =&gt;<span class="type">Route</span>): <span class="type">Route</span> = directive.tapply(_ ⇒ r)</span><br></pre></td></tr></table></figure>
+
+<h2 id="对函数式编程的思考"><a href="#对函数式编程的思考" class="headerlink" title="对函数式编程的思考"></a>对函数式编程的思考</h2><p>由于函数被类型化，函数的调用，特别是高阶函数的调用将会发生一些与传统函数调用有本质区别的变化，其中尤为重要的一点是：高阶函数的调用可能并不是在函数，而只是在“具体化”函数的定义，高阶函数执行结束的结果可能只是“细化了一个函数的具体行为”，然后把这个细化好的函数作为一个值传给了需要它的地方，留待后面调用！</p>
+<p>非函数式编程时，函数的逻辑是确定的，函数式编程的一个困难的地方是，在高阶函数里，你无法准确地了解函数每一步的逻辑，那些作为参数传进来的函数，可能有很多不同的实现封装着不同的逻辑，当函数参数很多或嵌套层次加深时，会给阅读代码带来很大的困难，这也是人们抱怨函数式编程可读性差的一个原因！</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>AKKA-HTTP DSL源码解读</p><p><a href="https://laurence.enlightgram.com/scala/akka-http-dsl-source/">https://laurence.enlightgram.com/scala/akka-http-dsl-source/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2016-11-18</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/HTTP/">HTTP</a><a class="link-muted mr-2" rel="tag" href="/tags/Scala/">Scala</a><a class="link-muted mr-2" rel="tag" href="/tags/Akka/">Akka</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B/">函数式编程</a><a class="link-muted mr-2" rel="tag" href="/tags/DSL/">DSL</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/scala/scala-functional-collection-operations/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Scala之集合上常见的函数式风格的操作汇总</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/scala/actor-error-handling/"><span class="level-item">Actor系统的错误处理</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#示例代码"><span class="level-left"><span class="level-item">示例代码</span></span></a></li><li><a class="level is-mobile" href="#Directive的创建"><span class="level-left"><span class="level-item">Directive的创建</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#调用堆栈"><span class="level-left"><span class="level-item">调用堆栈</span></span></a></li><li><a class="level is-mobile" href="#一个分支"><span class="level-left"><span class="level-item">一个分支</span></span></a></li><li><a class="level is-mobile" href="#回到主干"><span class="level-left"><span class="level-item">回到主干</span></span></a></li></ul></li><li><a class="level is-mobile" href="#深入解读"><span class="level-left"><span class="level-item">深入解读</span></span></a></li><li><a class="level is-mobile" href="#对函数式编程的思考"><span class="level-left"><span class="level-item">对函数式编程的思考</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

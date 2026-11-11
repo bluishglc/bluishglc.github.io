@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>SSL/TLS工作原理的朴素理解和演绎 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="尽管在数年前学习过SSL/TLS的工作原理，并做了笔记 《和安全有关的那些事(非对称加密、数字摘要、数字签名、数字证书、SSL、HTTPS及其他)》 ，然而知识就是这样，长时间不用就会淡忘，现在又需要重新复习和梳理一下SSL/TLS相关的知识了。 首先，明确一下，几年前，大家讨论的都是SSL，这个 TLS 其实是在SSL基础上发展起来的，可以简单认为是SSL的后续升级版本，或许过几年，SSL这个名"><meta property="og:type" content="article"><meta property="og:title" content="SSL/TLS工作原理的朴素理解和演绎"><meta property="og:url" content="https://laurence.enlightgram.com/security/ssl-tls-explained/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="尽管在数年前学习过SSL/TLS的工作原理，并做了笔记 《和安全有关的那些事(非对称加密、数字摘要、数字签名、数字证书、SSL、HTTPS及其他)》 ，然而知识就是这样，长时间不用就会淡忘，现在又需要重新复习和梳理一下SSL/TLS相关的知识了。 首先，明确一下，几年前，大家讨论的都是SSL，这个 TLS 其实是在SSL基础上发展起来的，可以简单认为是SSL的后续升级版本，或许过几年，SSL这个名"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/security/ssl-tls-explained/1.jpeg"><meta property="article:published_time" content="2022-03-17T17:38:48.000Z"><meta property="article:modified_time" content="2026-11-11T02:50:16.464Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="加密"><meta property="article:tag" content="TLS"><meta property="article:tag" content="SSL"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/security/ssl-tls-explained/1.jpeg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/security/ssl-tls-explained/"},"headline":"SSL/TLS工作原理的朴素理解和演绎","image":["https://laurence.enlightgram.com/images/security/ssl-tls-explained/1.jpeg"],"datePublished":"2022-03-17T17:38:48.000Z","dateModified":"2026-11-11T02:50:16.464Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"尽管在数年前学习过SSL/TLS的工作原理，并做了笔记 《和安全有关的那些事(非对称加密、数字摘要、数字签名、数字证书、SSL、HTTPS及其他)》 ，然而知识就是这样，长时间不用就会淡忘，现在又需要重新复习和梳理一下SSL/TLS相关的知识了。 首先，明确一下，几年前，大家讨论的都是SSL，这个 TLS 其实是在SSL基础上发展起来的，可以简单认为是SSL的后续升级版本，或许过几年，SSL这个名"}</script><link rel="canonical" href="https://laurence.enlightgram.com/security/ssl-tls-explained/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">SSL/TLS工作原理的朴素理解和演绎</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Security/">Security</a></span><span class="level-item">发表于：<time dateTime="2022-03-17T17:38:48.000Z" title="2022-03-17 10:38:48">2022-03-17</time></span><span class="level-item">阅读用时：24 分钟 (约 3592 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>尽管在数年前学习过SSL&#x2F;TLS的工作原理，并做了笔记 <a href="/security/encryption-signature-certificate-ssl-https/">《和安全有关的那些事(非对称加密、数字摘要、数字签名、数字证书、SSL、HTTPS及其他)》</a> ，然而知识就是这样，长时间不用就会淡忘，现在又需要重新复习和梳理一下SSL&#x2F;TLS相关的知识了。</p>
+<p>首先，明确一下，几年前，大家讨论的都是SSL，这个 TLS 其实是在SSL基础上发展起来的，可以简单认为是SSL的后续升级版本，或许过几年，SSL这个名词将不再被人提起。</p>
+<p>回归正题，SSL&#x2F;TLS工作原理涉及一系列密码学的知识，需要完全吃透要花不少时间，本文是一篇个人笔记，不求对于原理的描述有多么严谨，主要是想将SSL&#x2F;TLS的工作原理以一种朴素的方式表达清楚，也便于个人记忆。行文中如有不严禁之处，请多指正。</p>
+<p>注：本文多处引用和摘抄网络上的相关文章，会在文末注明出处。虽然配图风格各不相同，但阐述的是一个完整体系，都是完美贴合逻辑脉络的，请忽略图片风格，聚焦在图片表达的逻辑上。</p>
+<h3 id="核心问题：如何安全地通信？"><a href="#核心问题：如何安全地通信？" class="headerlink" title="核心问题：如何安全地通信？"></a>核心问题：如何安全地通信？</h3><p>SSL&#x2F;TLS解决的核心问题就是：如何安全地通信？在典型的通信场景中，会涉及到消息请求方、消息接收方两个主要角色，对应到计算机领域，请求方往往是客户端（典型如 浏览器 ），接收方往往是服务器，为了更好地表述问题，我们会在文中交替使用这种称呼。此外，通信过程中会出现各种“不速之客”，例如：劫持者，中间人等，这些是安全通信需要防范的对象。</p>
+<h3 id="V1-朴素的想法"><a href="#V1-朴素的想法" class="headerlink" title="V1: 朴素的想法"></a>V1: 朴素的想法</h3><p>确保通信安全的最朴素想法就是：对信息 加密 ！加密需要使用到密钥（简单理解的话密钥就是一串非常长的随机字符串），通信双方都持有同一个密钥，发送方在发送消息前先使用密钥对信息加密，接收方收到消息后再使用密钥解密，进而就可以得到消息明文了。过程下图所述：</p>
+<p><img src="/../../images/security/ssl-tls-explained/1.jpeg" alt="在这里插入图片描述"></p>
+<p>实际上，现行的安全通信方式，包括SSL&#x2F;TLS， 在完成握手之后的常规通信中，用的就是这种最朴素的处理方式。请注意这里的限定条件：完成握手之后，我们会在后面详细解释握手时发生的事情。</p>
+<p>但是这一做法有一个明显的安全漏洞：就是怎么才能把这个 密钥 安全地配发给通信双方呢？这个问题在密码学中有一个专门的叫法： <strong>“密钥配送问题”</strong> 。</p>
+<p>注意：密钥配送问题在密码学中仅指对称加密中的密钥配送，这一点要搞清楚，因为在后续的非对称加密中，还会涉及到 公钥 如何安全分发的问题，虽然性质上很类似，但那个问题不叫密钥配送问题，我们会在后文单独解释。</p>
+<p>解决密钥配送问题一般有如下几种方法，这里只简单逻辑一下，不深入展开，大家可以自行参考：<a target="_blank" rel="noopener" href="https://book.douban.com/reading/33467329/">https://book.douban.com/reading/33467329/</a> 或 《图解密码技术》一书。</p>
+<ul>
+<li><p>通过事先共享密钥来解决</p>
+</li>
+<li><p>通过密钥分配中心来解决</p>
+</li>
+<li><p>通过DH密钥交换来解决</p>
+</li>
+<li><p>通过公钥密钥来解决</p>
+</li>
+</ul>
+<h3 id="V2-基于非对称加密-算法-的加强版"><a href="#V2-基于非对称加密-算法-的加强版" class="headerlink" title="V2: 基于非对称加密 算法 的加强版"></a>V2: 基于非对称加密 算法 的加强版</h3><p>V1版本使用的加密方法是众所周知的“对称加密”方式，其弱点也是众所周知的，即“密码配送问题”。后来，出现了“非对称加密”算法。非对称加密方式是这样的：它的密钥分为加密密钥和解密密钥两种。加密密钥是可以公开的，因此又被称为公钥(public key)。解密密钥不能公开，只能有自己保管，因此被称为 私钥 (private key)。一对公钥和私钥是一一对应的，一般称之为密钥对。如果使用非对称加密方式传递信息，则情况如下图所示：</p>
+<p><img src="/../../images/security/ssl-tls-explained/2.png" alt="在这里插入图片描述"></p>
+<p>在这一版中，客户端使用的密钥是来自于 服务器 的公钥，客户端用服务器的公钥加密数据，到达服务器端之后，服务器使用自己私钥解密。</p>
+<p>由于非对称加密中的密钥对拥有这样一种性质：使用私钥加密的数据只能用对应公钥才能解密，使用公钥加密的数据只能使用对应私钥才能解密，除此之外，任何其他密钥都不可以用来解密，包括用公钥解密公钥加密过的数据和用私钥解密私钥加密过的数据都是不行的。</p>
+<p>这样的话，我们可以想象，服务器只需要保留好自己的私钥，公钥可以任意传播，谁都可以获取，但是拿到公钥的人只能对数据进行加密操作，唯一能解密数据的只有服务器，这样“密码配送”的问题就解决了，因为公钥加密的数据只有服务器端的私钥可以解密，而私钥只需服务器持有即可，不需要配送给任何人。</p>
+<p>基于V1和V2两个版本，我们先来比较一下对称密码(对称加密）和公钥密码（非对称加密）优缺点</p>
+<ul>
+<li><p>对称密码(对称加密）的优缺点：性能好，但存在密码配送问题</p>
+</li>
+<li><p>公钥密码（非对称加密）的优缺点：没有密码配送问题，但是性能差，处理速度远低于对称密码，难以抵御中间人的攻击</p>
+</li>
+</ul>
+<p>梳理如下表：</p>
+<table>
+<thead>
+<tr>
+<th align="center">加密方式</th>
+<th align="center">优点</th>
+<th align="center">缺点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">对称加密</td>
+<td align="center">性能好</td>
+<td align="center">存在“密码配送问题”</td>
+</tr>
+<tr>
+<td align="center">非对称加密</td>
+<td align="center">没有“密码配送问题”</td>
+<td align="center">性能差，有“中间人攻击问题”</td>
+</tr>
+</tbody></table>
+<p>这里已经引出了V2版本的一个安全漏洞“ <strong>中间人攻击</strong> ”，也叫“ <strong>公钥认证问题</strong> ”， 这是同一个问题的两种表述方式。我们来看一下具体是怎样一种情况：</p>
+<p><img src="/../../images/security/ssl-tls-explained/3.png" alt="在这里插入图片描述"></p>
+<p>所谓中间人攻击是这样一种逻辑：当客户端向服务器请求公钥时，如果中间链路上有一个窃听者，它截获了服务器返回的公钥，我们把服务器的这个公钥称之为公钥A，然后窃听者将服务器的公钥A替换成了自己的公钥，我们把窃听者这个自己的公钥称之为公钥B，这样，客户端原本请求的是服务器公钥A，但实际拿到的是窃听者的公钥B，后续所有从客户端发送的消息，都可以在窃听者那里被解密，为了使会话持续，窃听者每次解密消息之后，还会使用服务器的公钥A对客户端的消息重新进行加密，再发给服务器，从而在客户端与服务器两者之间架设了无缝的监听通路。</p>
+<p>所以我们可以看到，这个安全漏洞还是出现在服务器向客户端派发公钥的过程中，虽然这一问题不是对称加密中的“密钥配送问题”，但性质上是非常类似的，都是关于“怎么把一个密钥安全地配送出去？”（对于客户端来说，这个问题也可以表述为：怎么认证他拿到的公钥是正确安全的呢？这就是所谓的“公钥认证问题”。）</p>
+<p><strong>我们用朴素的逻辑思考一下应该如何从根本上解决公钥认证（中间人攻击）问题？既然在没有建立安全通道的前提下传输密钥可能会被窃取，而建立安全通道又必须要先传输密钥，这就变成了一个鸡生蛋蛋生鸡的死锁问题。那么，索性不传递密钥是否可行呢？如果能把公钥固化到客户端（例如浏览器）里，就可以解决这个问题，但问题是每天都会各种各样的服务器上线和下线，固化到客户端的密钥是无法同步进行变更的，且任何的变更通信本身都是不可靠的。面对这种局面，我们的解题思路是: 设立一个“安全可靠的第三方服务器”，它有一对自己的公钥和私钥，把它的公钥固化到所有的客户端，各种应用服务器拿着自己的公钥到这台服务器上，用这台服务器的私钥来加密它们的公钥（加密后的公钥就被称为了证书），这样，客户端再请求与服务器通信时，从服务器那里拿到的不再是明码的公钥，而是经过了加密的公钥，而解密这个公钥使用的正是已经固化在了客户端的第三方服务器的公钥。这样，中间人没有从中插手的机会了，因为中间人没有这个第三方服务器的公钥，这个公钥从来没有在网络上传送过，所以没有给中间人在传输中去截获的任何机会，因为它固化到了客户端的软件里，这就完美地破解鸡生蛋蛋生鸡的问题，而这里所谓的“安全可靠的第三方服务器”其实就是常说的CA – 证书认证机构 （Certificate Authority）。</strong> </p>
+<p><strong>在这个场景中还有一个非常重要的地方，虽然CA参与解决了公钥认证的问题，但它不会也不需要出现在每次的通信中，实际上，客户端&#x2F;服务器与CA之间都只打过一次交到，客户端是一次性地固化了CA的公钥，服务器是一次性地拿到了经CA加密后的自己的公钥。所以，在客户端与服务器的通信中，不涉及任何与这个第三方安全服务器的交互！</strong> </p>
+<h3 id="V3-引入授信第三方，解决公钥认证（中间人攻击）问题"><a href="#V3-引入授信第三方，解决公钥认证（中间人攻击）问题" class="headerlink" title="V3: 引入授信第三方，解决公钥认证（中间人攻击）问题"></a>V3: 引入授信第三方，解决公钥认证（中间人攻击）问题</h3><p>进过V2版本的铺垫，以及对引入CA必要性的解释，我们看一下第三版的样子：</p>
+<p><img src="/../../images/security/ssl-tls-explained/4.png" alt="在这里插入图片描述"></p>
+<p>这已经是事实上的标准版本了，也就是大家所熟知的SSL&#x2F;TLS握手过程，它的前5步是关键的握手阶段，我们来解释一下：</p>
+<ol>
+<li><p>客户端向服务器发起一个安全连接的请求</p>
+</li>
+<li><p>服务器返回经过CA认证的数字证书，证书里面包含了服务器的public key</p>
+</li>
+<li><p>客户端拿到数字证书，用自己浏览器内置的CA证书解密得到服务器的public key</p>
+</li>
+<li><p>客户端用服务器的public key加密一个用于接下来的对称加密算法的密钥，传给web服务器，因为只有服务器有private key可以解密，所以不用担心中间人拦截这个加密的密钥</p>
+</li>
+<li><p>服务器拿到这个加密的密钥，解密获取密钥，再使用对称加密算法，和客户端完成接下来的网络通信</p>
+</li>
+</ol>
+<p>在这一版中，由于CA的引入，公钥认证（中间人攻击）问题已经不符存在。虽然在这个握手的过程中，根本没有出现客户端与服务器的通信（也不应该有任何通信，还是前面提到的，如果再和CA有任何密钥传输，那这一动作就又变成不可靠的安全漏洞了），但是CA起到了关键作用。这里详细解释一下：</p>
+<ol>
+<li><p>服务器端的CA证书是由CA机构签发的，它主要包含着服务器的密钥，但使用了CA的公钥进行了一次加密，这样的话，要获取服务器的公钥，得先用CA的公钥解密。</p>
+</li>
+<li><p>客户端也有CA签发的证书，证书里主要包含的是CA的公钥，如前所述，这是提前固化到客户端的，不存在客户端与CA的网络通信去获取这个证书。</p>
+</li>
+</ol>
+<p>我们在再从数字证书的角度来梳理一下上述流程：对于服务器端，数字证书的核心内容是他自己的公钥，但是该公钥被CA的私钥加密了。对于客户端，数字证书的核心内容是CA的公钥。当客户端请求通信时，服务器会先将服务器端的CA证书发送给客户端，客户端会使用CA的分发（浏览器内置）的证书中取出CA的公钥解密服务器的证书，取到的是服务器端自己的公钥，然后客户端就可以使用服务器端的公钥来加密消息并向服务器通信了。</p>
+<p>此外，V3版还有一个改动没有提到，那就是：一但完成握手过程，后续的通信其实使用的是在握手时产生的临时对称密钥，而不是服务器的非对称密钥，因为对称密钥性能更好。这种综合使用伪随机数生成器、对称密码和公钥密码三种技术的密码系统就是所谓的 <strong>混合密码系统</strong> ，整个SSL&#x2F;TLS的工作模型其实也是混合密码系统的一种实现。总得来说，混合密码系统的工作机制是：</p>
+<ol>
+<li><p>用对称密码加密</p>
+</li>
+<li><p>通过伪随机数生成器生成对称密码加密中使用的会话密钥</p>
+</li>
+<li><p>用公钥密码加密会话密码</p>
+</li>
+<li><p>从混合密码系统外部赋予公钥密码加密时使用的密钥</p>
+</li>
+</ol>
+<p>上述四点也恰恰是SSL&#x2F;TLS工作原理最核心的四个支柱。</p>
+<hr>
+<p>参考文章：</p>
+<p><a target="_blank" rel="noopener" href="https://blog.csdn.net/qq_38289815/article/details/107591115">https://blog.csdn.net/qq_38289815/article/details/107591115</a></p>
+<p><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/36981565">https://zhuanlan.zhihu.com/p/36981565</a></p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>SSL/TLS工作原理的朴素理解和演绎</p><p><a href="https://laurence.enlightgram.com/security/ssl-tls-explained/">https://laurence.enlightgram.com/security/ssl-tls-explained/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2022-03-17</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E5%8A%A0%E5%AF%86/">加密</a><a class="link-muted mr-2" rel="tag" href="/tags/TLS/">TLS</a><a class="link-muted mr-2" rel="tag" href="/tags/SSL/">SSL</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/security/pem-der-crt-cer-key-files/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">关于PEM, DER, CRT, CER，KEY等各类证书与密钥文件后缀的解释</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/ai-ml/pandas-loc-and-iloc/"><span class="level-item">Pandas笔记 · DataFrame.loc()和DataFrame.iloc()</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#核心问题：如何安全地通信？"><span class="level-left"><span class="level-item">核心问题：如何安全地通信？</span></span></a></li><li><a class="level is-mobile" href="#V1-朴素的想法"><span class="level-left"><span class="level-item">V1: 朴素的想法</span></span></a></li><li><a class="level is-mobile" href="#V2-基于非对称加密-算法-的加强版"><span class="level-left"><span class="level-item">V2: 基于非对称加密 算法 的加强版</span></span></a></li><li><a class="level is-mobile" href="#V3-引入授信第三方，解决公钥认证（中间人攻击）问题"><span class="level-left"><span class="level-item">V3: 引入授信第三方，解决公钥认证（中间人攻击）问题</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

@@ -1,0 +1,802 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>解决方案：如何在 Amazon EMR Serverless 上执行纯 SQL 文件？ - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="长久已来，SQL以其简单易用、开发效率高等优势一直是ETL的首选编程语言，在构建数据仓库和数据湖的过程中发挥着不可替代的作用。Hive和Spark SQL也正是立足于这一点，才在今天的大数据生态中牢牢占据着主力位置。在常规的Spark环境中，开发者可以使用 spark-sql 命令直接执行SQL文件，这是一项看似平平无奇实则非常重要的功能：一方面，这一方式极大地降低了Spark的使用门槛，用户只要"><meta property="og:type" content="article"><meta property="og:title" content="解决方案：如何在 Amazon EMR Serverless 上执行纯 SQL 文件？"><meta property="og:url" content="https://laurence.enlightgram.com/aws/emr-serverless-sql-file/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="长久已来，SQL以其简单易用、开发效率高等优势一直是ETL的首选编程语言，在构建数据仓库和数据湖的过程中发挥着不可替代的作用。Hive和Spark SQL也正是立足于这一点，才在今天的大数据生态中牢牢占据着主力位置。在常规的Spark环境中，开发者可以使用 spark-sql 命令直接执行SQL文件，这是一项看似平平无奇实则非常重要的功能：一方面，这一方式极大地降低了Spark的使用门槛，用户只要"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/aws/emr-serverless-sql-file/2.jpeg"><meta property="article:published_time" content="2023-08-16T18:12:26.000Z"><meta property="article:modified_time" content="2026-11-11T02:50:16.138Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="SQL"><meta property="article:tag" content="EMR"><meta property="article:tag" content="Serverless"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/aws/emr-serverless-sql-file/2.jpeg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/aws/emr-serverless-sql-file/"},"headline":"解决方案：如何在 Amazon EMR Serverless 上执行纯 SQL 文件？","image":["https://laurence.enlightgram.com/images/aws/emr-serverless-sql-file/2.jpeg"],"datePublished":"2023-08-16T18:12:26.000Z","dateModified":"2026-11-11T02:50:16.138Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"长久已来，SQL以其简单易用、开发效率高等优势一直是ETL的首选编程语言，在构建数据仓库和数据湖的过程中发挥着不可替代的作用。Hive和Spark SQL也正是立足于这一点，才在今天的大数据生态中牢牢占据着主力位置。在常规的Spark环境中，开发者可以使用 spark-sql 命令直接执行SQL文件，这是一项看似平平无奇实则非常重要的功能：一方面，这一方式极大地降低了Spark的使用门槛，用户只要"}</script><link rel="canonical" href="https://laurence.enlightgram.com/aws/emr-serverless-sql-file/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">解决方案：如何在 Amazon EMR Serverless 上执行纯 SQL 文件？</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/AWS/">AWS</a></span><span class="level-item">发表于：<time dateTime="2023-08-16T18:12:26.000Z" title="2023-08-16 11:12:26">2023-08-16</time></span><span class="level-item">阅读用时：24 分钟 (约 3588 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>长久已来，SQL以其简单易用、开发效率高等优势一直是ETL的首选编程语言，在构建数据仓库和数据湖的过程中发挥着不可替代的作用。Hive和Spark SQL也正是立足于这一点，才在今天的大数据生态中牢牢占据着主力位置。在常规的Spark环境中，开发者可以使用 <code>spark-sql</code> 命令直接执行SQL文件，这是一项看似平平无奇实则非常重要的功能：一方面，这一方式极大地降低了Spark的使用门槛，用户只要会写SQL就可以使用Spark；另一方面，通过命令行驱动SQL文件的执行可以极大简化SQL作业的提交工作，使得作业提交本身被“代码化”，为大规模工程开发和自动化部署提供了便利。</p>
+<p>但遗憾的是，Amazon EMR Serverless 未能针对执行SQL文件提供原生支持，用户只能在Scala&#x2F; Python代码 中嵌入SQL语句，这对于倚重纯SQL开发数仓或数据湖的用户来说并不友好。为此，我们专门开发了一组用于读取、解析和执行SQL文件的工具类，借助这组工具类，用户可以在 Amazon EMR Serverless 上直接执行SQL文件，本文将详细介绍一下这一方案。</p>
+<h3 id="1-方案设计"><a href="#1-方案设计" class="headerlink" title="1. 方案设计"></a>1. 方案设计</h3><p>鉴于在Spark编程环境中执行SQL语句的方法是： <code>spark.sql(&quot;...&quot;)</code> ，我们可以设计一个通用的作业类，该类在启动时会根据传入的参数读取指定位置上的SQL文件，然后拆分成单条SQL并调用 <code>spark.sql(&quot;...&quot;)</code> 执行。为了让作业类更加灵活和通用，还可以引入通配符一次加载并执行多个SQL文件。此外，ETL作业经常需要根据作业调度工具生成的时间参数去执行相应的批次，这些参数同样会作用到SQL中，所以，作业类还应允许用户在SQL文件中嵌入自定义变量，并在提交作业时以参数形式为自定义变量赋值。基于这种设计思路，我们开发了一个项目，实现了上述功能，项目地址为：</p>
+<table>
+<thead>
+<tr>
+<th align="left">项目名称</th>
+<th align="left">项目地址</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://github.com/bluishglc/emr-serverless-utils">Amazon EMR Serverless Utilities</a></td>
+<td align="left"><a target="_blank" rel="noopener" href="https://github.com/bluishglc/emr-serverless-utils">https://github.com/bluishglc/emr-serverless-utils</a></td>
+</tr>
+</tbody></table>
+<p>项目中的 <a target="_blank" rel="noopener" href="https://github.com/bluishglc/emr-serverless-utils/blob/master/src/main/scala/com/github/emr/serverless/SparkSqlJob.scala"> <code>com.github.emr.serverless.SparkSqlJob</code> </a> 类即为通用的SQL作业类，该类接受两个可选参数，分别是：</p>
+<table>
+<thead>
+<tr>
+<th align="left">参数</th>
+<th align="left">说明</th>
+<th align="left">取值示例</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">–sql-files</td>
+<td align="left">指定要执行的SQL文件路径，支持 <a target="_blank" rel="noopener" href="https://docs.oracle.com/javase/8/docs/api/java/nio/file/FileSystem.html#getPathMatcher-java.lang.String-">Java文件系统通配符</a> ，可指定多个文件一起执行</td>
+<td align="left">s3:&#x2F;&#x2F;my-spark-sql-job&#x2F;sqls&#x2F;insert-into-*.sql</td>
+</tr>
+<tr>
+<td align="left">–sql-params</td>
+<td align="left">以 <code>K1=V1,K2=V2,...</code> 形式为SQL文件中定义的 <code>${K1}</code> , <code>${K2}</code> ,…形式的变量设值</td>
+<td align="left">CUST_CITY&#x3D;NEW YORK,ORD_DATE&#x3D;2008-07-15</td>
+</tr>
+</tbody></table>
+<p>该方案具备如下特性：</p>
+<p>① 允许单一SQL文件包含多条SQL语句<br>② 允许在SQL文件中使用 <code>${K1}</code> , <code>${K2}</code> ,…的形式定义变量，并在执行作业时使用 <code>K1=V1,K2=V2,...</code> 形式的参数进行变量赋值<br>③ 支持 <a target="_blank" rel="noopener" href="https://docs.oracle.com/javase/8/docs/api/java/nio/file/FileSystem.html#getPathMatcher-java.lang.String-">Java文件系统通配符</a> ，可一次执行多个SQL文件</p>
+<p>下面，我们将分别在AWS控制台和命令行两种环境下介绍并演示如何使用该项目的工具类提交纯SQL作业。</p>
+<h3 id="2-实操演示"><a href="#2-实操演示" class="headerlink" title="2. 实操演示"></a>2. 实操演示</h3><h4 id="2-1-环境准备"><a href="#2-1-环境准备" class="headerlink" title="2.1. 环境准备"></a>2.1. 环境准备</h4><p>在EMR Serverless上提交作业时需要准备一个“EMR Serverless Application”和一个“EMR Serverless Job Execution Role”，其中后者应具有S3和Glue Data Catalog的读写权限。Application可以在EMR Serverless控制台（EMR Studio）上通过向导轻松创建（全默认配置即可），Execution Role可以使用 <a href="/hudi/hudi-deltastreamer-serverless-spark/">《CDC一键入湖：当 Apache Hudi DeltaStreamer 遇见 Serverless Spark》</a> 一文第5节提供的脚本快速创建。</p>
+<p>接下来要准备提交作业所需的Jar包和SQL文件。首先在S3上创建一个存储桶，本文使用的桶取名： <code>my-spark-sql-job</code> （当您在自己的环境中操作时请注意替换桶名），然后从 <a target="_blank" rel="noopener" href="https://github.com/bluishglc/emr-serverless-utils/releases/download/v1.0/emr-serverless-utils-1.0.jar">[ 此处 ]</a> 下载编译好的 <code>emr-serverless-utils.jar</code> 包并上传至 <code>s3://my-spark-sql-job/jars/</code> 目录下：</p>
+<p> <img src="/../../images/aws/emr-serverless-sql-file/2.jpeg" alt="请添加图片描述"></p>
+<p>在演示过程中还将使用到5个SQL示例文件，从 <a target="_blank" rel="noopener" href="https://github.com/bluishglc/emr-serverless-utils/releases/download/v1.0/example-sqls.zip">[ 此处 ]</a> 下载解压后上传至 <code>s3://my-spark-sql-job/sqls/</code> 目录下：</p>
+<p> <img src="/../../images/aws/emr-serverless-sql-file/3.jpeg" alt="请添加图片描述"></p>
+<h4 id="2-2-在控制台上提交纯SQL文件作业"><a href="#2-2-在控制台上提交纯SQL文件作业" class="headerlink" title="2.2. 在控制台上提交纯SQL文件作业"></a>2.2. 在控制台上提交纯SQL文件作业</h4><h5 id="2-2-1-执行单一SQL文件"><a href="#2-2-1-执行单一SQL文件" class="headerlink" title="2.2.1. 执行单一SQL文件"></a>2.2.1. 执行单一SQL文件</h5><p>打开EMR Serverless的控制台（EMR Studio），在选定的EMR Serverless Application下提交一个如下的Job：</p>
+<p> <img src="/../../images/aws/emr-serverless-sql-file/4.jpeg" alt="请添加图片描述"></p>
+<p>① Script location：设定为此前上传的Jar包路径 <code>s3://my-spark-sql-job/jars/emr-serverless-utils-1.0.jar</code><br>② Main class：设定为 <code>com.github.emr.serverless.SparkSqlJob</code><br>③ Script arguments：设定为 <code>[&quot;--sql-files&quot;,&quot;s3://my-spark-sql-job/sqls/drop-tables.sql&quot;]</code> </p>
+<p>至于其他选项，无需特别设定，保持默认配置即可，对于在生产环境中部署的作业，您可以结合自身作业的需要灵活配置，例如Spark Driver&#x2F;Executor的资源分配等。需要提醒的是：通过控制台创建的作业默认会启用Glue Data Catalog（即：Additional settings -&gt; Metastore configuration -&gt; Use AWS Glue Data Catalog 默认是勾选的），为了方便在Glue和Athena中检查SQL脚本的执行结果，建议您不要修改此项默认配置。</p>
+<p>上述配置描述了这样一项工作：以 <code>s3://my-spark-sql-job/jars/emr-serverless-utils-1.0.jar</code> 中的 <code>com.github.emr.serverless.SparkSqlJob</code> 作为主类，提起一个Spark作业。其中 <code>[&quot;--sql-files&quot;,&quot;s3://my-spark-sql-job/sqls/drop-tables.sql&quot;]</code> 是传递给 <code>SparkSqlJob</code> 的参数，用于告知作业所要执行的SQL文件位置。本次作业执行的SQL文件只有三条简单的DROP TABLE语句，是一个基础示例，用以展示工具类执行单一文件内多条SQL语句的能力。</p>
+<h5 id="2-2-2-执行带自定义参数的SQL文件"><a href="#2-2-2-执行带自定义参数的SQL文件" class="headerlink" title="2.2.2. 执行带自定义参数的SQL文件"></a>2.2.2. 执行带自定义参数的SQL文件</h5><p>接下来要演示的是工具类的第二项功能：执行带自定义参数的SQL文件。新建或直接复制上一个作业（在控制台上选定上一个作业，依次点击 Actions -&gt; Clone job），然后将“Script arguments”的值设定为：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">[</span><span class="string">&quot;--sql-files&quot;</span><span class="punctuation">,</span><span class="string">&quot;s3://my-spark-sql-job/sqls/create-tables.sql&quot;</span><span class="punctuation">,</span><span class="string">&quot;--sql-params&quot;</span><span class="punctuation">,</span><span class="string">&quot;APP_S3_HOME=s3://my-spark-sql-job&quot;</span><span class="punctuation">]</span></span><br></pre></td></tr></table></figure>
+
+<p>如下图所示：</p>
+<p> <img src="/../../images/aws/emr-serverless-sql-file/5.jpeg" alt="请添加图片描述"></p>
+<p>这次的作业设定除了使用 <code>--sql-files</code> 参数指定了SQL文件外，还通过 <code>--sql-params</code> 参数为SQL中出现的用户自定义变量进行了赋值。根据此前的介绍， <code>APP_S3_HOME=s3://my-spark-sql-job</code> 是一个“Key&#x3D;Value”字符串，其含义是将值 <code>s3://my-spark-sql-job</code> 赋予了变量 <code>APP_S3_HOME</code> ，SQL中所有出现 <code>${APP_S3_HOME}</code> 的地方都将被 <code>s3://my-spark-sql-job</code> 所替代。查看 <code>create-tables.sql</code> 文件，在建表语句的LOCATION部分可以发现自定义变量 <code>${APP_S3_HOME}</code> ：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">EXTERNAL</span> <span class="keyword">TABLE</span> IF <span class="keyword">NOT</span> <span class="keyword">EXISTS</span> ORDERS (</span><br><span class="line">    ... ...</span><br><span class="line">)</span><br><span class="line">... ...</span><br><span class="line">LOCATION <span class="string">&#x27;$&#123;APP_S3_HOME&#125;/data/orders/&#x27;</span>;</span><br></pre></td></tr></table></figure>
+
+<p>当 <code>SparkSqlJob</code> 读取该SQL文件时，会根据键值对字符串 <code>APP_S3_HOME=s3://my-spark-sql-job</code> 将SQL文件中所有的 <code>${APP_S3_HOME}</code> 替换为 <code>s3://my-spark-sql-job</code> ，实际执行的SQL将变为：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">EXTERNAL</span> <span class="keyword">TABLE</span> IF <span class="keyword">NOT</span> <span class="keyword">EXISTS</span> ORDERS (</span><br><span class="line">    ... ...</span><br><span class="line">)</span><br><span class="line">... ...</span><br><span class="line">LOCATION <span class="string">&#x27;s3://my-spark-sql-job/data/orders/&#x27;</span>;</span><br></pre></td></tr></table></figure>
+
+<p>提交作业并执行完毕后，可登录Athena控制台，查看数据表是否创建成功。</p>
+<h5 id="2-2-3-使用通配符执行多个文件"><a href="#2-2-3-使用通配符执行多个文件" class="headerlink" title="2.2.3. 使用通配符执行多个文件"></a>2.2.3. 使用通配符执行多个文件</h5><p>有时候，我们需要批量执行一个文件夹下的所有SQL文件，或者使用通配符选择性的执行部分SQL文件， <code>SparkSqlJob</code> 使用了 <a target="_blank" rel="noopener" href="https://docs.oracle.com/javase/8/docs/api/java/nio/file/FileSystem.html#getPathMatcher-java.lang.String-">Java文件系统通配符</a> 来支持这类需求。下面的作业就演示了通配符的使用方法，同样是新建或直接复制上一个作业，然后将“Script arguments”的值设定为：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">[</span><span class="string">&quot;--sql-files&quot;</span><span class="punctuation">,</span><span class="string">&quot;s3://my-spark-sql-job/sqls/insert-into-*.sql&quot;</span><span class="punctuation">]</span></span><br></pre></td></tr></table></figure>
+
+<p>如下图所示：</p>
+<p> <img src="/../../images/aws/emr-serverless-sql-file/6.jpeg" alt="请添加图片描述"></p>
+<p>这次作业的 <code>--sql-files</code> 参数使用了路径通配符， <code>insert-into-*.sql</code> 将同时匹配 <code>insert-into-orders.sql</code> 和 <code>insert-into-customers.sql</code> 两个SQL文件，它们将分别向 <code>ORDERS</code> 和 <code>CUSTOMERS</code> 两张表插入多条记录。执行完毕后，可以可登录Athena控制台，查看数据表中是否有数据产生。</p>
+<h5 id="2-2-4-一个复合示例"><a href="#2-2-4-一个复合示例" class="headerlink" title="2.2.4. 一个复合示例"></a>2.2.4. 一个复合示例</h5><p>最后，我们来提交一个更有代表性的复合示例：文件通配符 + 用户自定义参数。再次新建或直接复制上一个作业，然后将“Script arguments”的值设定为：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">[</span><span class="string">&quot;--sql-files&quot;</span><span class="punctuation">,</span><span class="string">&quot;s3://my-spark-sql-job/sqls/select-*.sql&quot;</span><span class="punctuation">,</span><span class="string">&quot;--sql-params&quot;</span><span class="punctuation">,</span><span class="string">&quot;APP_S3_HOME=s3://my-spark-sql-job,CUST_CITY=NEW YORK,ORD_DATE=2008-07-15&quot;</span><span class="punctuation">]</span></span><br></pre></td></tr></table></figure>
+
+<p>如下图所示：</p>
+<p>![emr-serverless-snapshot-4.jpg-150.8kB][6]</p>
+<p>本次作业的 <code>--sql-files</code> 参数使用路径通配符 <code>select-*.sql</code> 匹配 <code>select-tables.sql</code> 文件，该文件中存在三个用户自定义变量，分别是 <code>${APP_S3_HOME}</code> 、 <code>${CUST_CITY}</code> 、 <code>${ORD_DATE}</code> ：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">EXTERNAL</span> <span class="keyword">TABLE</span> ORDERS_CUSTOMERS</span><br><span class="line">    ... ...</span><br><span class="line">    LOCATION <span class="string">&#x27;$&#123;APP_S3_HOME&#125;/data/orders_customers/&#x27;</span></span><br><span class="line"><span class="keyword">AS</span> <span class="keyword">SELECT</span></span><br><span class="line">    ... ...</span><br><span class="line"><span class="keyword">WHERE</span></span><br><span class="line">    C.CUST_CITY <span class="operator">=</span> <span class="string">&#x27;$&#123;CUST_CITY&#125;&#x27;</span> <span class="keyword">AND</span></span><br><span class="line">    O.ORD_DATE <span class="operator">=</span> <span class="built_in">CAST</span>(<span class="string">&#x27;$&#123;ORD_DATE&#125;&#x27;</span> <span class="keyword">AS</span> <span class="type">DATE</span>);</span><br></pre></td></tr></table></figure>
+
+<p><code>--sql-params</code> 参数为这三个自定义变量设置了取值，分别是： <code>APP_S3_HOME=s3://my-spark-sql-job</code> ， <code>CUST_CITY=NEW YORK</code> ， <code>ORD_DATE=2008-07-15</code> ，于是上述SQL将被转化为如下内容去执行：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">EXTERNAL</span> <span class="keyword">TABLE</span> ORDERS_CUSTOMERS</span><br><span class="line">    ... ...</span><br><span class="line">    LOCATION <span class="string">&#x27;s3://my-spark-sql-job/data/orders_customers/&#x27;</span></span><br><span class="line"><span class="keyword">AS</span> <span class="keyword">SELECT</span></span><br><span class="line">    ... ...</span><br><span class="line"><span class="keyword">WHERE</span></span><br><span class="line">    C.CUST_CITY <span class="operator">=</span> <span class="string">&#x27;NEW YORK&#x27;</span> <span class="keyword">AND</span></span><br><span class="line">    O.ORD_DATE <span class="operator">=</span> <span class="built_in">CAST</span>(<span class="string">&#x27;2008-07-15&#x27;</span> <span class="keyword">AS</span> <span class="type">DATE</span>);</span><br></pre></td></tr></table></figure>
+
+<p>至此，通过控制台提交纯SQL文件作业的所有功能演示完毕。</p>
+<h4 id="2-3-通过命令行提交纯SQL文件作业"><a href="#2-3-通过命令行提交纯SQL文件作业" class="headerlink" title="2.3. 通过命令行提交纯SQL文件作业"></a>2.3. 通过命令行提交纯SQL文件作业</h4><p>实际上，很多EMR Serverless用户并不在控制台上提交自己的作业，而是通过AWS CLI提交，这种方式方式多见于工程代码或作业调度中。所以，我们再来介绍一下如何通过命令行提交纯SQL文件作业。</p>
+<p>本文使用命令行提交EMR Serverless作业的方式遵循了 <a href="/aws/emr-serverless-job-submission/">《最佳实践：如何优雅地提交一个 Amazon EMR Serverless 作业？》</a> 一文给出的最佳实践。首先，登录一个安装了 <a target="_blank" rel="noopener" href="https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html">AWS CLI</a> 并配置有 <a target="_blank" rel="noopener" href="https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html">用户凭证</a> 的Linux环境（建议使用Amazon Linux2），先使用命令 <code>sudo yum -y install jq</code> 安装操作 json文件 的命令行工具：jq（后续脚本会使用到它），然后完成如下前期准备工作：</p>
+<p>① 创建或选择一个作业专属工作目录和S3存储桶<br>② 创建或选择一个EMR Serverless Execution Role<br>③ 创建或选择一个EMR Serverless Application</p>
+<p>接下来将所有环境相关变量悉数导出（请根据您的AWS账号和本地环境替换命令行中的相应值）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> APP_NAME=<span class="string">&#x27;change-to-your-app-name&#x27;</span></span><br><span class="line"><span class="built_in">export</span> APP_S3_HOME=<span class="string">&#x27;change-to-your-app-s3-home&#x27;</span></span><br><span class="line"><span class="built_in">export</span> APP_LOCAL_HOME=<span class="string">&#x27;change-to-your-app-local-home&#x27;</span></span><br><span class="line"><span class="built_in">export</span> EMR_SERVERLESS_APP_ID=<span class="string">&#x27;change-to-your-application-id&#x27;</span></span><br><span class="line"><span class="built_in">export</span> EMR_SERVERLESS_EXECUTION_ROLE_ARN=<span class="string">&#x27;change-to-your-execution-role-arn&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>以下是一份示例：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> APP_NAME=<span class="string">&#x27;my-spark-sql-job&#x27;</span></span><br><span class="line"><span class="built_in">export</span> APP_S3_HOME=<span class="string">&#x27;s3://my-spark-sql-job&#x27;</span></span><br><span class="line"><span class="built_in">export</span> APP_LOCAL_HOME=<span class="string">&#x27;/home/ec2-user/my-spark-sql-job&#x27;</span></span><br><span class="line"><span class="built_in">export</span> EMR_SERVERLESS_APP_ID=<span class="string">&#x27;00fbfel40ee59k09&#x27;</span></span><br><span class="line"><span class="built_in">export</span> EMR_SERVERLESS_EXECUTION_ROLE_ARN=<span class="string">&#x27;arn:aws:iam::123456789000:role/EMR_SERVERLESS_ADMIN&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p><a href="/aws/emr-serverless-job-submission/">《最佳实践：如何优雅地提交一个 Amazon EMR Serverless 作业？》</a> 一文提供了多个操作Job的通用脚本，都非常实用，本文也会直接复用这些脚本，但是由于我们需要多次提交且每次的参数又有所不同，为了便于使用和简化行文，我们将原文中的部分脚本封装为一个Shell函数，取名为 <code>submit-spark-sql-job</code> ：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><span class="line">submit-spark-sql-<span class="function"><span class="title">job</span></span>() &#123;</span><br><span class="line">    sqlFiles=<span class="string">&quot;<span class="variable">$1</span>&quot;</span></span><br><span class="line">    sqlParams=<span class="string">&quot;<span class="variable">$2</span>&quot;</span></span><br><span class="line">    <span class="built_in">cat</span> &lt;&lt; <span class="string">EOF &gt; $APP_LOCAL_HOME/start-job-run.json</span></span><br><span class="line"><span class="string">&#123;</span></span><br><span class="line"><span class="string">    &quot;name&quot;:&quot;my-spark-sql-job&quot;,</span></span><br><span class="line"><span class="string">    &quot;applicationId&quot;:&quot;$EMR_SERVERLESS_APP_ID&quot;,</span></span><br><span class="line"><span class="string">    &quot;executionRoleArn&quot;:&quot;$EMR_SERVERLESS_EXECUTION_ROLE_ARN&quot;,</span></span><br><span class="line"><span class="string">    &quot;jobDriver&quot;:&#123;</span></span><br><span class="line"><span class="string">        &quot;sparkSubmit&quot;:&#123;</span></span><br><span class="line"><span class="string">        &quot;entryPoint&quot;:&quot;$APP_S3_HOME/jars/emr-serverless-utils-1.0.jar&quot;,</span></span><br><span class="line"><span class="string">        &quot;entryPointArguments&quot;:[</span></span><br><span class="line"><span class="string">            $([[ -n &quot;$sqlFiles&quot; ]] &amp;&amp; echo &quot;\&quot;--sql-files\&quot;, \&quot;$sqlFiles\&quot;&quot;)</span></span><br><span class="line"><span class="string">            $([[ -n &quot;$sqlParams&quot; ]] &amp;&amp; echo &quot;,\&quot;--sql-params\&quot;, \&quot;$sqlParams\&quot;&quot;)</span></span><br><span class="line"><span class="string">        ],</span></span><br><span class="line"><span class="string">         &quot;sparkSubmitParameters&quot;:&quot;--class com.github.emr.serverless.SparkSqlJob --conf spark.hadoop.hive.metastore.client.factory.class=com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory&quot;</span></span><br><span class="line"><span class="string">        &#125;</span></span><br><span class="line"><span class="string">   &#125;,</span></span><br><span class="line"><span class="string">   &quot;configurationOverrides&quot;:&#123;</span></span><br><span class="line"><span class="string">        &quot;monitoringConfiguration&quot;:&#123;</span></span><br><span class="line"><span class="string">            &quot;s3MonitoringConfiguration&quot;:&#123;</span></span><br><span class="line"><span class="string">                &quot;logUri&quot;:&quot;$APP_S3_HOME/logs&quot;</span></span><br><span class="line"><span class="string">            &#125;</span></span><br><span class="line"><span class="string">        &#125;</span></span><br><span class="line"><span class="string">   &#125;</span></span><br><span class="line"><span class="string">&#125;</span></span><br><span class="line"><span class="string">EOF</span></span><br><span class="line">    jq . <span class="variable">$APP_LOCAL_HOME</span>/start-job-run.json</span><br><span class="line">    <span class="built_in">export</span> EMR_SERVERLESS_JOB_RUN_ID=$(aws emr-serverless start-job-run \</span><br><span class="line">        --no-paginate --no-cli-pager --output text \</span><br><span class="line">        --name my-spark-sql-job \</span><br><span class="line">        --application-id <span class="variable">$EMR_SERVERLESS_APP_ID</span> \</span><br><span class="line">        --execution-role-arn <span class="variable">$EMR_SERVERLESS_EXECUTION_ROLE_ARN</span> \</span><br><span class="line">        --execution-timeout-minutes 0 \</span><br><span class="line">        --cli-input-json file://<span class="variable">$APP_LOCAL_HOME</span>/start-job-run.json \</span><br><span class="line">        --query jobRunId)</span><br><span class="line">    now=$(<span class="built_in">date</span> +%s)sec</span><br><span class="line">    <span class="keyword">while</span> <span class="literal">true</span>; <span class="keyword">do</span></span><br><span class="line">        jobStatus=$(aws emr-serverless get-job-run \</span><br><span class="line">                        --no-paginate --no-cli-pager --output text \</span><br><span class="line">                        --application-id <span class="variable">$EMR_SERVERLESS_APP_ID</span> \</span><br><span class="line">                        --job-run-id <span class="variable">$EMR_SERVERLESS_JOB_RUN_ID</span> \</span><br><span class="line">                        --query jobRun.state)</span><br><span class="line">        <span class="keyword">if</span> [ <span class="string">&quot;<span class="variable">$jobStatus</span>&quot;</span> = <span class="string">&quot;PENDING&quot;</span> ] || [ <span class="string">&quot;<span class="variable">$jobStatus</span>&quot;</span> = <span class="string">&quot;SCHEDULED&quot;</span> ] || [ <span class="string">&quot;<span class="variable">$jobStatus</span>&quot;</span> = <span class="string">&quot;RUNNING&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">            <span class="keyword">for</span> i <span class="keyword">in</span> &#123;0..5&#125;; <span class="keyword">do</span></span><br><span class="line">                <span class="built_in">echo</span> -ne <span class="string">&quot;\E[33;5m&gt;&gt;&gt; The job [ <span class="variable">$EMR_SERVERLESS_JOB_RUN_ID</span> ] state is [ <span class="variable">$jobStatus</span> ], duration [ <span class="subst">$(date -u --date now-$now +%H:%M:%S)</span> ] ....\r\E[0m&quot;</span></span><br><span class="line">                <span class="built_in">sleep</span> 1</span><br><span class="line">            <span class="keyword">done</span></span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">            <span class="built_in">printf</span> <span class="string">&quot;The job [ <span class="variable">$EMR_SERVERLESS_JOB_RUN_ID</span> ] is [ <span class="variable">$jobStatus</span> ]%50s\n\n&quot;</span></span><br><span class="line">            <span class="built_in">break</span></span><br><span class="line">        <span class="keyword">fi</span></span><br><span class="line">    <span class="keyword">done</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>该函数接受两个位置参数：</p>
+<p>① 第一位置上的参数用于指定SQL文件路径，其值会传递给 <code>SparkSqlJob</code> 的 <code>--sql-files</code><br>② 第二位置上的参数用于指定SQL文件中的用户自定义变量，其值会传递给 <code>SparkSqlJob</code> 的 <code>--sql-params</code> </p>
+<p>函数中使用的Jar包和SQL文件与《2.1. 环境准备》一节准备的Jar包和SQL文件一致，所以使用脚本提交作业前同样需要完成2.1节的环境准备工作。接下来，我们就使用该函数完成与2.2节一样的操作。</p>
+<h5 id="2-3-1-执行单一SQL文件"><a href="#2-3-1-执行单一SQL文件" class="headerlink" title="2.3.1. 执行单一SQL文件"></a>2.3.1. 执行单一SQL文件</h5><p>本节操作与2.2.1节完全一致，只是改用了命令行方式实现，命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">submit-spark-sql-job <span class="string">&quot;<span class="variable">$APP_S3_HOME</span>/sqls/drop-tables.sql&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="2-3-2-执行带自定义参数的SQL文件"><a href="#2-3-2-执行带自定义参数的SQL文件" class="headerlink" title="2.3.2. 执行带自定义参数的SQL文件"></a>2.3.2. 执行带自定义参数的SQL文件</h5><p>本节操作与2.2.2节完全一致，只是改用了命令行方式实现，命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">submit-spark-sql-job <span class="string">&quot;<span class="variable">$APP_S3_HOME</span>/sqls/create-tables.sql&quot;</span> <span class="string">&quot;APP_S3_HOME=<span class="variable">$APP_S3_HOME</span>&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="2-3-3-使用通配符执行多个文件"><a href="#2-3-3-使用通配符执行多个文件" class="headerlink" title="2.3.3. 使用通配符执行多个文件"></a>2.3.3. 使用通配符执行多个文件</h5><p>本节操作与2.2.3节完全一致，只是改用了命令行方式实现，命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">submit-spark-sql-job <span class="string">&quot;<span class="variable">$APP_S3_HOME</span>/sqls/insert-into-*.sql&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="2-3-4-一个复合示例"><a href="#2-3-4-一个复合示例" class="headerlink" title="2.3.4. 一个复合示例"></a>2.3.4. 一个复合示例</h5><p>本节操作与2.2.4节完全一致，只是改用了命令行方式实现，命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">submit-spark-sql-job <span class="string">&quot;<span class="variable">$APP_S3_HOME</span>/sqls/select-tables.sql&quot;</span> <span class="string">&quot;APP_S3_HOME=<span class="variable">$APP_S3_HOME</span>,CUST_CITY=NEW YORK,ORD_DATE=2008-07-15&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="3-在源代码中调用工具类"><a href="#3-在源代码中调用工具类" class="headerlink" title="3. 在源代码中调用工具类"></a>3. 在源代码中调用工具类</h3><p>尽管在Spark编程环境中可以使用 <code>spark.sql(...)</code> 形式直接执行SQL语句，但是，从前文示例中可以看出 <a target="_blank" rel="noopener" href="https://github.com/bluishglc/emr-serverless-utils">emr-serverless-utils</a> 提供的SQL文件执行能力更便捷也更强大一些，所以，最后我们简单介绍一下如何在源代码中调用相关的工具类获得上述SQL文件的处理能力。具体做法非常简单，你只需要：</p>
+<p>① 将 <code>emr-serverless-utils-1.0.jar</code> 加载到你的类路径中<br>② 声明隐式类型转换<br>③ 在spark上直接调用 <code>execSqlFile()</code> </p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"># 初始化<span class="type">SparkSession</span>及其他操作</span><br><span class="line">...</span><br><span class="line"></span><br><span class="line"># 声明隐式类型转换</span><br><span class="line"><span class="keyword">import</span> com.github.emr.serverless.<span class="type">SparkSqlSupport</span>._</span><br><span class="line"></span><br><span class="line"># 在spark上直接调用execSqlFile()</span><br><span class="line">spark.execSqlFile(<span class="string">&quot;s3://YOUR/XXX.sql&quot;</span>)</span><br><span class="line"></span><br><span class="line"># 在spark上直接调用execSqlFile()</span><br><span class="line">spark.execSqlFile(<span class="string">&quot;s3://YOUR/XXX.sql&quot;</span>, <span class="string">&quot;K1=V1,K2=V2,...&quot;</span>)</span><br><span class="line"></span><br><span class="line"># 其他操作</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+</div><div class="article-licensing box"><div class="licensing-title"><p>解决方案：如何在 Amazon EMR Serverless 上执行纯 SQL 文件？</p><p><a href="https://laurence.enlightgram.com/aws/emr-serverless-sql-file/">https://laurence.enlightgram.com/aws/emr-serverless-sql-file/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2023-08-16</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/SQL/">SQL</a><a class="link-muted mr-2" rel="tag" href="/tags/EMR/">EMR</a><a class="link-muted mr-2" rel="tag" href="/tags/Serverless/">Serverless</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/spark/spark-executor-single-vcore/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">为什么我的 Spark Executor / Yarn Container 只有一个vCore?</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/bigdata/tpc-ds-hive-spark-parquet/"><span class="level-item">在Hive/Spark上执行TPC-DS基准测试 (PARQUET格式）</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-方案设计"><span class="level-left"><span class="level-item">1. 方案设计</span></span></a></li><li><a class="level is-mobile" href="#2-实操演示"><span class="level-left"><span class="level-item">2. 实操演示</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-1-环境准备"><span class="level-left"><span class="level-item">2.1. 环境准备</span></span></a></li><li><a class="level is-mobile" href="#2-2-在控制台上提交纯SQL文件作业"><span class="level-left"><span class="level-item">2.2. 在控制台上提交纯SQL文件作业</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-2-1-执行单一SQL文件"><span class="level-left"><span class="level-item">2.2.1. 执行单一SQL文件</span></span></a></li><li><a class="level is-mobile" href="#2-2-2-执行带自定义参数的SQL文件"><span class="level-left"><span class="level-item">2.2.2. 执行带自定义参数的SQL文件</span></span></a></li><li><a class="level is-mobile" href="#2-2-3-使用通配符执行多个文件"><span class="level-left"><span class="level-item">2.2.3. 使用通配符执行多个文件</span></span></a></li><li><a class="level is-mobile" href="#2-2-4-一个复合示例"><span class="level-left"><span class="level-item">2.2.4. 一个复合示例</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-3-通过命令行提交纯SQL文件作业"><span class="level-left"><span class="level-item">2.3. 通过命令行提交纯SQL文件作业</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-3-1-执行单一SQL文件"><span class="level-left"><span class="level-item">2.3.1. 执行单一SQL文件</span></span></a></li><li><a class="level is-mobile" href="#2-3-2-执行带自定义参数的SQL文件"><span class="level-left"><span class="level-item">2.3.2. 执行带自定义参数的SQL文件</span></span></a></li><li><a class="level is-mobile" href="#2-3-3-使用通配符执行多个文件"><span class="level-left"><span class="level-item">2.3.3. 使用通配符执行多个文件</span></span></a></li><li><a class="level is-mobile" href="#2-3-4-一个复合示例"><span class="level-left"><span class="level-item">2.3.4. 一个复合示例</span></span></a></li></ul></li></ul></li><li><a class="level is-mobile" href="#3-在源代码中调用工具类"><span class="level-left"><span class="level-item">3. 在源代码中调用工具类</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

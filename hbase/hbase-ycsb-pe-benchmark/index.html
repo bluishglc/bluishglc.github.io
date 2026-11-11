@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>使用 YCSB 和 PE 进行 HBase 性能压力测试 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="HBase主要性能压力测试有两个，一个是 HBase 自带的 PE，另一个是 YCSB，先简单说一个两者的区别。PE 是 HBase 自带的工具，开箱即用，使用起来非常简单，但是 PE 只能按单个线程统计压测结果，不能汇总整体压测数据，更重要的是，PE 没有 YCSB 的 预设模板（Workload） 功能，测试场景单一，相较而言，YCSB 要强大的多，它的 Workload 功能非常实用，可以模"><meta property="og:type" content="article"><meta property="og:title" content="使用 YCSB 和 PE 进行 HBase 性能压力测试"><meta property="og:url" content="https://laurence.enlightgram.com/hbase/hbase-ycsb-pe-benchmark/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="HBase主要性能压力测试有两个，一个是 HBase 自带的 PE，另一个是 YCSB，先简单说一个两者的区别。PE 是 HBase 自带的工具，开箱即用，使用起来非常简单，但是 PE 只能按单个线程统计压测结果，不能汇总整体压测数据，更重要的是，PE 没有 YCSB 的 预设模板（Workload） 功能，测试场景单一，相较而言，YCSB 要强大的多，它的 Workload 功能非常实用，可以模"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/hbase/hbase-ycsb-pe-benchmark/1.png"><meta property="article:published_time" content="2023-09-12T23:34:09.000Z"><meta property="article:modified_time" content="2026-11-06T02:21:32.791Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="性能调优"><meta property="article:tag" content="HBase"><meta property="article:tag" content="基准测试"><meta property="article:tag" content="YCSB"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/hbase/hbase-ycsb-pe-benchmark/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/hbase/hbase-ycsb-pe-benchmark/"},"headline":"使用 YCSB 和 PE 进行 HBase 性能压力测试","image":["https://laurence.enlightgram.com/images/hbase/hbase-ycsb-pe-benchmark/1.png"],"datePublished":"2023-09-12T23:34:09.000Z","dateModified":"2026-11-06T02:21:32.791Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"HBase主要性能压力测试有两个，一个是 HBase 自带的 PE，另一个是 YCSB，先简单说一个两者的区别。PE 是 HBase 自带的工具，开箱即用，使用起来非常简单，但是 PE 只能按单个线程统计压测结果，不能汇总整体压测数据，更重要的是，PE 没有 YCSB 的 预设模板（Workload） 功能，测试场景单一，相较而言，YCSB 要强大的多，它的 Workload 功能非常实用，可以模"}</script><link rel="canonical" href="https://laurence.enlightgram.com/hbase/hbase-ycsb-pe-benchmark/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">使用 YCSB 和 PE 进行 HBase 性能压力测试</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/HBase/">HBase</a></span><span class="level-item">发表于：<time dateTime="2023-09-12T23:34:09.000Z" title="2023-09-12 16:34:09">2023-09-12</time></span><span class="level-item">阅读用时：15 分钟 (约 2187 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>HBase主要性能压力测试有两个，一个是 HBase 自带的 PE，另一个是 YCSB，先简单说一个两者的区别。PE 是 HBase 自带的工具，开箱即用，使用起来非常简单，但是 PE 只能按单个线程统计压测结果，不能汇总整体压测数据，更重要的是，PE 没有 YCSB 的 预设模板（Workload） 功能，测试场景单一，相较而言，YCSB 要强大的多，它的 Workload 功能非常实用，可以模拟更贴近实际使用场景的压力状况。下面分解介绍一下两款工具的使用方法。</p>
+<h2 id="1-YCSB"><a href="#1-YCSB" class="headerlink" title="1. YCSB"></a>1. YCSB</h2><p>官方文档： <a target="_blank" rel="noopener" href="https://github.com/brianfrankcooper/YCSB/blob/master/asynchbase/README.md">https://github.com/brianfrankcooper/YCSB/blob/master/asynchbase/README.md</a> </p>
+<h3 id="1-1-全局配置"><a href="#1-1-全局配置" class="headerlink" title="1.1 全局配置"></a>1.1 全局配置</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">hbaseYcsbUrl=<span class="string">&quot;https://github.com/brianfrankcooper/YCSB/releases/download/0.17.0/ycsb-hbase20-binding-0.17.0.tar.gz&quot;</span></span><br><span class="line">hbaseYcsbPkg=$(<span class="built_in">basename</span> <span class="variable">$hbaseYcsbUrl</span>)</span><br><span class="line">hbaseYcsbDir=$(<span class="built_in">basename</span> <span class="variable">$hbaseYcsbUrl</span> <span class="string">&quot;.tar.gz&quot;</span>)</span><br><span class="line"><span class="built_in">export</span> YCSB_HOME=<span class="string">&quot;/opt/<span class="variable">$hbaseYcsbDir</span>&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="1-2-下载"><a href="#1-2-下载" class="headerlink" title="1.2. 下载"></a>1.2. 下载</h3><p>下载地址： <a target="_blank" rel="noopener" href="https://github.com/brianfrankcooper/YCSB/releases">https://github.com/brianfrankcooper/YCSB/releases</a> </p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">wget <span class="variable">$hbaseYcsbUrl</span> -P /tmp/</span><br><span class="line"><span class="built_in">sudo</span> tar -xzf /tmp/<span class="variable">$hbaseYcsbPkg</span> -C /opt</span><br><span class="line"><span class="variable">$YCSB_HOME</span>/bin/ycsb -h</span><br></pre></td></tr></table></figure>
+
+<h3 id="1-3-建表"><a href="#1-3-建表" class="headerlink" title="1.3. 建表"></a>1.3. 建表</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF | hbase shell</span></span><br><span class="line"><span class="string">disable &#x27;usertable&#x27;</span></span><br><span class="line"><span class="string">drop &#x27;usertable&#x27;</span></span><br><span class="line"><span class="string">n_splits = 30 # HBase recommends (10 * number of regionservers)</span></span><br><span class="line"><span class="string">create &#x27;usertable&#x27;, &#x27;cf&#x27;, &#123;SPLITS =&gt; (1..n_splits).map &#123;|i| &quot;user#&#123;1000+i*(9999-1000)/n_splits&#125;&quot;&#125;&#125;</span></span><br><span class="line"><span class="string">describe &#x27;usertable&#x27;</span></span><br><span class="line"><span class="string">EOF</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="1-4-加载数据"><a href="#1-4-加载数据" class="headerlink" title="1.4. 加载数据"></a>1.4. 加载数据</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">$YCSB_HOME</span>/bin/ycsb load hbase20 -<span class="built_in">cp</span> /etc/hbase/conf/ -p columnfamily=cf -P <span class="variable">$YCSB_HOME</span>/workloads/workloada</span><br></pre></td></tr></table></figure>
+
+<p>上述数据加载使用的是方案&#x2F;模板： <code>workloada</code> （就是一个properties文件），该方案默认写入1000条记录，并执行1000次操作（read，update，scan等），用户可以自定插入的数据量和操作次数，例如： <code>-p recordcount=10000 -p operationcount=10000</code> 。这里再详细说明 一下 <code>recordcount</code> 和 <code>operationcount</code> 两个属性：</p>
+<ul>
+<li><p><code>recordcount</code> ：总的插入数据量，写入数据的操作不会算到 <code>operationcount</code> 里面</p>
+</li>
+<li><p><code>operationcount</code> ：总的操作次数，操作被分成了read、update、scan、insert四种类型，可以在配置中设定它们之间的比例，但总的操作次数是由 <code>operationcount</code> 控制的</p>
+</li>
+</ul>
+<h3 id="1-5-确认数据是否加载成功"><a href="#1-5-确认数据是否加载成功" class="headerlink" title="1.5. 确认数据是否加载成功"></a>1.5. 确认数据是否加载成功</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF | hbase shell</span></span><br><span class="line"><span class="string">scan &#x27;usertable&#x27;</span></span><br><span class="line"><span class="string">EOF</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="1-6-选择压测模板（Workload）"><a href="#1-6-选择压测模板（Workload）" class="headerlink" title="1.6. 选择压测模板（Workload）"></a>1.6. 选择压测模板（Workload）</h3><p>上述加载数据的测试仅仅是一个“冒烟”测试，实际进行压测前，要根据目标场景选择一个相匹配的 Workload，当然，也可以完全自定义 Workload，以下是存放在 <code>$YCSB_HOME/workloads</code> 下的6种预定义的 Workload:</p>
+<table>
+<thead>
+<tr>
+<th align="left">Workload预制方案</th>
+<th align="left">说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">workloada</td>
+<td align="left">50% 读 50% 更新，读写均衡</td>
+</tr>
+<tr>
+<td align="left">workloadb</td>
+<td align="left">95% 读 5% 更新，读多写少，多数系统比较符合这种场景</td>
+</tr>
+<tr>
+<td align="left">workloadc</td>
+<td align="left">100% 读</td>
+</tr>
+<tr>
+<td align="left">workloadd</td>
+<td align="left">95% 读 5% 插入，读最近更新，越新的纪录读取概率越大（requestdistribution&#x3D;latest）</td>
+</tr>
+<tr>
+<td align="left">workloade</td>
+<td align="left">95% 扫描 5% 插入，小范围查询（重Scan），不是点查</td>
+</tr>
+<tr>
+<td align="left">workloadf</td>
+<td align="left">50% 读，50% 读取-修改-写入，即：读取一个纪录，然后修改这个纪录，最后写回</td>
+</tr>
+</tbody></table>
+<h3 id="1-7-正式压测"><a href="#1-7-正式压测" class="headerlink" title="1.7. 正式压测"></a>1.7. 正式压测</h3><p>了解了上述不同类型的 Workload 后，选择一个符合自身集群使用场景的 Workload，然后就可以正式压测了，以下以 <code>workloadb</code> 为例：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">nohup</span> <span class="variable">$YCSB_HOME</span>/bin/ycsb run hbase20 \</span><br><span class="line">    -<span class="built_in">cp</span> /etc/hbase/conf/ \</span><br><span class="line">    -p columnfamily=cf \</span><br><span class="line">    -p recordcount=10000000 \</span><br><span class="line">    -p operationcount=10000000 \</span><br><span class="line">    -P <span class="variable">$YCSB_HOME</span>/workloads/workloadb \</span><br><span class="line">    -threads 3 \</span><br><span class="line">    -s &amp;&gt; nohup.out &amp;</span><br><span class="line"><span class="built_in">tail</span> -f nohup.out</span><br></pre></td></tr></table></figure>
+
+<p>压测执行完毕后会给出类似下图的压测报告：</p>
+<p> <img src="/../../images/hbase/hbase-ycsb-pe-benchmark/1.png" alt="在这里插入图片描述"></p>
+<h2 id="2-PE"><a href="#2-PE" class="headerlink" title="2. PE"></a>2. PE</h2><p>PE只能统计每个线程执行的情况，不能统计整体的状态，所以还是推荐使用YCSB。</p>
+<h3 id="2-1-建表并执行测试"><a href="#2-1-建表并执行测试" class="headerlink" title="2.1 建表并执行测试"></a>2.1 建表并执行测试</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF | hbase shell</span></span><br><span class="line"><span class="string">create &#x27;test-table&#x27;, &#123;NAME =&gt; &#x27;f&#x27;, REPLICATION_SCOPE=&gt;&#x27;1&#x27;&#125;</span></span><br><span class="line"><span class="string">EOF</span></span><br><span class="line"></span><br><span class="line">hbase pe --nomapred --oneCon=<span class="literal">true</span> --table=test-table --rows=1000000 --valueSize=100 --compress=SNAPPY --presplit=16 --autoFlush=<span class="literal">true</span> randomWrite 16</span><br></pre></td></tr></table></figure>
+
+<p>PE的测试报告并不在控制台直接输出（这一点不太好），而是写入到了HBase的LOG文件，如果是EMR，会写到 <code>/var/log/hbase/hbase.log</code> 中，PE会分别打出每个线程的延迟状况，类似下面这样：<br> <img src="/../../images/hbase/hbase-ycsb-pe-benchmark/2.png" alt="在这里插入图片描述"></p>
+<h2 id="3-附录"><a href="#3-附录" class="headerlink" title="3. 附录"></a>3. 附录</h2><h3 id="3-1-PE-命令行参数"><a href="#3-1-PE-命令行参数" class="headerlink" title="3.1. PE 命令行参数"></a>3.1. PE 命令行参数</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><span class="line">General Options:</span><br><span class="line"> nomapred        采用MapReduce的方式启动多线程测试还是通过多线程的方式，如果没有安装MapReduce，或者不想用MapReduce，通常我们采用多线程的方式，因此一般在命令中加上--nomapred来表示不使用MapReduce。  </span><br><span class="line"> rows            每个客户端(线程)运行的行。默认值：一百万。注意这里的行数是指单线程的行数，如果rows=100， 线程数为10，那么在写测试中，写入HBase的将是 100 x 10 行  </span><br><span class="line"> size            总大小,单位GiB。与--rows互斥。默认值：1.0。  </span><br><span class="line"> sampleRate      样本比例:对总行数的一部分样本执行测试。只有randomRead支持。默认值：1.0  </span><br><span class="line"> traceRate       启用HTrace跨度。每N行启动一次跟踪。默认值：0  </span><br><span class="line"> table           测试表的名字，如果不设，默认为TestTable。  </span><br><span class="line"> multiGet        如果&gt; 0，则在执行RandomRead时，执行多次获取而不是单次获取。默认值：0  </span><br><span class="line"> compress        要使用的压缩类型（GZ，LZO，...）。默认值：<span class="string">&#x27;无&#x27;</span>  </span><br><span class="line"> flushCommits    该参数用于确定测试是否应该刷新表。默认值：<span class="literal">false</span>  </span><br><span class="line"> writeToWAL      在puts上设置writeToWAL。默认值：True  </span><br><span class="line"> autoFlush       默认为<span class="literal">false</span>，即PE默认用的是BufferedMutator，BufferedMutator会把数据攒在内存里，达到一定的大小再向服务器发送，如果想明确测单行Put的写入性能，建议设置为<span class="literal">true</span>。个人觉得PE中引入autoFlush会影响统计的准确性，因为在没有攒够足够的数据时，put操作会立马返回，根本没产生RPC，但是相应的时间和次数也会被统计在最终结果里。  </span><br><span class="line"> oneCon          多线程运行测试时，底层使用一个还是多个链接。这个参数默认值为<span class="literal">false</span>，每个thread都会启一个Connection，建议把这个参数设为True  </span><br><span class="line"> presplit        表的预分裂region个数，在做性能测试时一定要设置region个数，不然所有的读写会落在一个region上，严重影响性能  </span><br><span class="line"> inmemory        试图尽可能保持CF内存的HFile。不保证始终从内存中提供读取。默认值：<span class="literal">false</span>  </span><br><span class="line"> usetags         与KV一起写标签。与HFile V3配合使用。默认值：<span class="literal">false</span>  </span><br><span class="line"> numoftags       指定所需的标签号。仅当usetags为<span class="literal">true</span>时才有效。  </span><br><span class="line"> filterAll       通过不将任何内容返回给客户端，帮助过滤掉服务器端的所有行。通过在内部使用FilterAllFilter,帮助检查服务器端性能。  </span><br><span class="line"> latency         设置为报告操作延迟。默认值：False  </span><br><span class="line"> bloomFilter     Bloom 过滤器类型，[NONE，ROW，ROWCOL]之一  </span><br><span class="line"> valueSize       写入HBase的value的size，单位是Byte，大家可以根据自己实际的场景设置这个Value的大小。默认值：1024  </span><br><span class="line"> valueRandom     设置是否应该在0和<span class="string">&#x27;valueSize&#x27;</span>之间改变值大小;设置读取大小的统计信息：默认值: Not <span class="built_in">set</span>.  </span><br><span class="line"> valueZipf       设置是否应该以zipf格式改变0和<span class="string">&#x27;valueSize&#x27;</span>之间的值大小, 默认值: Not <span class="built_in">set</span>.  </span><br><span class="line"> period          报告每个<span class="string">&#x27;period&#x27;</span>行：默认值：opts.perClientRunRows / 10  </span><br><span class="line"> multiGet        批处理组合成N组。只有randomRead支持。默认值: disabled  </span><br><span class="line"> replicas        启用区域副本测试。默认值：1。  </span><br><span class="line"> splitPolicy     为表指定自定义RegionSplitPolicy。  </span><br><span class="line"> randomSleep     在每次获得0和输入值之前进行随机睡眠。默认值：0  </span><br><span class="line"></span><br><span class="line"> Note: -D properties will be applied to the conf used.   </span><br><span class="line">  For example:   </span><br><span class="line">   -Dmapreduce.output.fileoutputformat.compress=<span class="literal">true</span>  </span><br><span class="line">   -Dmapreduce.task.timeout=60000  </span><br><span class="line"></span><br><span class="line">Command:  </span><br><span class="line"> filterScan      使用过滤器运行扫描测试，根据它的值查找特定行（确保使用--rows = 20）   </span><br><span class="line"> randomRead      运行随机读取测试  </span><br><span class="line"> randomSeekScan  运行随机搜索和扫描100测试  </span><br><span class="line"> randomWrite     运行随机写测试  </span><br><span class="line"> scan            运行扫描测试（每行读取）  </span><br><span class="line"> scanRange10     使用开始和停止行（最多10行）运行随机搜索扫描  </span><br><span class="line"> scanRange100    使用开始和停止行运行随机搜索扫描（最多100行）  </span><br><span class="line"> scanRange1000   使用开始和停止行（最多1000行）运行随机搜索扫描  </span><br><span class="line"> scanRange10000  使用开始和停止行运行随机搜索扫描（最多10000行）  </span><br><span class="line"> sequentialRead  运行顺序读取测试  </span><br><span class="line"> sequentialWrite 运行顺序写入测试  </span><br><span class="line"></span><br><span class="line">Args:  </span><br><span class="line"> nclients        整数。必须要有该参数。客户端总数（和HRegionServers）  </span><br><span class="line">running: 1 &lt;= value &lt;= 500  </span><br><span class="line">Examples:  </span><br><span class="line"> 运行一个单独的客户端:  </span><br><span class="line"> $ bin/hbase org.apache.hadoop.hbase.PerformanceEvaluation sequentialWrite 1</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-2-百分位数值（Percentile）：P99，P999"><a href="#3-2-百分位数值（Percentile）：P99，P999" class="headerlink" title="3.2. 百分位数值（Percentile）：P99，P999"></a>3.2. 百分位数值（Percentile）：P99，P999</h3><p>百分位数值是一个统计学中的术语，通俗一点解释是：把所有的请求响应时间按从小到大的顺序排列起来，排在某个 百分比 位置上的请求响应时间就是这个百分比对应的百分位数值。举个例子就是明白了：</p>
+<p><strong>P99</strong> ：响应耗时从小到大排列，处在99%位置上的耗时即为P99值。假设该值为200ms，就意味着：99%的用户的响应耗时在200ms之内，只有1%的用户的响应耗时大于200ms</p>
+<p><strong>P99.9 ( P999 )</strong> ：许多互联网公司会采用P99.9值，也就是99.9%的用户耗时作为指标，通过测量与优化该值，就可保证绝大多数用户的使用体验。 至于P99.99值，优化成本过高，而且服务响应由于网络波动、系统抖动等不能解决之情况，因此大多数时候都不考虑该指标。</p>
+<p>参考资料：</p>
+<p><a target="_blank" rel="noopener" href="https://hbase.apache.org/book.html#hbase_metrics">https://hbase.apache.org/book.html#hbase_metrics</a> </p>
+<p><a target="_blank" rel="noopener" href="https://hbase.apache.org/book.html#hbase_metrics">https://hbase.apache.org/book.html#offheap_read_write</a> </p>
+<p><a target="_blank" rel="noopener" href="https://help.aliyun.com/zh/emr/emr-on-ecs/user-guide/hbase-metrics">https://help.aliyun.com/zh/emr/emr-on-ecs/user-guide/hbase-metrics</a> </p>
+<p><a target="_blank" rel="noopener" href="https://www.cnblogs.com/felixzh/p/10246335.html">https://www.cnblogs.com/felixzh/p/10246335.html</a> </p>
+<p><a target="_blank" rel="noopener" href="https://cloud.tencent.com/developer/article/1596748">https://cloud.tencent.com/developer/article/1596748</a> </p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>使用 YCSB 和 PE 进行 HBase 性能压力测试</p><p><a href="https://laurence.enlightgram.com/hbase/hbase-ycsb-pe-benchmark/">https://laurence.enlightgram.com/hbase/hbase-ycsb-pe-benchmark/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2023-09-12</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/">性能调优</a><a class="link-muted mr-2" rel="tag" href="/tags/HBase/">HBase</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%9F%BA%E5%87%86%E6%B5%8B%E8%AF%95/">基准测试</a><a class="link-muted mr-2" rel="tag" href="/tags/YCSB/">YCSB</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/aws/delta-lake-on-emr/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">在 EMR 上使用 Delta Lake</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/kafka/kafka-s3-backup-restore/"><span class="level-item">Apache Kafka 基于 S3 的数据导出、导入、备份、还原、迁移方案</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-YCSB"><span class="level-left"><span class="level-item">1. YCSB</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#1-1-全局配置"><span class="level-left"><span class="level-item">1.1 全局配置</span></span></a></li><li><a class="level is-mobile" href="#1-2-下载"><span class="level-left"><span class="level-item">1.2. 下载</span></span></a></li><li><a class="level is-mobile" href="#1-3-建表"><span class="level-left"><span class="level-item">1.3. 建表</span></span></a></li><li><a class="level is-mobile" href="#1-4-加载数据"><span class="level-left"><span class="level-item">1.4. 加载数据</span></span></a></li><li><a class="level is-mobile" href="#1-5-确认数据是否加载成功"><span class="level-left"><span class="level-item">1.5. 确认数据是否加载成功</span></span></a></li><li><a class="level is-mobile" href="#1-6-选择压测模板（Workload）"><span class="level-left"><span class="level-item">1.6. 选择压测模板（Workload）</span></span></a></li><li><a class="level is-mobile" href="#1-7-正式压测"><span class="level-left"><span class="level-item">1.7. 正式压测</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-PE"><span class="level-left"><span class="level-item">2. PE</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-1-建表并执行测试"><span class="level-left"><span class="level-item">2.1 建表并执行测试</span></span></a></li></ul></li><li><a class="level is-mobile" href="#3-附录"><span class="level-left"><span class="level-item">3. 附录</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#3-1-PE-命令行参数"><span class="level-left"><span class="level-item">3.1. PE 命令行参数</span></span></a></li><li><a class="level is-mobile" href="#3-2-百分位数值（Percentile）：P99，P999"><span class="level-left"><span class="level-item">3.2. 百分位数值（Percentile）：P99，P999</span></span></a></li></ul></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

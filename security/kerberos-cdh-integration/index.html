@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Kerberose安装与CDH集成 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="Kerberose安装与CDH集成 --- 1.Kerberose安装 1.1. 软件版本 OS: CentOS 7.5 CDH: 5.16.1 JDK: 8u211 1.2. 集群角色 node1.cluster -&gt; master节点 node[2-5].cluster -&gt; slave节点 1.3. 安装JCE Policy File 很多Linux系统默认使用AES-256来加密ticke"><meta property="og:type" content="article"><meta property="og:title" content="Kerberose安装与CDH集成"><meta property="og:url" content="https://laurence.enlightgram.com/security/kerberos-cdh-integration/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="Kerberose安装与CDH集成 --- 1.Kerberose安装 1.1. 软件版本 OS: CentOS 7.5 CDH: 5.16.1 JDK: 8u211 1.2. 集群角色 node1.cluster -&gt; master节点 node[2-5].cluster -&gt; slave节点 1.3. 安装JCE Policy File 很多Linux系统默认使用AES-256来加密ticke"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/profile/thumbnail.png"><meta property="article:published_time" content="2019-05-31T16:15:25.000Z"><meta property="article:modified_time" content="2026-11-06T02:21:33.245Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Kerberos"><meta property="article:tag" content="CDH"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/profile/thumbnail.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/security/kerberos-cdh-integration/"},"headline":"Kerberose安装与CDH集成","image":["https://laurence.enlightgram.com/images/profile/thumbnail.png"],"datePublished":"2019-05-31T16:15:25.000Z","dateModified":"2026-11-06T02:21:33.245Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"Kerberose安装与CDH集成 --- 1.Kerberose安装 1.1. 软件版本 OS: CentOS 7.5 CDH: 5.16.1 JDK: 8u211 1.2. 集群角色 node1.cluster -> master节点 node[2-5].cluster -> slave节点 1.3. 安装JCE Policy File 很多Linux系统默认使用AES-256来加密ticke"}</script><link rel="canonical" href="https://laurence.enlightgram.com/security/kerberos-cdh-integration/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Kerberose安装与CDH集成</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Security/">Security</a></span><span class="level-item">发表于：<time dateTime="2019-05-31T16:15:25.000Z" title="2019-05-31 09:15:25">2019-05-31</time></span><span class="level-item">阅读用时：22 分钟 (约 3306 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><h2 id="Kerberose安装与CDH集成"><a href="#Kerberose安装与CDH集成" class="headerlink" title="Kerberose安装与CDH集成"></a>Kerberose安装与CDH集成</h2><hr>
+<h3 id="1-Kerberose安装"><a href="#1-Kerberose安装" class="headerlink" title="1.Kerberose安装"></a>1.Kerberose安装</h3><h4 id="1-1-软件版本"><a href="#1-1-软件版本" class="headerlink" title="1.1. 软件版本"></a>1.1. 软件版本</h4><ul>
+<li><p>OS: CentOS 7.5</p>
+</li>
+<li><p>CDH: 5.16.1</p>
+</li>
+<li><p>JDK: 8u211</p>
+</li>
+</ul>
+<h4 id="1-2-集群角色"><a href="#1-2-集群角色" class="headerlink" title="1.2. 集群角色"></a>1.2. 集群角色</h4><p>node1.cluster -&gt; master节点<br>node[2-5].cluster -&gt; slave节点</p>
+<h4 id="1-3-安装JCE-Policy-File"><a href="#1-3-安装JCE-Policy-File" class="headerlink" title="1.3. 安装JCE Policy File"></a>1.3. 安装JCE Policy File</h4><p>很多Linux系统默认使用AES-256来加密tickets，例如CentOS&#x2F;Red Hat，这需要在所有的集群节点以及Hadoop使用者的主机上安装 Java Cryptography Extension (JCE) Unlimited Strength Jurisdiction Policy File。</p>
+<p>但是在JDK 8.151之后，应经默认使用了Unlimited Strength的Policy文件，所以安装了8.151之后的JDK的话，就可以省略这一步了。</p>
+<h4 id="1-4-安装Kerberos"><a href="#1-4-安装Kerberos" class="headerlink" title="1.4. 安装Kerberos"></a>1.4. 安装Kerberos</h4><p>注：本文所有操作均在root用户下执行。</p>
+<p>Kerberos是CDH之外的独立基础设施，需要自行安装。</p>
+<ul>
+<li>在Master节点上安装krb5-server和openldap-clients</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum -y install krb5-server openldap-clients </span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>在所有的节点上安装krb5-workstation和krb5-libs</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install -y krb5-workstation krb5-libs</span><br></pre></td></tr></table></figure>
+
+<h4 id="1-5-配置Kerberos"><a href="#1-5-配置Kerberos" class="headerlink" title="1.5. 配置Kerberos"></a>1.5. 配置Kerberos</h4><p><strong>注：以下所有文件在修改前先cp一个bak备份文件</strong> </p>
+<ul>
+<li>&#x2F;etc&#x2F;krb5.conf</li>
+</ul>
+<p>&#x2F;etc&#x2F;krb5.conf存在于每一个Kerberos节点上，所以在master节点上编辑好该文件后需要覆盖到集群上的所有节点上。</p>
+<p>&#x2F;etc&#x2F;krb5.conf在每台机器上已经有一份默认配置，需要修改的是与你的集群相关的特定信息，主要是domain, kdc 服务器 和admin_server服务器的地址。 以下给出一份配置参考， 其中 <code>YOUR-DOMAIN</code> ， <code>YOUR-KDC-SERVER</code> ， <code>YOUR-MASTER-SERVER</code> 需要根据集群的情况确定，然后查找替换即可。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"># Configuration snippets may be placed in this directory as well</span><br><span class="line">includedir /etc/krb5.conf.d/</span><br><span class="line"></span><br><span class="line">[logging]</span><br><span class="line"> default = FILE:/var/log/krb5libs.log</span><br><span class="line"> kdc = FILE:/var/log/krb5kdc.log</span><br><span class="line"> admin_server = FILE:/var/log/kadmind.log</span><br><span class="line"></span><br><span class="line">[libdefaults]</span><br><span class="line"> default_realm = YOUR-DOMAIN</span><br><span class="line"> dns_lookup_realm = false</span><br><span class="line"> ticket_lifetime = 24h</span><br><span class="line"> dns_lookup_kdc = true</span><br><span class="line"> renew_lifetime = 7d</span><br><span class="line"> forwardable = true</span><br><span class="line"> rdns = false</span><br><span class="line"> udp_preference_limit = 0</span><br><span class="line">#default_ccache_name = KEYRING:persistent:%&#123;uid&#125;</span><br><span class="line"></span><br><span class="line">[realms]</span><br><span class="line"> YOUR-DOMAIN = &#123;</span><br><span class="line">  kdc = YOUR-KDC-SERVER</span><br><span class="line">  admin_server = YOUR-MASTER-SERVER</span><br><span class="line"> &#125;</span><br><span class="line"></span><br><span class="line">[domain_realm]</span><br><span class="line"> .YOUR-DOMAIN = YOUR-DOMAIN</span><br><span class="line">YOUR-DOMAIN = YOUR-DOMAIN</span><br></pre></td></tr></table></figure>
+
+<p>这份 配置文件 中有这些几个重要的配置项需要重点关注一下：</p>
+<p>default_realm：Kerberos默认的领域，当整个集群只在一个域里时，通常这个配置项的值就是当前域。如果有多个领域，可以在 [realms] 节添加其他域。<br>ticket_lifetime： 凭证生效的时限，一般为24小时，即kinit之后，23小时内凭证都是有效的。<br>renew_lifetime： 凭证最长可以被延期的时限，一般为一个礼拜。当凭证过期之后，对安全认证的服务的后续访问则会失败。</p>
+<ul>
+<li>&#x2F;var&#x2F;kerberos&#x2F;krb5kdc&#x2F;kdc.conf</li>
+</ul>
+<p>该文件是KDC的配置文件，所以只存在于kdc服务器上，以下是一份配置参考：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">[kdcdefaults]</span><br><span class="line"> kdc_ports = 88</span><br><span class="line"> kdc_tcp_ports = 88</span><br><span class="line"></span><br><span class="line">[realms]</span><br><span class="line"> YOUR-DOMAIN = &#123;</span><br><span class="line">  master_key_type = aes256-cts</span><br><span class="line">  max_renewable_life = 7d 0h 0m 0s</span><br><span class="line">  acl_file = /var/kerberos/krb5kdc/kadm5.acl</span><br><span class="line">  dict_file = /usr/share/dict/words</span><br><span class="line">  admin_keytab = /var/kerberos/krb5kdc/kadm5.keytab</span><br><span class="line"># note that aes256 is ONLY supported in Active Directory in a domain / forrest operating at a 2008 or greater functional level.</span><br><span class="line"># aes256 requires that you download and deploy the JCE Policy files for your JDK release level to provide</span><br><span class="line"># strong java encryption extension levels like AES256. Make sure to match based on the encryption configured within AD for</span><br><span class="line"># cross realm auth, note that RC4 = arcfour when comparing windows and linux enctypes</span><br><span class="line"># 另：在JDK 8.151版本之后，已经默认使用unlimited的policy了，不必再去单独下载安装JCE了</span><br><span class="line">  supported_enctypes = aes256-cts:normal aes128-cts:normal arcfour-hmac:normal</span><br><span class="line">  default_principal_flags = +renewable, +forwardable</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+
+<p>同样的，YOUR-DOMAIN需要替换成集群实际的domain。 对于这份配置文件，有一个项配置需要特别关注，因于它是CDH要求必须配置的，即 <code>max_renewable_life</code> 。在CDH配置Kerberos时，有一项前置条件：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">KDC必须配置为允许renewable tickets with non-zerolifetime</span><br></pre></td></tr></table></figure>
+
+<p>当max_renewable_life配置为一个非零值时即满足了这个条件。</p>
+<ul>
+<li>&#x2F;var&#x2F;kerberos&#x2F;krb5kdc&#x2F;kadm5.acl</li>
+</ul>
+<p>一般情况下，我们并不需要编辑这个文件，因为它默认配置的一条规则是可以满足一般需求的，即：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">*/admin@YOUR-DOMAIN         *</span><br></pre></td></tr></table></figure>
+
+<p>因为这项配置的含义是：只要principal的名字的第二部分是admin，那么该principal就拥有管理员权限。例如后面我们要建立的 <code>cloudera-scm/admin@YOUR-DOMAIN</code> 这个principal，就拥有管理员权限，因为它的名字以&#x2F;admin结尾。</p>
+<h4 id="1-6-创建数据库"><a href="#1-6-创建数据库" class="headerlink" title="1.6. 创建数据库"></a>1.6. 创建数据库</h4><p>在master节点上，执行：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kdb5_util create -r YOUR-DOMAIN -s</span><br></pre></td></tr></table></figure>
+
+<p>该命令执行完成后，会在&#x2F;var&#x2F;kerberos&#x2F;krb5kdc&#x2F; 目录下生成principal数据库文件。</p>
+<p>如果遇到数据库已经存在的提示，可以把 &#x2F;var&#x2F;kerberos&#x2F;krb5kdc&#x2F; 目录下的 principal 的相关文件都删除掉:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">rm</span> -rf /var/kerberos/krb5kdc/principal*</span><br></pre></td></tr></table></figure>
+
+<p>默认的数据库名字都是 principal。可以使用 -d指定数据库名字。</p>
+<h4 id="1-7-启动Kerberos服务"><a href="#1-7-启动Kerberos服务" class="headerlink" title="1.7. 启动Kerberos服务"></a>1.7. 启动Kerberos服务</h4><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">systemctl start krb5kdc </span><br><span class="line">systemctl start kadmin </span><br><span class="line">systemctl <span class="built_in">enable</span> krb5kdc </span><br><span class="line">systemctl <span class="built_in">enable</span> kadmin</span><br></pre></td></tr></table></figure>
+
+<h4 id="1-8-验证安装"><a href="#1-8-验证安装" class="headerlink" title="1.8. 验证安装"></a>1.8. 验证安装</h4><p>服务启动之后，我们可以通过一组添加并查看principal的命令来验证kerberos是否已经安装成功：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"># 列出Kerberos中的所有认证用户，即principals</span><br><span class="line">kadmin.local -q &quot;list_principals&quot;</span><br><span class="line"></span><br><span class="line"># 添加认证用户，需要输入密码</span><br><span class="line">kadmin.local -q &quot;addprinc test-user&quot;</span><br><span class="line"></span><br><span class="line"># 使用该用户登录，获取身份认证，需要输入密码</span><br><span class="line">kinit test-user</span><br><span class="line"></span><br><span class="line"># 查看当前用户的认证信息ticket</span><br><span class="line">klist</span><br><span class="line"></span><br><span class="line"># 更新ticket</span><br><span class="line">kinit -R</span><br><span class="line"></span><br><span class="line"># 销毁当前的ticket</span><br><span class="line">kdestroy</span><br><span class="line"></span><br><span class="line"># 删除认证用户</span><br><span class="line">kadmin.local -q &quot;delprinc test-user&quot;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h3 id="2-在CDH上启用Kerberos"><a href="#2-在CDH上启用Kerberos" class="headerlink" title="2. 在CDH上启用Kerberos"></a>2. 在CDH上启用Kerberos</h3><p>当Kerberos安装好之后，我们就可以通过CDH的Cloudera Manager来启用Kerberos了。简单地说，这一过程其实是让Cloudera Manager自动地为所有的CDH上的服务生成相应的服务主体和凭证，同时，将所有服务的身份认证机制改为kerberos(这需要修改所有服务上安全相关的配置项，会由CM自动完成)，这样，外围客户端（不管是CLI工具，如hdfs dfs xxxx这样的命令，还是java clent libary等）再连接这些服务时，必须要通过kerberos客户端工具表明身份并认证通过之后(例如kinit xxx这样的CLI操作)才能访问这些服务。</p>
+<p>CM上有专门启用Kerberos的向导配置，本文不再赘述，可以参考以下两篇文章中的截图：</p>
+<ol>
+<li><p><a target="_blank" rel="noopener" href="https://blog.51cto.com/flyfish225/2096487">https://blog.51cto.com/flyfish225/2096487</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://cloud.tencent.com/developer/article/1077884">https://cloud.tencent.com/developer/article/1077884</a></p>
+</li>
+</ol>
+<h3 id="3-创建hdfs-hive等用户主体"><a href="#3-创建hdfs-hive等用户主体" class="headerlink" title="3. 创建hdfs&#x2F;hive等用户主体"></a>3. 创建hdfs&#x2F;hive等用户主体</h3><p>CM在enable kerberos的过程中生成的全部都是“服务主体（principal）”，没有一个是“用户主体（principal）”，服务主体（principal）一定都带着主机名以标识这是哪个主机上的哪个服务，例如：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">hive/node1.your-domain@your-domain</span><br><span class="line">hdfs/node2.your-domain@your-domain</span><br><span class="line">....</span><br></pre></td></tr></table></figure>
+
+<p>服务主体都是用来标识服务的，并不是用户可以拿来做身份认证的。比如我使用beeline连接hive时就需要明确指明要访问的service principal是哪个，就像下面这样：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">beeline -u &quot;jdbc:hive2://node1.your-domain:10000/default;principal=hive/node1.your-domain@your-domain&quot;</span><br></pre></td></tr></table></figure>
+
+<p>如果用户试图以这些service principal的身份进行认证，你也不知道它们的密码的，因为它们的密码是随机生成的。</p>
+<p>所以一旦服务被kerberos保护起来以后，就要建立kerberos“用户主体”，使用用户主体来访问服务。以hdfs服务为例，它的默认超级用户是hdfs， <strong>一旦启用kerberos，就不会再以本地OS账号的身份进行认证了，而是看kerberos的prinpical里有没有这个用户</strong> ，一个很简单的验证方法就是：这时即时你使用节点上的linux hdfs账号执行 <code>hdfs dfs -ls /</code> 这样的命令一样会因身份认证的问题而执行失败的。所以，我们要做的是就是在kerberos这个层面上建出hdfs的用户主体，任何用户，只要获取了hdfs的凭证，那么它就会被hdfs服务认定为hdfs用户，进而放权进行操作。添加用户凭证在前面也提到过，这里列出hdfs&#x2F;hive两个主要用户凭证的创建命令：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">kadmin.local -q &quot;addprinc hdfs@your-domain&quot;</span><br><span class="line">kadmin.local -q &quot;addprinc hive@your-domain&quot;</span><br></pre></td></tr></table></figure>
+
+<p>我们从建立hdfs和hive的用户主体这个典型的案例可以很清晰地认识到kerberos本质：在一个认证体系里，永远有两个参与方：服务和使用服务的用户，在没有引入kerberos时，以HDFS服务为例，它以当前Linux用户的身份进行身份认证（其实等于没有什么认证动作），然后基于HDFS文件系统的权限体系（即HDFS上的文件owner,group和rwx权限 ）进行权限控制。而当引入kerberos时，其实是加了一个透明的身份认证层，即，首先，“用户”的概念已经发生了变化，不再是任何linux账号，而是通过kerberos的addprinc建立的用户。即使绝大多数时候人们总是会在kerberos上建立与linux账号同名的principal，但它们完全是两种体系下的两码事了。但是对于服务端来说，一个用户就是一个确定的，唯一的用户，一旦通过了身份认证，那么确定就是你了，你将获得你本该拥有的一切权限。以HDFS服务的超级账号hdfs为例，它就是一个账号，当我们是使用非kerberos的方式访问HDFS服务时，它检查的是当前linux账号是不是hdfs, 如果是，那这个账号就是hdfs账号， 当我们是使用kerberos的方式访问HDFS服务时，它检查的是：这是不是kerberos principal数据库中存在的名为hdfs的用户主体，如果是，那么它通过的是kerberos认证，不管是哪种方式，一旦通过了身份认证，以hdfs用户的身份访问到了HDFS服务后，那么后面的权限，各种配置是完全一样，因为这是同一个用户（针对于服务的那个用户）！</p>
+<p>对于上述的描述，在hadoop文档中有比较官方的解释，但不太易于理解kerberos从中扮演的角色，所以仅供参考：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">Hadoop supports two different modes of operation to determine the user’s identity, specified by the hadoop.security.authentication property:</span><br><span class="line"></span><br><span class="line">- simple</span><br><span class="line"></span><br><span class="line">In this mode of operation, the identity of a client process is determined by the host operating system. On Unix-like systems, the user name is the equivalent of `whoami`.</span><br><span class="line"></span><br><span class="line">- kerberos</span><br><span class="line"></span><br><span class="line">In Kerberized operation, the identity of a client process is determined by its Kerberos credentials. For example, in a Kerberized environment, a user may use the kinit utility to obtain a Kerberos ticket-granting-ticket (TGT) and use klist to determine their current principal. When mapping a Kerberos principal to an HDFS username, all components except for the primary are dropped. For example, a principal todd/foobar@CORP.COMPANY.COM will act as the simple username todd on HDFS.</span><br></pre></td></tr></table></figure>
+
+<p>我们可以再引申地思考一下：kerberos这种认证方式和那种页面上使用用户命名+密码的认证方式的差别是什么呢？kerberos这种认证方式很像是这样运作的：简化所有服务对身份认证的要求（或者说服务本身就不想或不能做身份认证），当一个用户说他是谁的时候，系统就直接认定他是那个人，不需要提供任何密码或凭证，以一个系统的登录界面做比喻的话，就是这个登入对话框上只需要输入用户名即可，没有密码验证。那到底谁来确保这个用户就是他声称的那个人呢？这时我们引入kerberos认证，在用户访问到登入页面之前再拦截一层，这一层是通明的，用户可以主动地通过kinit来表明自己的身份，只要kerberos认证他通过了，后面对接的就是那个登入页面了。</p>
+<h3 id="3-创建普通用户主体"><a href="#3-创建普通用户主体" class="headerlink" title="3. 创建普通用户主体"></a>3. 创建普通用户主体</h3><p>在linux上部署和运行程序会有一些默认的约定或称之为最佳实践，比如：为一个应用创建单独的linux账号，使用这个账号部署和启动应用。如果这个应用要访问大数据集群的资源，比如HDFS或Yarn，那它必须也要纳入kerveros体系里，说白了，就是也要为这个应用在kerberos上建立对应的用户凭证。</p>
+<p>其实就具体操作上讲，创建普通用户主体和上面提到的创建hdfs&#x2F;hive用户主体是一样的，区别只在于: 鉴于应用是基于集群的，Hadoop&#x2F;CDH明确要求：必须在集群上的每个节点上创建这个账号，同时在HDFS的&#x2F;user目录下创建同名文件夹，具体的要求是：</p>
+<ol>
+<li>确保群集中的所有主机都有一个linux用户帐户并且该帐户的名称与用户的主体名称的第一个组成部分相同。例如，如果用户的主体名称是 <a href="mailto:&#106;&#111;&#x65;&#64;&#72;&#65;&#x44;&#79;&#x4f;&#80;&#x2e;&#67;&#x4f;&#x4d;">joe@HADOOP.COM</a>，则每个框中应存在linux帐户joe。</li>
+<li>为每个用户帐户在 HDFS 上的 &#x2F;user 下创建一个子目录（例如 &#x2F;user&#x2F;joe）。将该目录的所有者和组更改为该用户。</li>
+</ol>
+<p>上述要求源自CDH官方文档：<a target="_blank" rel="noopener" href="https://www.cloudera.com/documentation/enterprise/5-3-x/topics/cm_sg_prep_for_users_s17.html">https://www.cloudera.com/documentation/enterprise/5-3-x/topics/cm_sg_prep_for_users_s17.html</a></p>
+<p>至于为什么必须要在所有节点上创建账号，我还没有找到特别准确的解释，虽然像hdfs&#x2F;yarn这样的账号都是这样做的，这和他们本来就是集群服务有关，而如果是一个只通过客户端访问集群资源的应用账户来说，为什么必须要这样呢？期待后续能找到答案。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>Kerberose安装与CDH集成</p><p><a href="https://laurence.enlightgram.com/security/kerberos-cdh-integration/">https://laurence.enlightgram.com/security/kerberos-cdh-integration/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2019-05-31</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Kerberos/">Kerberos</a><a class="link-muted mr-2" rel="tag" href="/tags/CDH/">CDH</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/security/kerberos-jdbc-principal-error/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Java应用/JDBC/Squirrel在Kerberos认证时报Unable to obtain Principal Name for authentication的解决方法</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/hadoop/hdp-small-cluster-parallelism/"><span class="level-item">提升小规模HDP集群的作业并行度</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#Kerberose安装与CDH集成"><span class="level-left"><span class="level-item">Kerberose安装与CDH集成</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#1-Kerberose安装"><span class="level-left"><span class="level-item">1.Kerberose安装</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#1-1-软件版本"><span class="level-left"><span class="level-item">1.1. 软件版本</span></span></a></li><li><a class="level is-mobile" href="#1-2-集群角色"><span class="level-left"><span class="level-item">1.2. 集群角色</span></span></a></li><li><a class="level is-mobile" href="#1-3-安装JCE-Policy-File"><span class="level-left"><span class="level-item">1.3. 安装JCE Policy File</span></span></a></li><li><a class="level is-mobile" href="#1-4-安装Kerberos"><span class="level-left"><span class="level-item">1.4. 安装Kerberos</span></span></a></li><li><a class="level is-mobile" href="#1-5-配置Kerberos"><span class="level-left"><span class="level-item">1.5. 配置Kerberos</span></span></a></li><li><a class="level is-mobile" href="#1-6-创建数据库"><span class="level-left"><span class="level-item">1.6. 创建数据库</span></span></a></li><li><a class="level is-mobile" href="#1-7-启动Kerberos服务"><span class="level-left"><span class="level-item">1.7. 启动Kerberos服务</span></span></a></li><li><a class="level is-mobile" href="#1-8-验证安装"><span class="level-left"><span class="level-item">1.8. 验证安装</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-在CDH上启用Kerberos"><span class="level-left"><span class="level-item">2. 在CDH上启用Kerberos</span></span></a></li><li><a class="level is-mobile" href="#3-创建hdfs-hive等用户主体"><span class="level-left"><span class="level-item">3. 创建hdfs/hive等用户主体</span></span></a></li><li><a class="level is-mobile" href="#3-创建普通用户主体"><span class="level-left"><span class="level-item">3. 创建普通用户主体</span></span></a></li></ul></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>论基于数据访问的集合类（Data Access Based Collection）和领域事件(Domain Event)模式 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="在正式展开之前，有一些概念要先做一个界定。首先：领域模型是指系统应对的领域中所有逻辑的一个抽象，本质上它是领域中各种对象和概念以及它们之间关系的集合。你可以用自然语言描述它，也可以用UML来描述，或者是代码去描述。特别地，当我们使用面向对象建模技术来实现这个领域模型时，我们可以把这个实现出来的模型称之为对象模型。我们可以认为领域模型是一个概念模型，是分析阶段的产物。 让精心构建的对象 模型 高效地"><meta property="og:type" content="article"><meta property="og:title" content="论基于数据访问的集合类（Data Access Based Collection）和领域事件(Domain Event)模式"><meta property="og:url" content="https://laurence.enlightgram.com/architecture/data-access-collection-and-domain-event/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="在正式展开之前，有一些概念要先做一个界定。首先：领域模型是指系统应对的领域中所有逻辑的一个抽象，本质上它是领域中各种对象和概念以及它们之间关系的集合。你可以用自然语言描述它，也可以用UML来描述，或者是代码去描述。特别地，当我们使用面向对象建模技术来实现这个领域模型时，我们可以把这个实现出来的模型称之为对象模型。我们可以认为领域模型是一个概念模型，是分析阶段的产物。 让精心构建的对象 模型 高效地"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/profile/thumbnail.png"><meta property="article:published_time" content="2011-07-19T21:54:20.000Z"><meta property="article:modified_time" content="2026-11-06T02:21:32.586Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="领域模型"><meta property="article:tag" content="多线程"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/profile/thumbnail.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/architecture/data-access-collection-and-domain-event/"},"headline":"论基于数据访问的集合类（Data Access Based Collection）和领域事件(Domain Event)模式","image":["https://laurence.enlightgram.com/images/profile/thumbnail.png"],"datePublished":"2011-07-19T21:54:20.000Z","dateModified":"2026-11-06T02:21:32.586Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"在正式展开之前，有一些概念要先做一个界定。首先：领域模型是指系统应对的领域中所有逻辑的一个抽象，本质上它是领域中各种对象和概念以及它们之间关系的集合。你可以用自然语言描述它，也可以用UML来描述，或者是代码去描述。特别地，当我们使用面向对象建模技术来实现这个领域模型时，我们可以把这个实现出来的模型称之为对象模型。我们可以认为领域模型是一个概念模型，是分析阶段的产物。 让精心构建的对象 模型 高效地"}</script><link rel="canonical" href="https://laurence.enlightgram.com/architecture/data-access-collection-and-domain-event/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">论基于数据访问的集合类（Data Access Based Collection）和领域事件(Domain Event)模式</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Architecture/">Architecture</a></span><span class="level-item">发表于：<time dateTime="2011-07-19T21:54:20.000Z" title="2011-07-19 14:54:20">2011-07-19</time></span><span class="level-item">阅读用时：21 分钟 (约 3125 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>在正式展开之前，有一些概念要先做一个界定。首先：领域模型是指系统应对的领域中所有逻辑的一个抽象，本质上它是领域中各种对象和概念以及它们之间关系的集合。你可以用自然语言描述它，也可以用UML来描述，或者是代码去描述。特别地，当我们使用面向对象建模技术来实现这个领域模型时，我们可以把这个实现出来的模型称之为对象模型。我们可以认为领域模型是一个概念模型，是分析阶段的产物。</p>
+<p>让精心构建的对象 模型 高效地工作有很多底层的技术问题需要解决，其中如何满足领域对象的业务方法在计算过程中对数据的需求是一个普遍存在的问题（实际上，在实际应用中，我们会遇到更为复杂的情况，不只是有数据的需求，还可能出现对应用层面发生依赖）。对于这一问题，目前有两种模型可供借鉴，那就是基于数据访问的集合类和领域事件模式。</p>
+<p><strong>基于数据访问的集合类（Data Access Based Collection）</strong> </p>
+<p>基于数据访问的集合类是我在开发oobbs系统时设计的一种模式。这一模式通过一个抽象的接口来代表某一对象依赖的一组集合。当这一对象实例化时，一个基于数据访问的集合实现类会注入到这个对象中，所有通过这一集合进行的操作，比如遍历，增删元素等都是被实现类转化成数据访问操作。基于数据访问的集合类很像是一个缩水版的Repository。还是以Forum的public List<Thread> getThreads()方法为例，我们认为getThreads是Forum的一个典型的业务方法，但是由于一个Forum拥有众多的Thread，这使得我们根本不容许一次将这个集合全部加载出来。即使是在hibernate这类提供了lazy和extra lazy加载机制ORM工具里，也无法避免当我们直得去迭代这一集合时，它们会被一次性全部加载。而另一方面，实际的应用请求也不会一次请求所有的Thread，更常见的情况是以分页的形式，一小批次一小批次地请求。因此基于数据访问的集合模式使用一个集合接口做为一个占位符，并声明了一些基本的集合操作：比如返回某一区间内的子集（为分页而服务）和add,remove等操作，而实现类里，这些方法是以数据访问的方式实现的。下面是集合的接口定义。它看起来很像一个普通的集合。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> oobbs.domainmodel;</span><br><span class="line"> </span><br><span class="line"><span class="keyword">import</span> java.io.Serializable;</span><br><span class="line"><span class="keyword">import</span> java.util.List;</span><br><span class="line"> </span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * The collection interface represents a set of objects, it&#x27;s like the</span></span><br><span class="line"><span class="comment"> * java.util.Collection, however, there no real objects in this collection, it</span></span><br><span class="line"><span class="comment"> * only looks like a collection, its method&#x27;s implementation is database access</span></span><br><span class="line"><span class="comment"> * operation! see &lt;code&gt;oobbs.infrastructure.persistence.AbstractHibernateCollection&lt;/code&gt; </span></span><br><span class="line"><span class="comment"> * <span class="doctag">@author</span> laurence.geng</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">interface</span> <span class="title class_">Collection</span>&lt;Entity, PK <span class="keyword">extends</span> <span class="title class_">Serializable</span>, Owner&gt; &#123;</span><br><span class="line">	<span class="type">void</span> <span class="title function_">setOwner</span><span class="params">(Owner owner)</span>;</span><br><span class="line"> </span><br><span class="line">	<span class="type">void</span> <span class="title function_">setOwnerName</span><span class="params">(String ownerName)</span>;</span><br><span class="line"> </span><br><span class="line">	<span class="comment">/**</span></span><br><span class="line"><span class="comment">	 * Adds an object. This method will persist entity to database directly!</span></span><br><span class="line"><span class="comment">	 * <span class="doctag">@param</span> e an entity instance. * <span class="doctag">@return</span> the pK the generated primary key</span></span><br><span class="line"><span class="comment">	 * after insert into database.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	<span class="type">PK</span> <span class="title function_">add</span><span class="params">(Entity e)</span>;</span><br><span class="line"> </span><br><span class="line">	<span class="type">void</span> <span class="title function_">addAll</span><span class="params">(java.util.Collection&lt;Entity&gt; c)</span>;</span><br><span class="line"> </span><br><span class="line">	<span class="comment">/**</span></span><br><span class="line"><span class="comment">	 * Removes the entity. This method will remove this entity from database</span></span><br><span class="line"><span class="comment">	 * directly.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	<span class="type">void</span> <span class="title function_">remove</span><span class="params">(Entity e)</span>;</span><br><span class="line"> </span><br><span class="line">	<span class="type">void</span> <span class="title function_">removeAll</span><span class="params">(java.util.Collection&lt;Entity&gt; c)</span>;</span><br><span class="line"> </span><br><span class="line">	<span class="type">boolean</span> <span class="title function_">contains</span><span class="params">(Entity o)</span>;</span><br><span class="line"> </span><br><span class="line">	<span class="type">boolean</span> <span class="title function_">isEmpty</span><span class="params">()</span>;</span><br><span class="line"> </span><br><span class="line">	<span class="type">int</span> <span class="title function_">size</span><span class="params">()</span>;</span><br><span class="line"> </span><br><span class="line">	<span class="comment">/**</span></span><br><span class="line"><span class="comment">	 * The most important method. It returns a subset of the whole collection.</span></span><br><span class="line"><span class="comment">	 * the returned subset is fetched from database by sql, hql or other data</span></span><br><span class="line"><span class="comment">	 * access way, The Collection itself never load all elements once time!</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	<span class="type">List</span>&lt;Entity&gt; <span class="title function_">toList</span><span class="params">(<span class="type">int</span> startIndex, <span class="type">int</span> offset)</span>;</span><br><span class="line"> </span><br><span class="line">	<span class="type">void</span> <span class="title function_">flush</span><span class="params">()</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>下面则是基本于hibernate的 集合 接口实现类。它实现了所有的基本的操作。在Forum类中就会这样一个字段以及相应的getter和setter：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Transient</span></span><br><span class="line"><span class="keyword">private</span> Collection&lt;Thread, Long, Forum&gt; forumThreads;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Autowired</span></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Sets ForumThreadCollection. </span></span><br><span class="line"><span class="comment"> * ForumThreadCollection is injected by this setter. When a collection instance injected, set this forum to its forum! </span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="type">void</span> <span class="title function_">setForumThreads</span><span class="params">(<span class="meta">@Qualifier(&quot;forumThreads&quot;)</span> Collection&lt;Thread, Long, Forum&gt; forumThreads)</span> &#123;</span><br><span class="line">	<span class="built_in">this</span>.forumThreads = forumThreads;</span><br><span class="line">	<span class="built_in">this</span>.forumThreads.setOwner(<span class="built_in">this</span>);</span><br><span class="line">	<span class="built_in">this</span>.forumThreads.setOwnerName(<span class="string">&quot;forum&quot;</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> *  Gets this forum&#x27;s thread collection.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="type">Collection</span>&lt;Thread, Long, Forum&gt; <span class="title function_">getForumThreads</span><span class="params">()</span> &#123;</span><br><span class="line">	<span class="keyword">return</span> forumThreads;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>其中注入的forumThreads对象是一个名为ForumThreadHibernateCollection的类，它继承了AbstractHibernateCollection类，因为没有特殊的需要，没有重写任何方法。而下面展示的是service中对这集合的一次使用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">List</span>&lt;Thread&gt; <span class="variable">threads</span> <span class="operator">=</span> forum.getForumThreads().toList(startThreadIndex,threadTotal);</span><br></pre></td></tr></table></figure>
+
+
+<p>我们来分析一下Domain Collection这一模式的优劣。我认为它最大的优点在于它能够以一个字段的形式存在于单端关联对象中，这使得单端对象的定义饱满，完成符合并体现了一对多双向关联中双方依赖关系。这一点是使用hiberate映射无法实现的，因为我们不能在Forum中映射@OneToMany(mappedBy&#x3D;”forum”)　private Set<Thread> threads;</p>
+<p>但是它的缺点也是非常明显并且似乎是无法克服的，那就是它只能用来表示直接关联的集合，如果单端对象想通过这一集合进一步遍历元素中更深层次的二级，三级集合时，domain　collection就显得力不从心了。比方说：在论坛的首页上往往会罗列出各个Forum的一些基本信息，其中之一就是该Forum有多少帖子(Post)，相应的，Forum对象会有这样一个方法public Long getPostCount()；很显然，Post是Forum的二级集合，一个Forum需要先得到它的Thread集合，再从每个Thread中得到Post集合。我们可以为了这一方法再提供一个ForumPostHibernateCollcetion用来代表一个Forum的所有Post的集合，但是这个集合已经和模型的定义发生了偏离，因为并没有从Forum到Post的直接关联。而更加普遍的问题的是：我们会常常遇到某一个单端实体从它直接依赖的对象开始进行深度地导航（体现在SQL上就是对多个表的join操作）,这时候我们不能为每一种导航而创建一个从出发点到结束点的domain collection。在这种情况下，获取数据必须通过另外一种方式进行了，那就是Domain Event模式。</p>
+<p><strong>领域事件(Domain Event)</strong> </p>
+<p>Domain Event模式最初由udi dahan提出，发表在自己的博客上： http :&#x2F;&#x2F;<a target="_blank" rel="noopener" href="http://www.udidahan.com/2009/06/14/domain-events-salvation/%E8%BF%99%E4%B8%80%E6%A8%A1%E5%BC%8F%E5%BE%97%E5%88%B0%E5%B9%BF%E6%B3%9B%E7%9A%84%E8%AE%A4%E5%8F%AF%E3%80%82%E5%AE%83%E6%89%80%E8%A6%81%E5%BA%94%E5%AF%B9%E7%9A%84%E6%AD%A3%E6%98%AF%E5%B0%86%E9%A2%86%E5%9F%9F%E5%AF%B9%E8%B1%A1%E4%BB%8E%E5%AF%B9repository%E6%88%96service%E7%9A%84%E4%BE%9D%E8%B5%96%E4%B8%AD%E8%A7%A3%E8%84%B1%E5%87%BA%E6%9D%A5%EF%BC%8C%E9%81%BF%E5%85%8D%E8%AE%A9%E9%A2%86%E5%9F%9F%E5%AF%B9%E8%B1%A1%E5%AF%B9%E8%BF%99%E4%BA%9B%E8%AE%BE%E6%96%BD%E4%BA%A7%E7%94%9F%E7%9B%B4%E6%8E%A5%E4%BE%9D%E8%B5%96%E3%80%82%E5%AE%83%E7%9A%84%E5%81%9A%E6%B3%95%E5%B0%B1%E6%98%AF%E5%BD%93%E9%A2%86%E5%9F%9F%E5%AF%B9%E8%B1%A1%E7%9A%84%E4%B8%9A%E5%8A%A1%E6%96%B9%E6%B3%95%E9%9C%80%E8%A6%81%E4%BE%9D%E8%B5%96%E5%88%B0%E8%BF%99%E4%BA%9B%E5%AF%B9%E8%B1%A1%E6%97%B6%E5%B0%B1%E5%8F%91%E5%87%BA%E4%B8%80%E4%B8%AA%E4%BA%8B%E4%BB%B6%EF%BC%8C%E8%BF%99%E4%B8%AA%E4%BA%8B%E4%BB%B6%E4%BC%9A%E8%A2%AB%E7%9B%B8%E5%BA%94%E7%9A%84%E5%AF%B9%E8%B1%A1%E7%9B%91%E5%90%AC%E5%88%B0%E5%B9%B6%E5%81%9A%E5%87%BA%E5%A4%84%E7%90%86%E3%80%82%E5%9C%A8%E6%88%91%E7%9A%84oobbs%E7%B3%BB%E7%BB%9F%E4%B8%AD%EF%BC%8C%E6%88%91%E5%AF%B9%E8%BF%99%E4%B8%80%E6%A8%A1%E5%BC%8F%E5%81%9A%E4%BA%86%E4%B8%80%E4%BA%9B%E6%94%B9%E8%BF%9B%EF%BC%8C%E4%B8%BB%E8%A6%81%E6%98%AF%E6%B6%88%E9%99%A4%E9%9D%99%E6%80%81%E6%96%B9%E6%B3%95%E5%92%8C%E8%A7%84%E8%8C%83%E4%BA%8B%E4%BB%B6%E6%A8%A1%E5%9E%8B%E3%80%82%E5%9C%A8%E6%88%91%E7%9A%84%E6%96%B9%E6%A1%88%E4%B8%AD%EF%BC%8C%E8%BF%99%E4%B8%80%E6%9C%BA%E5%88%B6%E7%94%B1%E8%BF%99%E6%A0%B7%E5%87%A0%E4%B8%AA%E8%A7%92%E8%89%B2%EF%BC%9ADomainEventDispatcher%EF%BC%8CDomainEvent%E5%92%8CDomainEventListener">www.udidahan.com/2009/06/14/domain-events-salvation/这一模式得到广泛的认可。它所要应对的正是将领域对象从对repository或service的依赖中解脱出来，避免让领域对象对这些设施产生直接依赖。它的做法就是当领域对象的业务方法需要依赖到这些对象时就发出一个事件，这个事件会被相应的对象监听到并做出处理。在我的oobbs系统中，我对这一模式做了一些改进，主要是消除静态方法和规范事件模型。在我的方案中，这一机制由这样几个角色：DomainEventDispatcher，DomainEvent和DomainEventListener</a>.</p>
+<p>DomainEventDispatcher会以字段的形式存在于领域对象中，负责在业务方法中dispatch领域事件。下面是所有Dispatcher的基 类 ：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> oobbs.domainmodel;</span><br><span class="line"> </span><br><span class="line"><span class="keyword">import</span> java.util.HashMap;</span><br><span class="line"><span class="keyword">import</span> java.util.Map;</span><br><span class="line"> </span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * The DomainEventDispatcher take charge of listener registration and dispatch</span></span><br><span class="line"><span class="comment"> * domain event to corresponding listener to handle. Usually, one dispatch per</span></span><br><span class="line"><span class="comment"> * domain object.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">DomainEventDispatcher</span> &#123;</span><br><span class="line">	<span class="comment">/** The listener map. all registered listeners are stored in this map. */</span></span><br><span class="line">	<span class="keyword">protected</span> <span class="type">Map</span>&lt;String, DomainObejctListener&gt; <span class="variable">listeners</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">HashMap</span>&lt;String, DomainObejctListener&gt;();</span><br><span class="line"> </span><br><span class="line">	<span class="comment">/** * Adds a listener. * * <span class="doctag">@param</span> listener the listener */</span></span><br><span class="line">	<span class="keyword">public</span> <span class="type">void</span> <span class="title function_">addListener</span><span class="params">(DomainObejctListener listener)</span> &#123;</span><br><span class="line">		listeners.put(listener.getName(), listener);</span><br><span class="line">	&#125;</span><br><span class="line"> </span><br><span class="line">	<span class="comment">/** * Removes all listeners. */</span></span><br><span class="line">	<span class="keyword">public</span> <span class="type">void</span> <span class="title function_">removeAllListeners</span><span class="params">()</span> &#123;</span><br><span class="line">		listeners.clear();</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>一般来说一个领域对象会有一个对应的event dispatcher,这个dispatcher会有一组重载的dispatch方法，用于分发不同的领域事件。下面是oobbs中 Forum 对象的event dispatcher.</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> oobbs.domainmodel.forum;</span><br><span class="line"> </span><br><span class="line"><span class="keyword">import</span> oobbs.Constants;</span><br><span class="line"><span class="keyword">import</span> oobbs.domainmodel.DomainEventDispatcher;</span><br><span class="line"><span class="keyword">import</span> oobbs.domainmodel.ResultCollector;</span><br><span class="line"> </span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * * The ForumEventDispatcher dispatch all events which about Forum object. * <span class="doctag">@author</span></span></span><br><span class="line"><span class="comment"> * laurence.geng</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">ForumEventDispatcher</span> <span class="keyword">extends</span> <span class="title class_">DomainEventDispatcher</span> &#123;</span><br><span class="line">	<span class="keyword">public</span> <span class="type">void</span> <span class="title function_">dispatch</span><span class="params">(GetForumThreadEvent event, ResultCollector result)</span> &#123;</span><br><span class="line">		<span class="type">ForumListener</span> <span class="variable">forumListener</span> <span class="operator">=</span> (ForumListener) listeners.get(Constants.FORUM_REPO_AS_FORUM_LISTENER);</span><br><span class="line">		forumListener.handleGetForumThreadEvent(event, result);</span><br><span class="line">	&#125;</span><br><span class="line"> </span><br><span class="line">	<span class="keyword">public</span> <span class="type">void</span> <span class="title function_">dispatch</span><span class="params">(GetForumPostCountEvent event, ResultCollector result)</span> &#123;</span><br><span class="line">		<span class="type">ForumListener</span> <span class="variable">forumListener</span> <span class="operator">=</span> (ForumListener) listeners.get(Constants.FORUM_REPO_AS_FORUM_LISTENER);</span><br><span class="line">		forumListener.handleGetFroumPostCountEvent(event, result);</span><br><span class="line">	&#125;</span><br><span class="line"> </span><br><span class="line">	<span class="keyword">public</span> <span class="type">void</span> <span class="title function_">dispatch</span><span class="params">(GetForumThreadCountEvent event, ResultCollector result)</span> &#123;</span><br><span class="line">		<span class="type">ForumListener</span> <span class="variable">forumListener</span> <span class="operator">=</span> (ForumListener) listeners.get(Constants.FORUM_REPO_AS_FORUM_LISTENER);</span><br><span class="line">		forumListener.handleGetForumThreadCountEvent(event, result);</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>系统中会有很多的domain event,下面是所有领域事件的基类：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> oobbs.domainmodel;</span><br><span class="line"> </span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * The supper class of all domain events. all events should provide event</span></span><br><span class="line"><span class="comment"> * source, the domain object which fired this event.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">DomainEvent</span> &#123;</span><br><span class="line">	<span class="comment">/** The event source, the domain object which fired this event. */</span></span><br><span class="line">	<span class="keyword">protected</span> Object source;</span><br><span class="line"> </span><br><span class="line">	<span class="type">public</span> <span class="title function_">DomainEvent</span><span class="params">(Object source)</span> &#123;</span><br><span class="line">		<span class="built_in">super</span>();</span><br><span class="line">		<span class="built_in">this</span>.source = source;</span><br><span class="line">	&#125;</span><br><span class="line"> </span><br><span class="line">	<span class="comment">/** * Gets the event source. * * <span class="doctag">@return</span> the event source */</span></span><br><span class="line">	<span class="keyword">public</span> <span class="type">Object</span> <span class="title function_">getSource</span><span class="params">()</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> source;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>下面就是刚才提到的例子中返回Forum某一部分（分页）Thread的事件，在这个事件中我们看到一个事件可以携带一些参数，供listener使用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> oobbs.domainmodel.forum;</span><br><span class="line"> </span><br><span class="line"><span class="keyword">import</span> oobbs.domainmodel.DomainEvent;</span><br><span class="line"> </span><br><span class="line"><span class="comment">/** </span></span><br><span class="line"><span class="comment"> * The Event that forum request to get its threads.</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@author</span> laurence.geng </span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">GetForumThreadEvent</span> <span class="keyword">extends</span> <span class="title class_">DomainEvent</span> &#123;</span><br><span class="line">	<span class="comment">/** The start index of request thread. */</span></span><br><span class="line">	<span class="keyword">private</span> <span class="type">int</span> startIndex;</span><br><span class="line">	<span class="comment">/** The count of request thread. */</span></span><br><span class="line">	<span class="keyword">private</span> <span class="type">int</span> count;</span><br><span class="line"> </span><br><span class="line">	<span class="type">public</span> <span class="title function_">GetForumThreadEvent</span><span class="params">(Forum source, <span class="type">int</span> startIndex, <span class="type">int</span> count)</span> &#123;</span><br><span class="line">		<span class="built_in">super</span>(source);</span><br><span class="line">		<span class="built_in">this</span>.startIndex = startIndex;</span><br><span class="line">		<span class="built_in">this</span>.count = count;</span><br><span class="line">	&#125;</span><br><span class="line"> </span><br><span class="line">	<span class="keyword">public</span> <span class="type">int</span> <span class="title function_">getStartIndex</span><span class="params">()</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> startIndex;</span><br><span class="line">	&#125;</span><br><span class="line"> </span><br><span class="line">	<span class="keyword">public</span> <span class="type">int</span> <span class="title function_">getCount</span><span class="params">()</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> count;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>而下面就是我们所有listener的基类：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> oobbs.domainmodel;</span><br><span class="line"> </span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * The super class of all domain object listeners. it handles events from</span></span><br><span class="line"><span class="comment"> * domain objects. Each listener has to provide a name as key for registering</span></span><br><span class="line"><span class="comment"> * itself to dispatcher. </span></span><br><span class="line"><span class="comment"> * <span class="doctag">@see</span> DomainObejctEvent </span></span><br><span class="line"><span class="comment"> * <span class="doctag">@author</span> laurence.geng</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">interface</span> <span class="title class_">DomainObejctListener</span> &#123;</span><br><span class="line">	<span class="comment">/** * Gets the name. * * <span class="doctag">@return</span> the name */</span></span><br><span class="line">	<span class="keyword">public</span> <span class="type">String</span> <span class="title function_">getName</span><span class="params">()</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>下面是Forum的listenerr接口，这个接口会有很多handle方法，代码只展示了一个。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> oobbs.domainmodel.forum;</span><br><span class="line"> </span><br><span class="line"><span class="keyword">import</span> oobbs.domainmodel.DomainObejctListener;</span><br><span class="line"><span class="keyword">import</span> oobbs.domainmodel.ResultCollector;</span><br><span class="line"> </span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * * The forum listener. It handles all events from Forum object. * * <span class="doctag">@see</span></span></span><br><span class="line"><span class="comment"> * ForumEvent * <span class="doctag">@author</span> laurence.geng</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">interface</span> <span class="title class_">ForumListener</span> <span class="keyword">extends</span> <span class="title class_">DomainObejctListener</span> &#123;</span><br><span class="line">	<span class="comment">/**</span></span><br><span class="line"><span class="comment">	 * * Handle the event that a forum requests to get its threads. * * <span class="doctag">@param</span></span></span><br><span class="line"><span class="comment">	 * event the event * <span class="doctag">@param</span> result the result</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	<span class="keyword">public</span> <span class="type">void</span> <span class="title function_">handleGetForumThreadEvent</span><span class="params">(GetForumThreadEvent event,ResultCollector result)</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>然后 是这个接口一个实现类，在oobbs中，做为forum的repository的实现类：ForumHibernateRepository，自然成为实现这一接口的最佳选择：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * * The Forum&#x27;s repository with hibernate implementation, besides, it&#x27;s a forum</span></span><br><span class="line"><span class="comment"> * listener which handle * all events come from forum object.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">ForumHibernateRepository</span> <span class="keyword">extends</span> <span class="title class_">AbstractHibernateRepository</span>&lt;Forum, Long&gt; <span class="keyword">implements</span> <span class="title class_">ForumRepository</span> &#123;</span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * (non-Javadoc)</span></span><br><span class="line"><span class="comment">	 * </span></span><br><span class="line"><span class="comment">	 * @see</span></span><br><span class="line"><span class="comment">	 * oobbs.domainmodel.forum.ForumListener#handleGetForumThreadEvent(oobbs</span></span><br><span class="line"><span class="comment">	 * .domainmodel.forum.GetForumThreadEvent,</span></span><br><span class="line"><span class="comment">	 * oobbs.domainmodel.ResultCollector)</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	<span class="meta">@Overridepublic</span></span><br><span class="line">	<span class="type">void</span> <span class="title function_">handleGetForumThreadEvent</span><span class="params">(<span class="keyword">final</span> GetForumThreadEvent event, ResultCollector result)</span> &#123;</span><br><span class="line">		<span class="type">List</span>&lt;Thread&gt; <span class="variable">threads</span> <span class="operator">=</span> (List&lt;Thread&gt;) getHibernateTemplate().executeWithNativeSession(<span class="keyword">new</span> <span class="title class_">HibernateCallback</span>() &#123;</span><br><span class="line">					<span class="meta">@SuppressWarnings(&quot;unchecked&quot;)</span></span><br><span class="line">					<span class="keyword">public</span> <span class="type">Object</span> <span class="title function_">doInHibernate</span><span class="params">(Session session)</span> <span class="keyword">throws</span> HibernateException, SQLException &#123;</span><br><span class="line">						logger.info(<span class="string">&quot;Start to load threads of forum.&quot;</span>);</span><br><span class="line">						<span class="comment">// Get forum.</span></span><br><span class="line">						<span class="type">String</span> <span class="variable">getForuumThreadHql</span> <span class="operator">=</span> <span class="string">&quot;from Thread as thread where thread.forum=:forum&quot;</span>;</span><br><span class="line">						<span class="type">List</span>&lt;Thread&gt; <span class="variable">threads</span> <span class="operator">=</span> (List&lt;Thread&gt;) session</span><br><span class="line">								.createQuery(getForuumThreadHql)</span><br><span class="line">								.setCacheable(<span class="literal">true</span>)</span><br><span class="line">								.setParameter(<span class="string">&quot;forum&quot;</span>, event.getSource())</span><br><span class="line">								.setFirstResult(event.getStartIndex())</span><br><span class="line">								.setMaxResults(event.getCount()).list();</span><br><span class="line">						<span class="keyword">return</span> threads;</span><br><span class="line">					&#125;</span><br><span class="line">				&#125;);</span><br><span class="line">		result.add(threads);</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>最后我们看一看这一切是如被触发的。我们来看forum的这个方法：oobbs.domainmodel.forum.Forum.getThreads(int, int)：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="type">List</span>&lt;Thread&gt; <span class="title function_">getThreads</span><span class="params">(<span class="type">int</span> startIndex, <span class="type">int</span> count)</span> &#123;</span><br><span class="line">	<span class="type">GetForumThreadEvent</span> <span class="variable">event</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">GetForumThreadEvent</span>(<span class="built_in">this</span>, startIndex, count);</span><br><span class="line">	<span class="type">ResultCollector</span> <span class="variable">result</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ResultCollector</span>();</span><br><span class="line">	forumEventDispatcher.dispatch(event, result);</span><br><span class="line">	<span class="keyword">return</span> (List&lt;Thread&gt;) result.getUniqueResult();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>很简洁的四行代码：分别new一个event和result collector，然后用ForumEventDispatcher来dispatch这个事件，然后收集返回的处理结果。上述所有组件都是围绕这里而设计的，我们希望在领域对象的业务方法里不会出现任何repository或service，DomainEvent模式很好的满足了我们的需求，并且是以一种非常优雅而简洁的方式。</p>
+<p>当然，在上面讲述的整个机制中，我们漏掉了一环没有讲，那就是dispatcher是如何被实例化并完成注册listener工作的。由于oobbs使用了 spring 的IOC管理对象， dispatcher是由IOC创建并完成注册listener等初始化工作的。下面的类完成了这一系列工作：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> oobbs.infrastructure.appcontext;</span><br><span class="line"> </span><br><span class="line"><span class="keyword">import</span> oobbs.domainmodel.DomainObejctListener;</span><br><span class="line"><span class="keyword">import</span> oobbs.domainmodel.forum.ForumEventDispatcher;</span><br><span class="line"><span class="keyword">import</span> oobbs.domainmodel.forum.ThreadEventDispatcher;</span><br><span class="line"><span class="keyword">import</span> org.apache.log4j.Logger;</span><br><span class="line"><span class="keyword">import</span> org.springframework.beans.BeansException;</span><br><span class="line"><span class="keyword">import</span> org.springframework.beans.factory.config.BeanPostProcessor;</span><br><span class="line"><span class="keyword">import</span> org.springframework.context.ApplicationContext;</span><br><span class="line"><span class="keyword">import</span> org.springframework.context.ApplicationContextAware;</span><br><span class="line"> </span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * * The ApplicationBeanPostProcessor will do some initialization work when bean</span></span><br><span class="line"><span class="comment"> * is created by spring ioc container, * such as: Adding listeners for domain</span></span><br><span class="line"><span class="comment"> * event dispatchers and so on. * <span class="doctag">@author</span> laurence.geng</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">ApplicationBeanPostProcessor</span> <span class="keyword">implements</span> <span class="title class_">BeanPostProcessor</span>,</span><br><span class="line">		ApplicationContextAware &#123;</span><br><span class="line">	<span class="comment">/** The Constant logger. */</span></span><br><span class="line">	<span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">Logger</span> <span class="variable">logger</span> <span class="operator">=</span> Logger</span><br><span class="line">			.getLogger(ApplicationBeanPostProcessor.class);</span><br><span class="line">	<span class="comment">/** The application context. */</span></span><br><span class="line">	<span class="keyword">private</span> ApplicationContext applicationContext;</span><br><span class="line"> </span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * (non-Javadoc) * @see org.springframework .beans.factory</span></span><br><span class="line"><span class="comment">	 * .config.BeanPostProcessor #postProcessBeforeInitialization</span></span><br><span class="line"><span class="comment">	 * (java.lang.Object, java.lang.String)</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line"> </span><br><span class="line">	<span class="keyword">public</span> <span class="type">Object</span> <span class="title function_">postProcessBeforeInitialization</span><span class="params">(Object bean, String beanName)</span>	<span class="keyword">throws</span> BeansException &#123;</span><br><span class="line">		<span class="keyword">return</span> bean; <span class="comment">// we could potentially return any object reference here...</span></span><br><span class="line">	&#125;</span><br><span class="line"> </span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * (non-Javadoc) * @see</span></span><br><span class="line"><span class="comment">	 * org.springframework.beans.factory.config.BeanPostProcessor</span></span><br><span class="line"><span class="comment">	 * #postProcessAfterInitialization(java.lang.Object, java.lang.String)</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	<span class="keyword">public</span> <span class="type">Object</span> <span class="title function_">postProcessAfterInitialization</span><span class="params">(Object bean, String beanName)</span> <span class="keyword">throws</span> BeansException &#123;</span><br><span class="line">		logger.debug(<span class="string">&quot;Bean &#x27;&quot;</span> + beanName + <span class="string">&quot;&#x27; created : &quot;</span> + bean.toString());</span><br><span class="line">		<span class="comment">// Adding listeners for domain event dispatchers.</span></span><br><span class="line">		<span class="keyword">if</span> (<span class="string">&quot;forumEventDispatcher&quot;</span>.equals(beanName)) &#123;</span><br><span class="line">			<span class="type">ForumEventDispatcher</span> <span class="variable">forumEventDispatcher</span> <span class="operator">=</span> (ForumEventDispatcher) bean;</span><br><span class="line">			forumEventDispatcher.addListener((DomainObejctListener) applicationContext.getBean(<span class="string">&quot;forumRepository&quot;</span>));</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">if</span> (<span class="string">&quot;threadEventDispatcher&quot;</span>.equals(beanName)) &#123;</span><br><span class="line">			<span class="type">ThreadEventDispatcher</span> <span class="variable">threadEventDispatcher</span> <span class="operator">=</span> (ThreadEventDispatcher) bean;</span><br><span class="line">			threadEventDispatcher.addListener((DomainObejctListener) applicationContext.getBean(<span class="string">&quot;threadRepository&quot;</span>));</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">return</span> bean;</span><br><span class="line">	&#125;</span><br><span class="line"> </span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * (non-Javadoc) * @see</span></span><br><span class="line"><span class="comment">	 * org.springframework.context.ApplicationContextAware#setApplicationContext</span></span><br><span class="line"><span class="comment">	 * (org.springframework.context.ApplicationContext)</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	<span class="meta">@Override</span></span><br><span class="line">	<span class="keyword">public</span> <span class="type">void</span> <span class="title function_">setApplicationContext</span><span class="params">(ApplicationContext arg0)</span> <span class="keyword">throws</span> BeansException &#123;</span><br><span class="line">		<span class="built_in">this</span>.applicationContext = arg0;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+
+<p><strong>小结</strong> </p>
+<p>最后总结一下：其实基于数据访问的集合类（Data Access Based Collection）和领域事件(Domain Event)两者各有优劣。在实际中可以结合使用。如果只使用数据访问的集合类，则很难支持二、三级关联，而一味地使用领域事件则有会导致引入过多的事件类，引起类型爆炸。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>论基于数据访问的集合类（Data Access Based Collection）和领域事件(Domain Event)模式</p><p><a href="https://laurence.enlightgram.com/architecture/data-access-collection-and-domain-event/">https://laurence.enlightgram.com/architecture/data-access-collection-and-domain-event/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2011-07-19</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E9%A2%86%E5%9F%9F%E6%A8%A1%E5%9E%8B/">领域模型</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%A4%9A%E7%BA%BF%E7%A8%8B/">多线程</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/java/maven-goal-and-phase/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">是goal还是phase？Maven插件(plugin)goal的执行与生命周期(lifecycle)phase的关系</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/web/puremvc-notification/"><span class="level-item">关于PureMVC的notification机制</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><!--!--></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

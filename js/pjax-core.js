@@ -67,7 +67,11 @@ var Pjax = function(options) {
         // popstate selects the destination entry before a queued scroll event
         // necessarily runs. Keep the still-mounted departure page's position by
         // UID; replaceState here would corrupt the destination entry instead.
-        this.scrollPositions[this.currentUid] = [window.scrollX, window.scrollY];
+        // Back from an anchor entry, which PJAX did not make, the current UID is
+        // the destination itself: its position must stay.
+        if (st.state.uid !== this.currentUid) {
+          this.scrollPositions[this.currentUid] = [window.scrollX, window.scrollY];
+        }
         var opt = clone(this.options);
         opt.url = st.state.url;
         opt.title = st.state.title;

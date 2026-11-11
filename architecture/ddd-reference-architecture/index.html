@@ -1,0 +1,799 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>领域驱动设计(Domain Driven Design)参考架构详解 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="摘要 本文将介绍领域驱动设计(Domain Driven Design)的官方参考架构，该架构分成了Interfaces、Applications和Domain三层以及包含各类基础设施的Infrastructure。本文会对架构中一些重要组件和问题进行讨论，给出一些分析结论。本文原文连接： 领域驱动设计(Domain Driven Design)参考架构详解_领域驱动设计的facede_ Laur"><meta property="og:type" content="article"><meta property="og:title" content="领域驱动设计(Domain Driven Design)参考架构详解"><meta property="og:url" content="https://laurence.enlightgram.com/architecture/ddd-reference-architecture/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="摘要 本文将介绍领域驱动设计(Domain Driven Design)的官方参考架构，该架构分成了Interfaces、Applications和Domain三层以及包含各类基础设施的Infrastructure。本文会对架构中一些重要组件和问题进行讨论，给出一些分析结论。本文原文连接： 领域驱动设计(Domain Driven Design)参考架构详解_领域驱动设计的facede_ Laur"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/architecture/ddd-reference-architecture/2.jpeg"><meta property="article:published_time" content="2011-08-12T18:33:02.000Z"><meta property="article:modified_time" content="2026-11-11T02:50:16.132Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="领域模型"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/architecture/ddd-reference-architecture/2.jpeg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/architecture/ddd-reference-architecture/"},"headline":"领域驱动设计(Domain Driven Design)参考架构详解","image":["https://laurence.enlightgram.com/images/architecture/ddd-reference-architecture/2.jpeg"],"datePublished":"2011-08-12T18:33:02.000Z","dateModified":"2026-11-11T02:50:16.132Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"摘要 本文将介绍领域驱动设计(Domain Driven Design)的官方参考架构，该架构分成了Interfaces、Applications和Domain三层以及包含各类基础设施的Infrastructure。本文会对架构中一些重要组件和问题进行讨论，给出一些分析结论。本文原文连接： 领域驱动设计(Domain Driven Design)参考架构详解_领域驱动设计的facede_ Laur"}</script><link rel="canonical" href="https://laurence.enlightgram.com/architecture/ddd-reference-architecture/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">领域驱动设计(Domain Driven Design)参考架构详解</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Architecture/">Architecture</a></span><span class="level-item">发表于：<time dateTime="2011-08-12T18:33:02.000Z" title="2011-08-12 11:33:02">2011-08-12</time></span><span class="level-item">阅读用时：21 分钟 (约 3160 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><h2 id="摘要"><a href="#摘要" class="headerlink" title="摘要"></a>摘要</h2><p>本文将介绍领域驱动设计(Domain Driven Design)的官方参考架构，该架构分成了Interfaces、Applications和Domain三层以及包含各类基础设施的Infrastructure。本文会对架构中一些重要组件和问题进行讨论，给出一些分析结论。本文原文连接： <a href="/architecture/ddd-reference-architecture/">领域驱动设计(Domain Driven Design)参考架构详解_领域驱动设计的facede_　Laurence的博客-CSDN博客</a> 转载请注明出处！</p>
+<h2 id="目录"><a href="#目录" class="headerlink" title="目录"></a>目录</h2><p>1.      架构概述<br>2.      架构详解<br>2.1.       Interfaces-接口层<br>2.1.1.        DTO<br>2.1.2.        Assembler<br>2.1.3.        Facade<br>2.2.       Application-应用层<br>2.3.       Domain-领域层<br>2.4.       Infrastructure-基础设施层<br>3.      关于架构的一些讨论<br>3.1.       架构并不能保证领域驱动设计的贯彻与执行<br>3.2.       Fa?ade是否是必须的？</p>
+<h2 id="1-架构概述"><a href="#1-架构概述" class="headerlink" title="1.      架构概述"></a>1.      架构概述</h2><p>领域驱动设计(Domain Driven Design)有一个官方的sample工程，名为DDDSample,官网： <a target="_blank" rel="noopener" href="http://dddsample.sourceforge.net/">DDD Sample Application - Introduction</a> ，该工程给出了一种实践领域驱动设计的参考架构，本文将对此该架构进行简单介绍，并就一些重要问题进行讨论。</p>
+<p>该架构分成了Interfaces、Applications和Domain三层以及包含各类基础设施的Infrastructure。下图简略描述了它们之间的关系：</p>
+<div style="text-align:center;"><img alt="" src="https://i-blog.csdnimg.cn/blog_migrate/926a668734c912c5cfb6463aab017c96.jpeg"></div>
+
+<div style="text-align:center;">图1：领域驱动设计风格的架构草图(来自于DDDSample官网）</div>
+
+<p>下图是详细架构：</p>
+<p><img src="/../../images/architecture/ddd-reference-architecture/3.gif"></p>
+<div style="text-align:center;">图2：领域驱动设计参考架构</div>
+
+<p>作为参照，下图展示了传统TransactionScript风格的架构，可以看出，两者的差异并不是太大（对于Façade来说，它是一种可选设施，如果 系统架构 中省略Façade，则DTO与领域对象的互换工作可在service中进行），这也从则面说明推行领域驱动设计的关键并不在架构上，而在于整个团队在分析、设计和开发上没有自始至终地以领域模型为核心开展工作，以面向对象的思想进行设计和编程。</p>
+<p>Transaction Script风格的架构具有明显的“数据”与“操作”分离的特征，其和领域驱动设计风格的架构在两个类组件上有质的区别，一个是领域对象，一个是Service。领域驱动设计的架构核心目标是要创建一个富领域模型，其典型特征是它的领域对象具有丰富的业务方法用以处理业务逻辑，而Transaction Script风格的领域对象则仅仅是数据的载体，没有业务方法，这种领域也被称作“贫血的领域对象”(Anemic Domain Objects)。在Service方面，领域驱动设计的架构里Service是非常“薄“的一层，其并不负责处理业务逻辑，而在TransactionScript风格的架构里，Service是处理业务逻辑的主要场所，因而往往非常厚重。</p>
+<p><img src="/../../images/architecture/ddd-reference-architecture/4.gif"></p>
+<div style="text-align:center;">图3：数据与操作分离的Transaction Script风格的架构</div>
+
+<h2 id="2-架构详解"><a href="#2-架构详解" class="headerlink" title="2.      架构详解"></a>2.      架构详解</h2><h3 id="2-1-Interfaces-接口层"><a href="#2-1-Interfaces-接口层" class="headerlink" title="2.1.    Interfaces-接口层"></a>2.1.    Interfaces-接口层</h3><p>领域驱动设计对Interfaces的定位是:</p>
+<p>Thislayer holds everything that interacts with other systems, such as web services,RMI interfaces or web applications, and batch processing frontends. It handlesinterpretation, validation and translation of incoming data. It also handlesserialization of outgoing data, such as HTML or XML across HTTP to web browsersor web service clients , or DTO classes and distributed facade interfaces forremote Java clients.</p>
+<p>该层包含与其他系统进行交互的接口与通信设施，在多数应用里，该层可能提供包括Web Services、RMI或Rest等在内的一种或多种通信接口。该层主要由Façade、DTO和Assembler三类组件构成，三类组件均是典型的J2EE模式，以下是对三类组件的具体介绍：</p>
+<h4 id="2-1-1-DTO"><a href="#2-1-1-DTO" class="headerlink" title="2.1.1.   DTO"></a>2.1.1.   DTO</h4><p>DTO- DataTransfer Object（数据传输对象），也常被称作VO-Value Object(值对象)。基于面向对象技术设计的领域对象（即通常所说的“实体”）都是细粒度的，将细粒度的领域对象直接传递到远程调用端需要进行多次网络通信，DTO在设计之初的主要考量是以粗粒度的数据结构减少网络通信并简化调用接口。以下罗列了DTO的多项作用：</p>
+<blockquote>
+<ul>
+<li><p>Reduces network traffic</p>
+</li>
+<li><p>Simplifies remote object and remote interface</p>
+</li>
+<li><p>Transfers more data in fewer remote calls</p>
+</li>
+<li><p>Reduces code duplication</p>
+</li>
+<li><p>Introduces stale transfer objects</p>
+</li>
+<li><p>Increases complexity due to synchronization and version control</p>
+</li>
+</ul>
+</blockquote>
+<p><img src="/../../images/architecture/ddd-reference-architecture/5.gif"></p>
+<div style="text-align:center;">图4.DTO应用时序图(基于《<span class="words-blog hl-git-1" data-report-view="{&quot;spm&quot;:&quot;1001.2101.3001.10283&quot;,&quot;extra&quot;:&quot;{\&quot;words\&quot;:\&quot;Core\&quot;,\&quot;isNewGitCodeAB\&quot;:1}&quot;}" data-tit="Core" data-pretit="core">Core</span> J2EE Patterns》插图进行了修改）</div>
+
+<p>值得一提的是，DTO对实现一个独立封闭的领域模型具有积极的作用，特别是当系统使用了某些具有自动脏数据检查（automatic dirty checking）机制的ORM框架时，DTO的优势就更加明显，否则就会存在领域对象在模型层以外被意外修改并自动持久化到数据库中的风险或者是像 Hibernate 那样的框架因未开启OpenSessionInView (注：开启OpenSessionInView有副作用，一般认为OpenSessionInView不是一种好的实践)而导致Lazy Loading出现问题。</p>
+<p>关于DTO具体的设计用意和应用场景可参考如下资源：</p>
+<p>1.《Core J2EE™ Patterns: Best Practices and Design Strategies, SecondEdition》</p>
+<p>2.《Patterns of Enterprise ApplicationArchitecture》</p>
+<h4 id="2-1-2-Assembler"><a href="#2-1-2-Assembler" class="headerlink" title="2.1.2.   Assembler"></a>2.1.2.   Assembler</h4><p>在引入DTO后，DTO与领域对象之间的相互转换工作多由Assembler承担，因此Assembler几乎总是同DTO一起出现。也有一些系统使用反射机制自动实现DTO与领域对象之间的相互转换，Appache的Commons BeanUtils就提供了类似的功能。应该说这两种实现各有利弊，使用Assembler进行对象数据交换更为安全与可控，并且接受编译期检查，但是代码量明显偏多。使用反射机制自动进行象数据交换虽然代码量很少，但却是非常脆弱的，一旦对象属性名发生了变化，数据交互就会失败，并且很难追踪发现。总体来说，Assembler更为直白和稳妥。</p>
+<p><img src="/../../images/architecture/ddd-reference-architecture/6.gif"></p>
+<div style="text-align:center;">图5.Assebler应用类图(基于《Core J2EE Patterns》插图进行了修改）</div>
+
+<p>关于Assembler具体的设计用意和应用场景可参考如下资源：</p>
+<p>1.《Core J2EE™ Patterns: Best Practices and Design Strategies, SecondEdition》</p>
+<p>2.《Patterns of Enterprise ApplicationArchitecture》</p>
+<h4 id="2-1-3-Facade"><a href="#2-1-3-Facade" class="headerlink" title="2.1.3.   Facade"></a>2.1.3.   Facade</h4><p>作为一种设计模式同时也是Interfaces层内的一类组件，Façade的用意在于为远程客户端提供粗粒度的调用接口。Façade本身不处理任何的业务逻辑，它的主要工作就是将一个用户请求委派给一个或多个Service进行处理，同时借助Assembler将Service传入或传出的领域对象转化为DTO进行传输。以下罗列了Façade的多项作用：</p>
+<blockquote>
+<ul>
+<li><p>Introduces a layer that provides services to remote clients</p>
+</li>
+<li><p>Exposes a uniform coarse-grained interface</p>
+</li>
+<li><p>Reduces coupling between the tiers</p>
+</li>
+<li><p>Promotes layering, increases flexibility and maintainability</p>
+</li>
+<li><p>Reduces complexity</p>
+</li>
+<li><p>Improves performance, reduces fine-grained remote methods</p>
+</li>
+<li><p>Centralizes security management</p>
+</li>
+<li><p>Centralizes transaction control</p>
+</li>
+<li><p>Exposes fewer remote interfaces to clients</p>
+</li>
+</ul>
+</blockquote>
+<p>实践Façade的过程中最难把握的问题就是Façade的粒度问题。传统的Service均以实体为单位进行组织，而Façade应该具有更粗粒度的组织依据，较为合适的粒度依据有：一个高度内聚的模块一个Façade,或者是一个“聚合”(特指领域驱动设计中的聚合)一个Façade.</p>
+<p><img src="/../../images/architecture/ddd-reference-architecture/7.gif"></p>
+<div style="text-align:center;">图6.Façade应用类图(基于《Core J2EE Patterns》插图进行了修改）</div>
+
+<p><img src="/../../images/architecture/ddd-reference-architecture/8.gif"></p>
+<p>图7.Façade应用时序图(基于《Core J2EE Patterns》插图进行了修改）</p>
+<p>关于Assembler具体的设计用意和应用场景可参考如下资源：</p>
+<p>1.《Core J2EE™ Patterns: Best Practices and Design Strategies, SecondEdition》</p>
+<p>2.《Patterns of Enterprise ApplicationArchitecture》</p>
+<p>3.《Design Patterns: Elementsof Reusable Object-Oriented Software》</p>
+<h3 id="2-2-Application-应用层"><a href="#2-2-Application-应用层" class="headerlink" title="2.2.    Application-应用层"></a>2.2.    Application-应用层</h3><p>领域驱动设计对Application的定位是:</p>
+<p>Theapplication layer is responsible for driving the workflow of the application,matching the use cases at hand. These operations are interface-independent andcan be both synchronous or message-driven. This layer is well suited forspanning transactions, high-level logging and security. The application layeris thin in terms of domain logic - it merely coordinates the domain layerobjects to perform the actual work.</p>
+<p>Application层中主要组件就是Service,在领域驱动设计的架构里，Service的组织粒度和接口设计依据与传统Transaction Script风格的Service是一致的，但是两者的实现却有着质的区别。TransactionScript风格的Service是实现业务逻辑的主要场所，因此往往非常厚重。而在领域驱动设计的架构里，Application是非常“薄”的一层，所有的Service只负责协调并委派业务逻辑给领域对象进行处理，其本身并真正实现业务逻辑，绝大部分的业务逻辑都由领域对象承载和实现了，这是区别系统是Transaction Script架构还是Domain Model 架构的重要标志。</p>
+<p>不管是Transaction Script风格还Domain Model风格，Service都会与多种组件进行交互，这些组件包括：其他的Service、领域对象和Repository 或 DAO。</p>
+<p><img src="/../../images/architecture/ddd-reference-architecture/9.gif"></p>
+<div style="text-align:center;">图8. Service应用时序图(基于《Core J2EE Patterns》插图进行了修改）</div>
+
+
+
+<p>Service的接口是面向用例设计的，是控制事务、安全的适宜场所。如果Façade的某一方法需要调用两个以上的Service方法，需要注意事务问题。</p>
+<h3 id="2-3-Domain-领域层"><a href="#2-3-Domain-领域层" class="headerlink" title="2.3.    Domain-领域层"></a>2.3.    Domain-领域层</h3><p>领域驱动设计对Domain的定位是:</p>
+<p>Thedomain layer is the heart of the software, and this is where the interestingstuff happens. There is one package per aggregate, and to each aggregatebelongs entities, value objects, domain events, a repository interface andsometimes factories.</p>
+<p>Thecore of the business logic belongs in here. The structure and naming ofaggregates, classes and methods in the domain layer should follow theubiquitous language, and you should be able to explain to a domain expert howthis part of the software works by drawing a few simple diagrams and using theactual class and method names of the source code.</p>
+<p>Domain层是整个系统的核心层，该层维护一个使用面向对象技术实现的领域模型，几乎全部的业务逻辑会在该层实现。Domain层包含Entity（实体）、ValueObject(值对象)、Domain Event（领域事件）和Repository（仓储）等多种重要的领域组件。</p>
+<h3 id="2-4-Infrastructure-基础设施层"><a href="#2-4-Infrastructure-基础设施层" class="headerlink" title="2.4.    Infrastructure-基础设施层"></a>2.4.    Infrastructure-基础设施层</h3><p>领域驱动设计对Infrastructure的定位是:</p>
+<p>Inaddition to the three vertical layers, there is also the infrastructure. As thethe picture shows, it supports all of the three layers in different ways,facilitating communication between the layers. In simple terms, theinfrastructure consists of everything that exists independently of ourapplication: external libraries, database engine, application server, messagingbackend and so on.</p>
+<p>Also,we consider code and configuration files that glues the other layers to theinfrastructure as part of the infrastructure layer. Looking for example at thepersistence aspect, the database schema definition, Hibernate configuration andmapping files and implementations of the repository interfaces are part of theinfrastructure layer.</p>
+<p>Whileit can be tricky to give a solid definition of what kind of code belongs to theinfrastructure layer for any given situation, it should be possible tocompletely stub out the infrastructure in pure Java unit&#x2F;scenario tests andstill be able to use the domain layer and possibly the application layer towork out the core business problems.</p>
+<p>作为基础设施层，Infrastructure为Interfaces、Application和Domain三层提供支撑。所有与具体平台、框架相关的实现会在Infrastructure中提供，避免三层特别是Domain层掺杂进这些实现，从而“污染”领域模型。Infrastructure中最常见的一类设施是对象持久化的具体实现。</p>
+<h2 id="3-关于架构的一些讨论"><a href="#3-关于架构的一些讨论" class="headerlink" title="3.      关于架构的一些讨论"></a>3.      关于架构的一些讨论</h2><h3 id="3-1-架构并不能保证领域驱动设计的贯彻与执行"><a href="#3-1-架构并不能保证领域驱动设计的贯彻与执行" class="headerlink" title="3.1.    架构并不能保证领域驱动设计的贯彻与执行"></a>3.1.    架构并不能保证领域驱动设计的贯彻与执行</h3><p>虽然一个合适的架构对于实施领域驱动设计是大有必要的，但只依靠架构是不能保证领域驱动设计的贯彻与执行的。实际上，在这个参考架构上使用Transaction Script的方式进行开法几乎没有任何问题，只要开发人员将领域对象变成“贫血”的“数据载体”对待，在service里实现业务逻辑，那么该参考架构将成为纯粹的TransactionScript方式。当然反过来看，这也体现了这一架构的灵活性。确保领域驱动设计的贯彻与执行需要整个团队在分析、设计和开发上没有自始至终地以领域模型为核心开展工作，以面向对象的思想进行设计和编程，才能保证实现领域驱动设计。</p>
+<h3 id="3-2-Facade是否是必须的？"><a href="#3-2-Facade是否是必须的？" class="headerlink" title="3.2.    Façade是否是必须的？"></a>3.2.    Façade是否是必须的？</h3><p>尽管在架构中对Façade的定义非常清晰，但在实践中我发现Façade并不是一个容易拿捏的东西。主要问题在于其与service之间的有太多的重叠与相似之处。我们注意到service是接口是面向一个use case的，因此事务也是追加在service这一层上，于是对于façade而言，99%的情况是，它只是把某个service的某个方法再包裹一下而已，如果把领域对象和DTO的互转换工作移至service中进行，那么façade将彻底变成空壳，而关键的是：如果service的接口设计是面向和user case的，那么，毫无疑问，service接口的传入传出参数也都应该是DTO，而这一点也在《Core J2EE™ Patterns: Best Practices and Design Strategies, SecondEdition》和《Patterns of Enterprise ApplicationArchitecture》两书的示例代码中完全印证了。那么，从更为务实角度出发，Façade并非是一种必须的组件。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>领域驱动设计(Domain Driven Design)参考架构详解</p><p><a href="https://laurence.enlightgram.com/architecture/ddd-reference-architecture/">https://laurence.enlightgram.com/architecture/ddd-reference-architecture/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2011-08-12</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E9%A2%86%E5%9F%9F%E6%A8%A1%E5%9E%8B/">领域模型</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/architecture/mvc-framework-and-architecture/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">从MVC框架看MVC架构的设计</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/java/maven-test-and-dev-database/"><span class="level-item">Maven环境下测试库和开发库的配置策略以及支持工具</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#摘要"><span class="level-left"><span class="level-item">摘要</span></span></a></li><li><a class="level is-mobile" href="#目录"><span class="level-left"><span class="level-item">目录</span></span></a></li><li><a class="level is-mobile" href="#1-架构概述"><span class="level-left"><span class="level-item">1.      架构概述</span></span></a></li><li><a class="level is-mobile" href="#2-架构详解"><span class="level-left"><span class="level-item">2.      架构详解</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-1-Interfaces-接口层"><span class="level-left"><span class="level-item">2.1.    Interfaces-接口层</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-1-1-DTO"><span class="level-left"><span class="level-item">2.1.1.   DTO</span></span></a></li><li><a class="level is-mobile" href="#2-1-2-Assembler"><span class="level-left"><span class="level-item">2.1.2.   Assembler</span></span></a></li><li><a class="level is-mobile" href="#2-1-3-Facade"><span class="level-left"><span class="level-item">2.1.3.   Facade</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-2-Application-应用层"><span class="level-left"><span class="level-item">2.2.    Application-应用层</span></span></a></li><li><a class="level is-mobile" href="#2-3-Domain-领域层"><span class="level-left"><span class="level-item">2.3.    Domain-领域层</span></span></a></li><li><a class="level is-mobile" href="#2-4-Infrastructure-基础设施层"><span class="level-left"><span class="level-item">2.4.    Infrastructure-基础设施层</span></span></a></li></ul></li><li><a class="level is-mobile" href="#3-关于架构的一些讨论"><span class="level-left"><span class="level-item">3.      关于架构的一些讨论</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#3-1-架构并不能保证领域驱动设计的贯彻与执行"><span class="level-left"><span class="level-item">3.1.    架构并不能保证领域驱动设计的贯彻与执行</span></span></a></li><li><a class="level is-mobile" href="#3-2-Facade是否是必须的？"><span class="level-left"><span class="level-item">3.2.    Façade是否是必须的？</span></span></a></li></ul></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

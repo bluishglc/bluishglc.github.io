@@ -191,8 +191,19 @@
         });
     }
 
+    /**
+     * Switch the is-N-column class of <body> (layout/layout.jsx), which sets the widths of the layout
+     * (include/style/responsive.styl): PJAX does not switch <body>. Its other classes are left as they are.
+     */
+    function switchColumnCount(oldBody, newBody) {
+        const pattern = /^is-\d-column$/;
+        Array.from(oldBody.classList).filter(name => pattern.test(name)).forEach(name => oldBody.classList.remove(name));
+        Array.from(newBody.classList).filter(name => pattern.test(name)).forEach(name => oldBody.classList.add(name));
+    }
+
     function switchHead(oldTitle, newTitle, options) {
         const pageUrl = this.state.href;
+        switchColumnCount(oldTitle.ownerDocument.body, newTitle.ownerDocument.body);
         // The loader stays in the old body, so inspect the incoming page, not the live DOM.
         mathjaxEnabled = !!newTitle.ownerDocument.querySelector('script#MathJax-script');
         oldTitle.textContent = newTitle.textContent;

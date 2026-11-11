@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>一种分页解决方案 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="开发MIS系统一个经常遇到的问题就是分页。这是一个经常出现而且没有太大变化的功能需求，我们完全可以编写一个可高度复用的解决方案。下面给出的就是一种基于Hibernate分页查询实现的一整套分页方案。在阐述这个方案之前，我想有必要就分页的相关问题做一个简单的阐述。 一般来说分页有两种解决方法：一种是一次性查出所有符合条件的数据，只是在显示的时候选出一部分展示的页面上。这种做法的好处是实现起来简单，也"><meta property="og:type" content="article"><meta property="og:title" content="一种分页解决方案"><meta property="og:url" content="https://laurence.enlightgram.com/java/paging-solution/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="开发MIS系统一个经常遇到的问题就是分页。这是一个经常出现而且没有太大变化的功能需求，我们完全可以编写一个可高度复用的解决方案。下面给出的就是一种基于Hibernate分页查询实现的一整套分页方案。在阐述这个方案之前，我想有必要就分页的相关问题做一个简单的阐述。 一般来说分页有两种解决方法：一种是一次性查出所有符合条件的数据，只是在显示的时候选出一部分展示的页面上。这种做法的好处是实现起来简单，也"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/profile/thumbnail.png"><meta property="article:published_time" content="2007-07-30T05:49:00.000Z"><meta property="article:modified_time" content="2026-11-06T02:21:32.890Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Hibernate"><meta property="article:tag" content="数据库"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/profile/thumbnail.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/java/paging-solution/"},"headline":"一种分页解决方案","image":["https://laurence.enlightgram.com/images/profile/thumbnail.png"],"datePublished":"2007-07-30T05:49:00.000Z","dateModified":"2026-11-06T02:21:32.890Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"开发MIS系统一个经常遇到的问题就是分页。这是一个经常出现而且没有太大变化的功能需求，我们完全可以编写一个可高度复用的解决方案。下面给出的就是一种基于Hibernate分页查询实现的一整套分页方案。在阐述这个方案之前，我想有必要就分页的相关问题做一个简单的阐述。 一般来说分页有两种解决方法：一种是一次性查出所有符合条件的数据，只是在显示的时候选出一部分展示的页面上。这种做法的好处是实现起来简单，也"}</script><link rel="canonical" href="https://laurence.enlightgram.com/java/paging-solution/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">一种分页解决方案</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Java/">Java</a></span><span class="level-item">发表于：<time dateTime="2007-07-30T05:49:00.000Z" title="2007-07-29 22:49:00">2007-07-29</time></span><span class="level-item">阅读用时：15 分钟 (约 2242 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>开发MIS系统一个经常遇到的问题就是分页。这是一个经常出现而且没有太大变化的功能需求，我们完全可以编写一个可高度复用的解决方案。下面给出的就是一种基于Hibernate分页查询实现的一整套分页方案。在阐述这个方案之前，我想有必要就分页的相关问题做一个简单的阐述。</p>
+<p>一般来说分页有两种解决方法：一种是一次性查出所有符合条件的数据，只是在显示的时候选出一部分展示的页面上。这种做法的好处是实现起来简单，也不会频繁地访问的数据库，但是当查询出的数据量非常大而用户可能针对某一小部分数据感兴趣时，这种做法就变得十分低效了。另一种做法则是每次只查询出一页要显示的数据，每换一页，再重新查询一次。这种做法的好处是不会一次性读出所有数据，查询速度和查询效率都很高，但不足之处是需要频繁地访问数据库（事实上，由于连接池技术的存在这种频繁的访问也未必会真得会为数据库带来多大的负担）。应该说这两种方法各有优劣，要根据实际情况进行取舍。我个人更倾向于第二种解决方法，本文提供的解决方案也是基于这种方法实现的。</p>
+<p>一、DAO层的分页组件</p>
+<p>DAO层的分页组件主要实现最低层的直接与数据库进行交互的分布查询功能。幸好Hibernate的API直接提供了对分页查询的支持：它们就是Query的setFirstResult方法（用于设置跳过的纪录数）和setMaxResults（用于设置一次要查出的纪录数）。一般来说分页是一个公共的需求，所以我们把分页方法写到BaseDAO里，代码如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line">public class BaseDAO</span><br><span class="line">&#123;</span><br><span class="line">    /**</span><br><span class="line">     * description: 根据查询字符串进行分页查询，分页的位置由skipedRows和showedRows确定</span><br><span class="line">     * </span><br><span class="line">     * @param queryString</span><br><span class="line">     *            查询字符串</span><br><span class="line">     * @param skipedRows</span><br><span class="line">     *            路过的纪录数</span><br><span class="line">     * @param showedRows</span><br><span class="line">     *            要显示的纪录数</span><br><span class="line">     * @return 分布查询的结果</span><br><span class="line">     */</span><br><span class="line">    public List PagingQueryByHql(String queryString, int skipedRows,</span><br><span class="line">            int showedRows)</span><br><span class="line">    &#123;</span><br><span class="line">        List result = null;</span><br><span class="line">        Session session = HibernateSessionFactory.getCurrentSession();</span><br><span class="line">        Query queryObject = session.createQuery(queryString).setFirstResult(</span><br><span class="line">                skipedRows).setMaxResults(showedRows);</span><br><span class="line">        result = queryObject.list();</span><br><span class="line">        session.close();</span><br><span class="line">        return result;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * description:根据查询字符串查询纪录总数。关于这里使用的实现方法有待进一步斟酌</span><br><span class="line">     * </span><br><span class="line">     * @param queryString</span><br><span class="line">     *            查询字符串</span><br><span class="line">     * @return 纪录总数</span><br><span class="line">     */</span><br><span class="line">    public int getQueryResultTotal(String queryString)</span><br><span class="line">    &#123;</span><br><span class="line">        StringBuffer queryTotalString = new StringBuffer(&quot;select count(*) &quot;);</span><br><span class="line">        queryTotalString.append(queryString.substring(queryString</span><br><span class="line">                .indexOf(&quot;from&quot;)));</span><br><span class="line">        Session session = HibernateSessionFactory.getCurrentSession();</span><br><span class="line">        Integer total = (Integer) session.createQuery(</span><br><span class="line">                queryTotalString.toString()).uniqueResult();</span><br><span class="line">        return total.intValue();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>按照B&#x2F;S开发的三层架构，我们的分页功能也被分散到DAO层、业务层和Web层这三个层次，每一层关注于特定的实现，并向上一层提供服务。下面就分这三个层次来逐步展示我们的解决方案。</p>
+<p>二、业务层的分页组件</p>
+<p>业务层的分页组件只是简单调用DAO组件的相关方法即可，它的代码如下，其中ParticularManager是服务层定义的某个接口，ParticularManagerImpl是它的一个实现类。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line">public class ParticularManagerImpl implements ParticularManager</span><br><span class="line">&#123;</span><br><span class="line"></span><br><span class="line">    private ParticularDAO; // 一个特定DAO继承自BaseDAO,它由spring依赖注入</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * description: 获取查询结果，调用ParticularDAO的PagingQueryByHql方法实现分页查询业务</span><br><span class="line">     * </span><br><span class="line">     * @param qo</span><br><span class="line">     *            查询对象,携带查询关键字</span><br><span class="line">     * @param skipedRows</span><br><span class="line">     *            路过的纪录数</span><br><span class="line">     * @param showedRows</span><br><span class="line">     *            要显示的纪录数</span><br><span class="line">     * @return 分页查询的结果</span><br><span class="line">     */</span><br><span class="line">    public List query(QO qo,int skipedRows,int showedRows)</span><br><span class="line">    &#123;</span><br><span class="line">        // ......</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * description:获取查询结果的记录总数,调用ParticularDAO的getQueryResultTotal方法实现分页查询业务</span><br><span class="line">     * </span><br><span class="line">     * @param qo</span><br><span class="line">     *            查询对象，携带查询关键字</span><br><span class="line">     */</span><br><span class="line">    public int getRecordCount(QO qo)</span><br><span class="line">    &#123; </span><br><span class="line">        // ......</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>三、Web层的分页组件</p>
+<p>Web层的分页组件包含一个 ParticularForm，和一个ParticularAction。它们的代码分别如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br></pre></td><td class="code"><pre><span class="line">public class ParticularForm extends ActionForm</span><br><span class="line">&#123;</span><br><span class="line">    private static final long serialVersionUID = 1L;</span><br><span class="line">    </span><br><span class="line">    private QO qo;    //查询对象qo</span><br><span class="line">    </span><br><span class="line">    private List queryResult;// 查询结果</span><br><span class="line">    </span><br><span class="line">    private String footer=&quot;&quot;; //页角字符串</span><br><span class="line">    </span><br><span class="line">    private int targetPage=1;　//目标页</span><br><span class="line">    </span><br><span class="line">    private int pageSize=20;　//页面大小</span><br><span class="line">    </span><br><span class="line">    public void reset(ActionMapping mapping, HttpServletRequest request)</span><br><span class="line">    &#123;</span><br><span class="line">        qo=new QO();</span><br><span class="line">        queryResult=null;    </span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    /*</span><br><span class="line">     * 以下为各字段的getter和setter</span><br><span class="line">     */</span><br><span class="line">    public QO getQo()</span><br><span class="line">    &#123;</span><br><span class="line">        return qo;</span><br><span class="line">    &#125;</span><br><span class="line">    public void setQo(QO qo)</span><br><span class="line">    &#123;</span><br><span class="line">        this.qo = qo;</span><br><span class="line">    &#125;</span><br><span class="line">    public List getQueryResult()</span><br><span class="line">    &#123;</span><br><span class="line">        return queryResult;</span><br><span class="line">    &#125;</span><br><span class="line">    public void setQueryResult(List queryResult)</span><br><span class="line">    &#123;</span><br><span class="line">        this.queryResult = queryResult;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    public String getFooter()</span><br><span class="line">    &#123;</span><br><span class="line">        return footer;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    public void setFooter(String footer)</span><br><span class="line">    &#123;</span><br><span class="line">        this.footer = footer;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    public int getPageSize()</span><br><span class="line">    &#123;</span><br><span class="line">        return pageSize;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    public void setPageSize(int pageSize)</span><br><span class="line">    &#123;</span><br><span class="line">        this.pageSize = pageSize;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    public int getTargetPage()</span><br><span class="line">    &#123;</span><br><span class="line">        return targetPage;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    public void setTargetPage(int targetPage)</span><br><span class="line">    &#123;</span><br><span class="line">        this.targetPage = targetPage;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line">public class ParticularAction extends BaseAction</span><br><span class="line">&#123;</span><br><span class="line"></span><br><span class="line">    private PagingUtil pagingUtil=new PagingUtil();　//分页工具类</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * 查询信息</span><br><span class="line">     * @param mapping</span><br><span class="line">     * @param form</span><br><span class="line">     * @param request</span><br><span class="line">     * @param response</span><br><span class="line">     * @return</span><br><span class="line">     */</span><br><span class="line">    public ActionForward query(ActionMapping mapping, ActionForm form,</span><br><span class="line">            HttpServletRequest request, HttpServletResponse response)</span><br><span class="line">    &#123;</span><br><span class="line">        ParticularForm particularForm=(ParticularForm)form;</span><br><span class="line">        ParticularManager particularManager = (ParticularManager) ServiceLocator.getService(&quot;particularManager&quot;);</span><br><span class="line">        StxxQueryQO qo=stxxQueryForm.getQo();</span><br><span class="line">        if(qo==null)</span><br><span class="line">            return null;    </span><br><span class="line">        //查询字符串    </span><br><span class="line">        StringBuffer queryString=new StringBuffer(&quot;from BaseStxxbPO as st where 1=1&quot;);</span><br><span class="line">        //从qo中取出数据，组织查询字符串....</span><br><span class="line">        //......        </span><br><span class="line">        pagingUtil.setRecordTotal(particularManager.getQueryResultTotal(queryString.toString()));    </span><br><span class="line">        pagingUtil.setPageSize(particularForm.getPageSize());</span><br><span class="line">        pagingUtil.setCurrentPage(particularForm.getTargetPage());</span><br><span class="line">        List result=particularManager.pagingQueryByHql(queryString.toString(),pagingUtil.getSkippedRecordTotal(),                             　　　 pagingUtil.getPageSize());</span><br><span class="line">        particularForm.setQueryResult(result);    //将查询结果赋给ActionForm</span><br><span class="line">        particularForm.setFooter(pagingUtil.createSnippet());</span><br><span class="line">        return mapping.findForward(&quot;QueryList&quot;);//转向列表页面    </span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>四、分页工具类</p>
+<p>上面的类中用到了一个PagingUtil类,这是这个分页方案的又一个核心。它的代码如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br><span class="line">188</span><br><span class="line">189</span><br><span class="line">190</span><br><span class="line">191</span><br><span class="line">192</span><br><span class="line">193</span><br><span class="line">194</span><br><span class="line">195</span><br><span class="line">196</span><br><span class="line">197</span><br><span class="line">198</span><br><span class="line">199</span><br><span class="line">200</span><br><span class="line">201</span><br><span class="line">202</span><br><span class="line">203</span><br><span class="line">204</span><br><span class="line">205</span><br><span class="line">206</span><br><span class="line">207</span><br><span class="line">208</span><br><span class="line">209</span><br><span class="line">210</span><br><span class="line">211</span><br><span class="line">212</span><br><span class="line">213</span><br><span class="line">214</span><br><span class="line">215</span><br><span class="line">216</span><br><span class="line">217</span><br><span class="line">218</span><br><span class="line">219</span><br><span class="line">220</span><br><span class="line">221</span><br><span class="line">222</span><br><span class="line">223</span><br><span class="line">224</span><br><span class="line">225</span><br><span class="line">226</span><br><span class="line">227</span><br><span class="line">228</span><br><span class="line">229</span><br><span class="line">230</span><br><span class="line">231</span><br><span class="line">232</span><br><span class="line">233</span><br><span class="line">234</span><br><span class="line">235</span><br><span class="line">236</span><br><span class="line">237</span><br><span class="line">238</span><br><span class="line">239</span><br><span class="line">240</span><br><span class="line">241</span><br><span class="line">242</span><br><span class="line">243</span><br><span class="line">244</span><br><span class="line">245</span><br><span class="line">246</span><br><span class="line">247</span><br><span class="line">248</span><br><span class="line">249</span><br><span class="line">250</span><br><span class="line">251</span><br><span class="line">252</span><br><span class="line">253</span><br><span class="line">254</span><br><span class="line">255</span><br><span class="line">256</span><br><span class="line">257</span><br><span class="line">258</span><br><span class="line">259</span><br><span class="line">260</span><br><span class="line">261</span><br><span class="line">262</span><br><span class="line">263</span><br><span class="line">264</span><br><span class="line">265</span><br><span class="line">266</span><br><span class="line">267</span><br><span class="line">268</span><br><span class="line">269</span><br><span class="line">270</span><br><span class="line">271</span><br><span class="line">272</span><br><span class="line">273</span><br><span class="line">274</span><br><span class="line">275</span><br><span class="line">276</span><br><span class="line">277</span><br><span class="line">278</span><br><span class="line">279</span><br><span class="line">280</span><br><span class="line">281</span><br><span class="line">282</span><br><span class="line">283</span><br><span class="line">284</span><br><span class="line">285</span><br><span class="line">286</span><br><span class="line">287</span><br><span class="line">288</span><br><span class="line">289</span><br><span class="line">290</span><br><span class="line">291</span><br><span class="line">292</span><br><span class="line">293</span><br><span class="line">294</span><br><span class="line">295</span><br><span class="line">296</span><br><span class="line">297</span><br><span class="line">298</span><br><span class="line">299</span><br><span class="line">300</span><br></pre></td><td class="code"><pre><span class="line">/**</span><br><span class="line"> * Description: 分页工具类,实现数据分页显示</span><br><span class="line"> */</span><br><span class="line">public class PagingUtil</span><br><span class="line">&#123;</span><br><span class="line"></span><br><span class="line">    private int recordTotal; // 记录总数</span><br><span class="line"></span><br><span class="line">    private int pageSize; // 每页显示记录数</span><br><span class="line"></span><br><span class="line">    private int pageTotal; // 总页数</span><br><span class="line"></span><br><span class="line">    private int currentPage; // 当前页数</span><br><span class="line"></span><br><span class="line">    private boolean hasPreviousPage; // 是否有上一页</span><br><span class="line"></span><br><span class="line">    private boolean hasNextPage; // 是否有下一页</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * 默认构造器,将页面大小初始化为20</span><br><span class="line">     */</span><br><span class="line">    public PagingUtil()</span><br><span class="line">    &#123;</span><br><span class="line">        this.recordTotal = 0;</span><br><span class="line">        this.pageSize = 20;</span><br><span class="line">        this.pageTotal = 1;</span><br><span class="line">        this.currentPage = 1;</span><br><span class="line">        this.hasPreviousPage = false;</span><br><span class="line">        this.hasNextPage = false;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * 根据记录总数和页面大小进行初始化</span><br><span class="line">     * </span><br><span class="line">     * @param recordTotal</span><br><span class="line">     *            记录总数</span><br><span class="line">     * @param pageSize</span><br><span class="line">     *            页面大小</span><br><span class="line">     */</span><br><span class="line">    public PagingUtil(int recordTotal, int pageSize)</span><br><span class="line">    &#123;</span><br><span class="line">        this.recordTotal = recordTotal;</span><br><span class="line">        this.pageSize = pageSize;</span><br><span class="line">        this.currentPage = 1;</span><br><span class="line">        this.resetPageTotal();</span><br><span class="line">        this.refresh();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * 获取已经跳过的记录总数</span><br><span class="line">     * </span><br><span class="line">     * @return int 跳过的记录总数</span><br><span class="line">     */</span><br><span class="line">    public int getSkippedRecordTotal()</span><br><span class="line">    &#123;</span><br><span class="line">        return (currentPage - 1) * pageSize;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * 刷新页面状态</span><br><span class="line">     */</span><br><span class="line">    public void refresh()</span><br><span class="line">    &#123;</span><br><span class="line">        if (pageTotal &lt;= 1)</span><br><span class="line">        &#123;</span><br><span class="line">            hasPreviousPage = false;</span><br><span class="line">            hasNextPage = false;</span><br><span class="line">        &#125;</span><br><span class="line">        else if (currentPage == 1)</span><br><span class="line">        &#123;</span><br><span class="line">            hasPreviousPage = false;</span><br><span class="line">            hasNextPage = true;</span><br><span class="line">        &#125;</span><br><span class="line">        else if (currentPage == pageTotal)</span><br><span class="line">        &#123;</span><br><span class="line">            hasPreviousPage = true;</span><br><span class="line">            hasNextPage = false;</span><br><span class="line">        &#125;</span><br><span class="line">        else</span><br><span class="line">        &#123;</span><br><span class="line">            hasPreviousPage = true;</span><br><span class="line">            hasNextPage = true;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * 生成页面上实现分页导航功能的JSP页面片断,以字符串形式记录.</span><br><span class="line">     * </span><br><span class="line">     * @return String 其内容表示实现分页导航功能的JSP页面片断,该字符串使用&lt;bean:write&gt;标签写到页面上时必须放置在一个form里</span><br><span class="line">     */</span><br><span class="line">    public String createSnippet()</span><br><span class="line">    &#123;</span><br><span class="line">        StringBuffer snippet = new StringBuffer(&quot;&quot;);</span><br><span class="line"></span><br><span class="line">        if (hasPreviousPage)</span><br><span class="line">        &#123;</span><br><span class="line">            snippet.append(&quot;&lt;INPUT type=submit class=&#x27;btn&#x27; value=首页 name=firs onclick=&#x27;this.form.targetPage.value=1&#x27;&gt;&quot;);</span><br><span class="line">            snippet.append(&quot;&lt;INPUT type=submit class=&#x27;btn&#x27;  value=上页 name=prev onclick=&#x27;this.form.targetPage.value=&quot;+ (currentPage - 1) + &quot;&#x27;&gt;&quot;);</span><br><span class="line">        &#125;</span><br><span class="line">        else</span><br><span class="line">        &#123;</span><br><span class="line">            snippet.append(&quot;&lt;INPUT type=submit class=&#x27;btn&#x27; value=首页 name=firs disabled&gt;&quot;);</span><br><span class="line">            snippet.append(&quot;&lt;INPUT type=submit class=&#x27;btn&#x27;  value=上页 name=prev disabled&gt;&quot;);</span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        if (hasNextPage)</span><br><span class="line">        &#123;</span><br><span class="line">            snippet.append(&quot;&lt;INPUT type=submit  class=&#x27;btn&#x27; value=下页 name=next onclick=&#x27;this.form.targetPage.value=&quot;+ (currentPage + 1) + &quot;&#x27;&gt;&quot;);</span><br><span class="line">            snippet.append(&quot;&lt;INPUT type=submit  class=&#x27;btn&#x27; value=末页 name=last onclick=&#x27;this.form.targetPage.value=&quot;+ pageTotal + &quot;&#x27;&gt;&quot;);</span><br><span class="line">        &#125;</span><br><span class="line">        else</span><br><span class="line">        &#123;</span><br><span class="line">            snippet.append(&quot;&lt;INPUT type=submit class=&#x27;btn&#x27;  value=下页 name=next disabled&gt;&quot;);</span><br><span class="line">            snippet.append(&quot;&lt;INPUT type=submit class=&#x27;btn&#x27;  value=末页 name=last disabled&gt;&quot;);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        snippet.append(&quot; 共&quot; + recordTotal + &quot;条记录&quot;);</span><br><span class="line">        snippet.append(&quot;  每页&lt;SELECT size=1  name=pageSize onchange=&#x27;this.form.targetPage.value=1;this.form.pageSize.value=this.value;this.form.submit();&#x27;&gt;&quot;);</span><br><span class="line"></span><br><span class="line">        if (pageSize == 5)</span><br><span class="line">        &#123;</span><br><span class="line">            snippet.append(&quot;&lt;OPTION value=5 selected&gt;5&lt;/OPTION&gt;&quot;);</span><br><span class="line">        &#125;</span><br><span class="line">        else</span><br><span class="line">        &#123;</span><br><span class="line">            snippet.append(&quot;&lt;OPTION value=5&gt;5&lt;/OPTION&gt;&quot;);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        if (pageSize == 10)</span><br><span class="line">        &#123;</span><br><span class="line">            snippet.append(&quot;&lt;OPTION value=10 selected&gt;10&lt;/OPTION&gt;&quot;);</span><br><span class="line">        &#125;</span><br><span class="line">        else</span><br><span class="line">        &#123;</span><br><span class="line">            snippet.append(&quot;&lt;OPTION value=10&gt;10&lt;/OPTION&gt;&quot;);</span><br><span class="line">        &#125;</span><br><span class="line">        if (pageSize == 20)</span><br><span class="line">        &#123;</span><br><span class="line">            snippet.append(&quot;&lt;OPTION value=20 selected&gt;20&lt;/OPTION&gt;&quot;);</span><br><span class="line">        &#125;</span><br><span class="line">        else</span><br><span class="line">        &#123;</span><br><span class="line">            snippet.append(&quot;&lt;OPTION value=20&gt;20&lt;/OPTION&gt;&quot;);</span><br><span class="line">        &#125;</span><br><span class="line">        if (pageSize == 50)</span><br><span class="line">        &#123;</span><br><span class="line">            snippet.append(&quot;&lt;OPTION value=50 selected&gt;50&lt;/OPTION&gt;&quot;);</span><br><span class="line">        &#125;</span><br><span class="line">        else</span><br><span class="line">        &#123;</span><br><span class="line">            snippet.append(&quot;&lt;OPTION value=50&gt;50&lt;/OPTION&gt;&quot;);</span><br><span class="line">        &#125;</span><br><span class="line">        if (pageSize == 100)</span><br><span class="line">        &#123;</span><br><span class="line">            snippet.append(&quot;&lt;OPTION value=100 selected&gt;100&lt;/OPTION&gt;&quot;);</span><br><span class="line">        &#125;</span><br><span class="line">        else</span><br><span class="line">        &#123;</span><br><span class="line">            snippet.append(&quot;&lt;OPTION value=100&gt;100&lt;/OPTION&gt;&quot;);</span><br><span class="line">        &#125;</span><br><span class="line">        snippet.append(&quot;&lt;/SELECT&gt;&quot;);</span><br><span class="line">        snippet.append(&quot;条 分&quot; + pageTotal + &quot;页显示 转到&quot;);</span><br><span class="line">        snippet.append(&quot;&lt;SELECT size=1 name=Pagelist onchange=&#x27;this.form.targetPage.value=this.value;this.form.submit();&#x27;&gt;&quot;);</span><br><span class="line">        for (int i = 1; i &lt; pageTotal + 1; i++)</span><br><span class="line">        &#123;</span><br><span class="line">            if (i == currentPage)</span><br><span class="line">            &#123;</span><br><span class="line">                snippet.append(&quot;&lt;OPTION value=&quot; + i + &quot; selected&gt;&quot; + i</span><br><span class="line">                        + &quot;&lt;/OPTION&gt;&quot;);</span><br><span class="line">            &#125;</span><br><span class="line">            else</span><br><span class="line">            &#123;</span><br><span class="line">                snippet.append(&quot;&lt;OPTION value=&quot; + i + &quot;&gt;&quot; + i + &quot;&lt;/OPTION&gt;&quot;);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        snippet.append(&quot;&lt;/SELECT&gt;页&quot;);</span><br><span class="line">        snippet.append(&quot;&lt;INPUT type=hidden  value=&quot; + currentPage</span><br><span class="line">                + &quot; name=&quot;targetPage&quot; &gt; &quot;);</span><br><span class="line">        snippet.append(&quot;&lt;INPUT type=hidden  value=&quot; + pageSize</span><br><span class="line">                + &quot; name=&quot;pageSize&quot;&gt; &quot;);</span><br><span class="line">        return snippet.toString();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /** 以下为getter和setter方法 * */</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * 获取记录总数</span><br><span class="line">     * </span><br><span class="line">     * @return int 总行数</span><br><span class="line">     */</span><br><span class="line">    public int getRecordTotal()</span><br><span class="line">    &#123;</span><br><span class="line">        return recordTotal;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /** </span><br><span class="line">     * 设置记录总数，同时利用recordTotal和pageSize计算出pageTotal。</span><br><span class="line">     * </span><br><span class="line">     * @param recordTotal 记录总数</span><br><span class="line">     */</span><br><span class="line">    public void setRecordTotal(int recordTotal)</span><br><span class="line">    &#123;</span><br><span class="line">        this.recordTotal = recordTotal;</span><br><span class="line">        resetPageTotal();</span><br><span class="line">        refresh();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * 计算总页数</span><br><span class="line">     * </span><br><span class="line">     * @return int 总页面数</span><br><span class="line">     */</span><br><span class="line">    public int getPageTotal()</span><br><span class="line">    &#123;</span><br><span class="line">        return pageTotal;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * 重置页面总数</span><br><span class="line">     */</span><br><span class="line">    protected void resetPageTotal()</span><br><span class="line">    &#123;</span><br><span class="line">        if (pageSize &gt;= 1)</span><br><span class="line">        &#123;</span><br><span class="line">            pageTotal = (recordTotal + pageSize - 1) / pageSize;</span><br><span class="line">        &#125;</span><br><span class="line">        else</span><br><span class="line">        &#123;</span><br><span class="line">            pageTotal = 1;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * 获取每页显示记录数</span><br><span class="line">     * </span><br><span class="line">     * @return int 每页显示的记录数</span><br><span class="line">     */</span><br><span class="line">    public int getPageSize()</span><br><span class="line">    &#123;</span><br><span class="line">        return pageSize;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * </span><br><span class="line">     * 设置每页显示记录数</span><br><span class="line">     * </span><br><span class="line">     * @param pageSize</span><br><span class="line">     *            每页显示记录数</span><br><span class="line">     */</span><br><span class="line">    public void setPageSize(int pageSize)</span><br><span class="line">    &#123;</span><br><span class="line">        this.pageSize = pageSize;</span><br><span class="line">        resetPageTotal();</span><br><span class="line">        refresh();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * 获取当前页数</span><br><span class="line">     * </span><br><span class="line">     * @return int 当前的页数</span><br><span class="line">     */</span><br><span class="line">    public int getCurrentPage()</span><br><span class="line">    &#123;</span><br><span class="line">        return currentPage;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * 设置当前页数</span><br><span class="line">     * </span><br><span class="line">     * @return int 当前的页数</span><br><span class="line">     */</span><br><span class="line">    public void setCurrentPage(int currentPage)</span><br><span class="line">    &#123;</span><br><span class="line">        if(currentPage&gt;=1&amp;&amp;currentPage&lt;=pageTotal)</span><br><span class="line">        &#123;</span><br><span class="line">            this.currentPage = currentPage;</span><br><span class="line">            refresh();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * 获取是否有下一页的状态信息</span><br><span class="line">     * </span><br><span class="line">     * @return blooean 是否有下一页</span><br><span class="line">     */</span><br><span class="line">    public boolean isHasNextPage()</span><br><span class="line">    &#123;</span><br><span class="line">        return hasNextPage;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * 获取是否有上一页的状态信息</span><br><span class="line">     * </span><br><span class="line">     * @return blooean 是否有上一页</span><br><span class="line">     */</span><br><span class="line">    public boolean isHasPreviousPage()</span><br><span class="line">    &#123;</span><br><span class="line">        return hasPreviousPage;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>需要特别说明的是createSnippet方法，它的作用就是根据当前页面情况动态的组织要写入到页面上的分页页面片段。而我们在页面上的工作就会因此而变得轻松了许多，因为这样一来，我们在页面上唯一要做的就是写下这一样一个语句：&lt;bean:write name&#x3D;”particularForm” property&#x3D;”footer”&#x2F;&gt;</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>一种分页解决方案</p><p><a href="https://laurence.enlightgram.com/java/paging-solution/">https://laurence.enlightgram.com/java/paging-solution/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2007-07-29</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Hibernate/">Hibernate</a><a class="link-muted mr-2" rel="tag" href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/java/eclipse-plugin-update-sites/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">常用Eclipse插件在线安装地址</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/architecture/dependency-inversion-and-injection/"><span class="level-item">关于依赖反转（基于接口编程）和依赖注入的一个小问题的领悟</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><!--!--></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>如何连通私有子网中的 MSK / Kafka 集群？ - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="MSK 集群通常都是建在私有子网中的，这给本地访问带来了很多麻烦，特别是需要在本地使用 Kafka GUI 客户端管理和读写 MSK 数据的时候。本文会给出一套解决方案。 我们这里讨论的问题有一点特殊性，那就是：由于 MSK 是托管服务，它的 Broker 主机名虽然映射了一个私有的 IP 地址，但是不能通过 SSH 登录的，这是比较特殊的一个地方，另一个地方是：Kafka 集群基本都是三个以上的"><meta property="og:type" content="article"><meta property="og:title" content="如何连通私有子网中的 MSK / Kafka 集群？"><meta property="og:url" content="https://laurence.enlightgram.com/aws/connect-private-msk-kafka/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="MSK 集群通常都是建在私有子网中的，这给本地访问带来了很多麻烦，特别是需要在本地使用 Kafka GUI 客户端管理和读写 MSK 数据的时候。本文会给出一套解决方案。 我们这里讨论的问题有一点特殊性，那就是：由于 MSK 是托管服务，它的 Broker 主机名虽然映射了一个私有的 IP 地址，但是不能通过 SSH 登录的，这是比较特殊的一个地方，另一个地方是：Kafka 集群基本都是三个以上的"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/aws/connect-private-msk-kafka/1.png"><meta property="article:published_time" content="2024-04-16T20:28:18.000Z"><meta property="article:modified_time" content="2026-11-06T07:30:18.447Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Kafka"><meta property="article:tag" content="MSK"><meta property="article:tag" content="代理"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/aws/connect-private-msk-kafka/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/aws/connect-private-msk-kafka/"},"headline":"如何连通私有子网中的 MSK / Kafka 集群？","image":["https://laurence.enlightgram.com/images/aws/connect-private-msk-kafka/1.png"],"datePublished":"2024-04-16T20:28:18.000Z","dateModified":"2026-11-06T07:30:18.447Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"MSK 集群通常都是建在私有子网中的，这给本地访问带来了很多麻烦，特别是需要在本地使用 Kafka GUI 客户端管理和读写 MSK 数据的时候。本文会给出一套解决方案。 我们这里讨论的问题有一点特殊性，那就是：由于 MSK 是托管服务，它的 Broker 主机名虽然映射了一个私有的 IP 地址，但是不能通过 SSH 登录的，这是比较特殊的一个地方，另一个地方是：Kafka 集群基本都是三个以上的"}</script><link rel="canonical" href="https://laurence.enlightgram.com/aws/connect-private-msk-kafka/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">如何连通私有子网中的 MSK / Kafka 集群？</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item article-label">付费</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/AWS/">AWS</a></span><span class="level-item">发表于：<time dateTime="2024-04-16T20:28:18.000Z" title="2024-04-16 13:28:18">2024-04-16</time></span><span class="level-item">阅读用时：4 分钟 (约 607 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><div class="hbe hbe-container" id="hexo-blog-encrypt"
+     data-hbe-format="4"
+     data-wpm="密码错误, 请重新输入."
+     data-whm="密码错误, 请重新输入."
+     data-salt="8309003f48acd6ea4ddabd7d671abe0debca287121cbbbe7db2e5c365d2a41af"
+     data-nonce="ee050468f1530062b87e71ae"
+     data-kdf-iterations="250000"
+     data-auto-save="true">
+  <script id="hbeData" type="hbeData">
+    ceb079c2f1dc39c9d3a92049ca1c266feb9ee82370629573408a1a003d7886858a373c8147edf076718ded71ce89f8f52a218e13e9bc7f559bc9ce7a9a1a6bfa818cbbd8cbc2d73f24c856d4fdaeec348f62a8a22d766fdcb6913eb3e8f863270615be325deab0ad884133ee8d7d370c495a9507f0bd5173f8f11388d513df43972057e55d4b91cffd2f4b1e5ccac9c99890fd53d550781cea2300dd06cfe5a49b7e62e6e82dba8827d0d182d855298fe6d75d94333fee87801e352a8b1f9ac1ffcc93cd0dcf12966173bccce42da1c462f4e69e49b408c452363feae48dbf176adcb263c4327d21cb1b6e9fa6f6f00a3a14f5b6a5ea9b780aa654d590a04d5cc6712e2622d2da0efb6b116ddfffcbdab2f26050df384e99abf343e44cfad024b0d1a5b33e090aba0c3687f6cbf9b7313532f370886b658aea83a305a760868f096e1c9604cfebb8dd8c92c9057ebe24c4a3ce238159a3d8747ba02b6169b2b48cd3d4f4b83bd0e3ba44afdfeda654fc85b4d999245cb00fc3b2311981f8075764aa9be0a3dc29cf8b0669392fc32a86b07402302e42da879f17285062b32c77427908915c7653b68f8323b3895ceee136b3c1999bacb6d1782c3e1e1ff6692aa29a7f26bcc6e6027edf14d83ab1e3a5d7d04cbf0c3b042f95ac8c1b119241514e3911d6e4acd020fa80f90532341a75d396aee842366bcdfabc9a424c421874a73c35a0e32c84c5418bfec7c7eab9e7b174b58b7871473e58744a1f48543fc9494f14d57597c99867e2bf7dcd271a5fccc8dfd606b805c9e384002a5623b1dd1e12f28c9da7bc59d33e92efb67b809a3f8ea414156594e4e4fc41a3e7bfca344aa53faa5dc6a65f41c63034b8339f55ebbaff267575f6811a17da19be6bcc8772e6d22c836d7eb70c44069f178a7f250c778c3c7c432a0ebf110e05a426835ffdd6a151e115b0a149dcdc5169283f0b2930e0b976816b8253aa6e12a80e5c859c867d16e1cffed88788cfe496801c777aeddb82f653b00a01c06e92756cc6c6cc7d21f2d3ef8f78e50cfb796d309a05f6f80a35cf45b3ead313a7895e44ca95fcaa38d66dcf2c73fadc79e383066f2c7bedb63b37768e7dfa7b93fdaa8fc113d702f80036928305b4df602f4d4c66159422bc8804eab49658a0a44b28c206a077eb22a64bf8cf5577d69b7f7c12e8e58aeb2dfafad8b08330b3ea1ea1921f7ef9a352feac45aad0815d88816c59f66d4e1b8b679e31184412f2fc8e9fcb73a26f8ed78870ef3687efae70d5e38d07c314117ae0edaa0941d5c40f15782f96d218dcf8ce67fdd3905c456bce084c779255158e6ab5bb155607f1af70b239e666daa9ba9a1a88e70891131c3f9867e696183de7ca1a1bb1f7e784cb4bbd126fc158825e146c72e270205c721ee83f7518a76f6417599dd6ed443c2629f3f1f05c83fe95593d9a6f118081124f44578adc1e3d3ecb26d4cdb35f35e5a36552ee2c71c55d86529b05fdd5138d5dc87d31869f64801c265da077b2b17824a8915a924b392ad2715d7cd7004789ad8a1ee9caa931a4f929fb8e85f09b401a01294a0aa7e6033fff698884bd98f380e7ae8a42c994dd5fe9645637180b24ee3cc4bab0bc7edd6240905406aae0d802d12b60d796871cc2c57b9178aa4c0062ac6ace6f8f1a5ba3c4d7b74ffbf322f2b71c792cfe0992d862c42aa4b6ebb52e88d48057a702452dbf9ee12dae2c4d28e6c8dfcecb8e324e523ce60c3ef418c06c539674cb89c8069fdda5faf15ee01838b0de1e9faf7f3a4b0aa8c53b0c4bbc94c87e1be16293a3c5fe19206e6e1c3cfec37418261318b6703051138b86d8a6dd96c78671700bc0224c3f0c3b12e6f15c2065fb1a641f5b57be1106e8cbb3530846419c81bd8ff7452d9e66544d1c8f5e8573cbfffa5e831dc7a881b2932c661f0dccb322c3f073c14be487e8b4fa47021fc126f44e1fb0e1632dc211e784a2065eaf9814ef2fcae02842dc3ea414b4f6a3976b025374511575bbb8c9ac384d53e2fb07cfa7d75e43167641c42846b4839313949daf997e8f0db1e4a741eabec7c088614edbd90d9ca657f176ba88366f38526baed168c44f49aabf3d8fae34805d549b18a1bbb5b763b30bba388770da1b66a6097c06acc48c1cc622a49f0e7e036d94db700f79af0319ba7b095657ff4a5dfe909ce3979af533ca08c973ec7a91c466be1a18ab606a4aff0a8dc0e01c338cc4e18ac0e27de21215cc416c75bd1ddbdc177703576567be8731a4474b784c2882ca145c337b230182a590a481defd3e05cb7e5e876688c4dff97d3a0a66e1c25e0c7426a4a7c158b99d7bb5a42774dff9d99dfd21f656c0a99a00f3b5f751bf38d2394b09d04183295cb9a705f9f5b4f7b70616e2aadf2214f56d40dcdd6b83d9742511ea3e4c2e751e1be825225450c387ea18eb8b487e9505d468d0953bd57be898615a9533807fb9095950e01ec872016f5c25d9c163328f81ad3ead20cb3a37b058ed98056ba29d90e96deea63820d8300a6e7612480df1827bd45faefc193581cd0354e7bfb8168bb443e31a392fe03da73c5ff69c4fcec0bd0fbbc831f4cbdc7ba92fdd5a3d757602dd9da24b1a878a14cd6dbb7c60826887e5727e57bf573d0ae271bd338d320b939ab4479b6ae6f42959e60da6a478e5ac4e892149e3bef8fc89720f8d0ff0e966057abe891bd0ae13729406e54a70a4d733c376b060c536659bde514aa248b2d167af3a14aafda90bf2fb446c4db61ae10d291601c968e8559e3b6abe7b38feba2de3fa970b7c3a567086f940ce13e6e796a4f06cbfa97dcc57eef170faf5a3db0a98309adeeda97a7f94560288bc2d75ba5af7c872fb54570c300e5251d750996542a735daf873a67c67eea5c4c70817f999aa2ba042871d3a53090b3cfb82c82759b0b8dbf2308f7be66e064c5f32e3d9f3d82c62e54cbcd7ec5d465b25d1bd932e7874dc74a7172ea9363030cca959ef81d25e628b7a0a01cac8d921f07be80632ec29cb04f0d9d5e6692ce811b740c2e52eeb567fb52ff9549e0eef62e6cd110d01810882917dbae3c480447fe505943797ed85d824289ab465853bb6855d57acd6ebb737ded1b3aea8c5d97dfb137d85c38a8e977703c2aaeca3ce6e891d57544b3458fd532f7335b7357e0c37fd1048fa0d3fb367a08e7b263eba31a20041e1a192725721494d6125e225d4f8809266f45199c02dcb9e1af6206a7596e0d0cb86bce6b7f16f7b72fc35a38386429520a6a2181b1c4f2ba993353945fadc07d7161874bd2196d5175833fc768c5ce605e300df393032a326f28e205ba08682961a0e3bdf7b0fb073c7ef6549fc09e9b33ce1ccfdc5ab7a9de27727ac867076085bc7d1d49138b36372552071bbd75ad1a39e471a6f59d1a137928c7f22b66f7e3f49c7acccfe0faabfc2abdbc3378e2ba346c24612f9088b4b988675f27fe68cb597919410e3c97c289a723f106259ba02c598a61af70f013b48a4f47fc8c9f6548aae73ec11fa2cebda5298feeaa12a917b914875464f420b7bc6b5a161c7a90ead0a34f24d67bbde7bbd59363394c1fcf080d906b2f9fbdef77a87b361964fdf2892cccd3b0e1455877d97905726d4fdb92423a58d42eefbad332780edd86b3bb0aa2d474187ad576a30fc119e1b5f7a67abe17494cfe33e2a150b490ae6b1d1d08d7c1b60b972dc59e555d57ecf71e89bb09af4b665552ee7611aa8aded07b96b6c1dd37643b3c0a337d86d0bd2efcb5a8ccf68d561bd695a6afe5cac0bca9a780265f8fc332b15805882bd7e9af165d91cfd7273bc188f4ad605e6b7b8241a1d6e0dae346d71f199186dd3083b25fb9d3a8c0b37003b0c8ec433b549db0078860cdcc0986e945d6698c5580f0b5dc6ecacfb1ddab65ce94d515e8e913696e891e6c03443c5c5fcfef5acb3e5424ca6fdff2677748cf1caff109f50a97dae8381270ae8ed0045640b844c8838dcfb3ec43248ce2f99cffd0107e926a554dba467a7d7b1ffb96ed310b1729a138424903413716e50051c37321e288595d9dc185617838fcfcc47873ab35e0c6da971e331c89257eaf3129380fd93978aaa592332f9824e15919aa756441bf3fbbee454d7dedc07016ef6ebf963e5161ee18fb56c08b3b39bfcf4097e9cc61c569a5740ab18434b9514b92c8d46c0e9ca66407133ca25eebaa7bc6274a2b6c9d6849e6bb0cedc9f35c1dedee55808e4c635a3d9891ea059d14d31a49dffd5ff495755e5827b00ca038bdb7b6b1369ef1aefab3c9817f1b04f37ea590f06b136879ed08a51740ed9281ed74591a00015ef647877715358338dbd7b6d67862320c310800f98afa162a77d4a666a112057e843e7a066b3e85e6611fce7cc8a088e1f87145e6aa0b0f8906b14f10af384a767a4e65ff35d8f374edd6f274c80e946780102f8ad586846097546bcbd18fbcc934f7260f799e9e4023e67674648eab7b2a64ec84eb3456ffc2b570acd3dffe5a8f2d7d99aa58c0f1e27a60be62b800328dfa75ef7ceade1f6016a0c3eea6efd2ba62afd2aedf0b158bc375920506aff0c05bc61734f50889680a7325ac6bc46aaf5d35cf53d6978e5dae744f9d953f90ee47a54cadb5bd22441e91d96d01c5d37f2ebfd055c7259955019b8aaab6e77352cd1dc2caac3b069718feda5c67cb3ac139481c64e89df38ec432469490db5398b292f4c804c7f2fadc3cd2d7beeb10777b0c2ae8553423ef2db0b0d0cb572641940442354b5a462b5e3359723cb7d414adf9bafe82fec09809347baec1c9eefb5eeafc96b0ec224234952e4d95154507cc4d918397445b460c92751dd6ee1dc5064f406f083c631d39fef7edd89e5812aeab7eca72f7922e6a5be1c585ed6115f9ef056309d6ff13bfddc97431afc1b36915509d05037a7cd188c2679c65633c404d7baed9dae7ab962790fe264e9e6ea78abffcc11167ec761ee96ccadfc6c3c6f2ebefbbdba5fd2a6bdc0876d333f5f284c65ff062b6c397ce2610c4a95abb6a65a0be7e1999cf48d8062f2be64a3a86aecad090063d46e22176a8a109262afb3d287fa8d3dde247e992c2208b9c0d57b136fa6105d9cb6af3598b65bb05da0a5a595e65844b6e9d27b014747dd67f202f6dbe0d08a68ba69636d88ae39d429352ff81f07795cb840f2124a797d600ca9c9fee3860df510b79126f85bc5c5a004ebe426d812d2885d0e8c55c2bf35011109839778dc2ee3c6964ec8d10abae64265a93b81d8290bd8b12dbe350ce3e8dc35c6245c9a1d6611987d60d4b7dee5ba6d0dcd5586542aa1ff049135f79a4c279b4b9875b89e02a5692b7226e25ae7cbf8df75ad97ee7ddabf708063e25ed3a2ee07f7f5b759e7325a41b19bfc033003c3776bc9572092a6ec3c7cf99e6e5d656e6d2c31f20a252734f4f932029d9110e8b3a168c789fcd1cac8c03ab2d2d2433906eeb9d9916db0d03269aa061774703b3f028ec713260ea6afad4b9f00298bf50c742fb50f915618097a232cc9af6bd02f764d69cdb8d029a4d3df7f06bc3678b37a3a08bb2b60057014692b05e26aee433286b39b552be245add75a6dd07fb18fd11e994a4a2a4856f50ce568ea11830f583536c3462f571a55acc02c64bec850c9f160092b75bd0922f9018ea95b39230f3e7059db13b24e8195ba61be0fa1736520459338736ac9323f0985202f0364cf2df3a5cd138a1a4b96c3f8bc5e4f6e35397e533df2552945ea7ff0af508d13ae6b8f49259c4378d89f562b5c8a155e57539c8f20a2f33b43fbfc2f6085e4817bf49f2f42cc8c84698a7c83cf94c2f168a782dcc843f7823d14b458ddf3e8f2b57d77f1ccda3426f82ef7e15267136ed89bcefbf5d054ada80e726d041105023aa7842f1bd8e5c4c445b6266ab4dd0d8c917d909f9f14a346e7d107d21e912b1f7bf230fe2b88e8ccff37e30c5f2a23ad431714583e78e8e17caad80d3ab0e1b1d8e424c9918704a9e6490c4600d40cbbc6478ccb034eb1d4972cd820086ac18ec4d6897136decd893c2778f0c5a205c191d0307b331e3064b80e8a70958b4a1a16bdde97692c6dcb23cb25647714c7e7ddf7143bc35d51aaf31ebbaefb6f490b99f188232875c74e3905be3c18154c94368554e54a712042342bef4d2ffa4abd8dc3ec5c83cd08d9aa1131c47675ced109719e818bd67c25fe417f74007cb8a2de4500ce5a7624d4825a019cac56a169dc17c074d4294b0d0cfc5b7fed32e83d5bbbfc0b23e933a34aec64a865905e0920361e6023980f6e168fbee91b41d1c3
+  </script>
+  <div class="hbe-preview"><p>MSK 集群通常都是建在私有子网中的，这给本地访问带来了很多麻烦，特别是需要在本地使用 Kafka GUI 客户端管理和读写 MSK 数据的时候。本文会给出一套解决方案。</p>
+<p>我们这里讨论的问题有一点特殊性，那就是：由于 MSK 是托管服务，它的 Broker 主机名虽然映射了一个私有的 IP 地址，但是不能通过 SSH 登录的，这是比较特殊的一个地方，另一个地方是：Kafka 集群基本都是三个以上的 Broker，它的连接地址往往是三台以上的主机+端口号，这是另一个比较特殊的地方。</p>
+<p>通常，通过 SSH Tunnel 建立端口端口转发是首先会被想到的解决方案，但是，测试并没有成功，当然，这不代表这一方向有问题，只是还没有找到正确的端口转发方法。</p>
+<p>本文，我们使用专门的 Kafka 端口转发工具： <a target="_blank" rel="noopener" href="https://github.com/grepplabs/kafka-proxy">Kafka Proxy</a> ，本地安装的 Kafka GUI 工具是 <a target="_blank" rel="noopener" href="https://www.kafkatool.com/">Offset Explorer</a> ， 测试环境 如下：</p>
+</div><div class="hbe-preview-end"><span>试读结束</span></div><div class="hbe hbe-content">
+    <form id="hbeForm" class="hbe hbe-form">
+      <div class="hbe hbe-input hbe-input-default">
+      <div class="hbe-qrcode-field"><img class="hbe-qrcode not-gallery-item" src="&#x2F;images&#x2F;profile&#x2F;wechat-qrcode.jpg" alt="QR code"><input class="hbe hbe-input-field hbe-input-field-default" type="password" id="hbePass" placeholder="在此输入文章密码..."></div>
+      <label class="hbe hbe-input-label hbe-input-label-default" for="hbePass">
+        <span class="hbe hbe-input-label-content hbe-input-label-content-default">本文为付费阅读内容，扫描下方二维码，关注作者微信公众号：“十万公里通票”，搜索文章《2024年度付费文章》，付费后可在文章中获得解锁密码。</span>
+      </label>
+    </div>
+      <button class="hbe hbe-button button is-small is-size-7" type="submit">解锁全文</button>
+      <div class="hbe hbe-error" role="alert" aria-live="polite"></div>
+    </form>
+  </div>
+</div>
+<script data-pjax>(function(){var f=document.getElementById("hbePass");if(f){var focus=f.focus;f.focus=function(){focus.call(f,{preventScroll:true});};}}());</script><script data-pjax>(function(){if(window.__hbeToc){return;}window.__hbeToc=true;window.addEventListener("hexo-blog-decrypt",function(){if(!document.querySelector("#toc .menu")){return;}document.querySelectorAll("#toc .menu").forEach(function(m){var c=m.cloneNode(true);c.querySelectorAll("a[data-href]").forEach(function(a){a.setAttribute("href",a.getAttribute("data-href"));a.removeAttribute("data-href");});m.replaceWith(c);});var s=document.createElement("script");s.src="/js/toc.js";document.body.appendChild(s);});}());</script><script data-pjax src="/lib/hbe.a3b9f59caa.js"></script><link href="/css/hbe.style.css" rel="stylesheet" type="text/css"><span hidden data-yearly-password="2024"></span><script data-pjax src="&#x2F;js&#x2F;yearly_password.js"></script></div><div class="article-licensing box"><div class="licensing-title"><p>如何连通私有子网中的 MSK / Kafka 集群？</p><p><a href="https://laurence.enlightgram.com/aws/connect-private-msk-kafka/">https://laurence.enlightgram.com/aws/connect-private-msk-kafka/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2024-04-16</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Kafka/">Kafka</a><a class="link-muted mr-2" rel="tag" href="/tags/MSK/">MSK</a><a class="link-muted mr-2" rel="tag" href="/tags/%E4%BB%A3%E7%90%86/">代理</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/flink/flink-cdc-debezium-json-format/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Flink CDC 的 debezium-json 格式和 debezium 原生格式是一回事吗？</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/flink/flink-sql-debezium-json/"><span class="level-item">Flink SQL：debezium-json 格式的表一定是数据库的 CDC 数据吗？</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><!--!--></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

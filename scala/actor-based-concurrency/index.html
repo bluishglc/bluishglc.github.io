@@ -1,0 +1,783 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>基于Actor的并发方案 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="前言 本文原文标题：《The Neophyte’s Guide to Scala Part 14: The Actor Approach to Concurrency》，作者： Daniel Westheide , 原文链接： http ://danielwestheide.com/blog/2013/02/27/the-neophytes-guide-to-scala-part-14-the-a"><meta property="og:type" content="article"><meta property="og:title" content="基于Actor的并发方案"><meta property="og:url" content="https://laurence.enlightgram.com/scala/actor-based-concurrency/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="前言 本文原文标题：《The Neophyte’s Guide to Scala Part 14: The Actor Approach to Concurrency》，作者： Daniel Westheide , 原文链接： http ://danielwestheide.com/blog/2013/02/27/the-neophytes-guide-to-scala-part-14-the-a"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/profile/thumbnail.png"><meta property="article:published_time" content="2016-11-14T15:36:45.000Z"><meta property="article:modified_time" content="2026-11-11T03:37:39.387Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="并发"><meta property="article:tag" content="Scala"><meta property="article:tag" content="Actor"><meta property="article:tag" content="Akka"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/profile/thumbnail.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/scala/actor-based-concurrency/"},"headline":"基于Actor的并发方案","image":["https://laurence.enlightgram.com/images/profile/thumbnail.png"],"datePublished":"2016-11-14T15:36:45.000Z","dateModified":"2026-11-11T03:37:39.387Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"前言 本文原文标题：《The Neophyte’s Guide to Scala Part 14: The Actor Approach to Concurrency》，作者： Daniel Westheide , 原文链接： http ://danielwestheide.com/blog/2013/02/27/the-neophytes-guide-to-scala-part-14-the-a"}</script><link rel="canonical" href="https://laurence.enlightgram.com/scala/actor-based-concurrency/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">基于Actor的并发方案</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Scala/">Scala</a></span><span class="level-item">发表于：<time dateTime="2016-11-14T15:36:45.000Z" title="2016-11-14 07:36:45">2016-11-14</time></span><span class="level-item">阅读用时：35 分钟 (约 5219 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p><strong>前言</strong> </p>
+<p>本文原文标题：《The Neophyte’s Guide to Scala Part 14: The Actor Approach to Concurrency》，作者： <a target="_blank" rel="noopener" href="http://danielwestheide.com/">Daniel Westheide</a> , 原文链接： http :&#x2F;&#x2F;danielwestheide.com&#x2F;blog&#x2F;2013&#x2F;02&#x2F;27&#x2F;the-neophytes-guide-to-scala-part-14-the-actor-approach-to-concurrency.html, 本文是作者撰写的《Scala初学者指南》系列文章里的第14篇，是对Scala的Actor编程模型和Akka的一个入门介绍，在征得作者授权之后，翻译为中文发表在我的技术博客上。本文原文链接: <a href="https://laurence.enlightgram.com/scala/actor-based-concurrency/">https://laurence.enlightgram.com/scala/actor-based-concurrency/</a> 转载请注明出处！</p>
+<p>相关阅读： <a href="/scala/actor-error-handling/">Actor系统的错误处理</a> | <a href="/scala/akka-notes/">一份关于AKKA的初步的琐碎的笔记</a> </p>
+<hr>
+<p><strong>目录</strong> </p>
+<p><strong>正文</strong> </p>
+<p>在前面几篇关于如何利用Scala 类 型系统大幅提升灵活性和编译期安全性的文章之后，我们现在重新回到这个系列早期探讨过的一个话题：Scala如何处理并发。我们前面介绍过组合使用 <code>Future</code> 进行异步处理的方案，这个方案能很好地应对诸多问题，但是，它不是Scala提供的唯一方案，Scala处理并发的另一块基石是“Actor模型”，它提供了一种基于进程间消息传递的并发方案。Actor并不是新概念，最知名的实现是在Erlang上，Scala核心库很早就有自己的Actor实现了，但是在Scala2.11版本之后，它面临被废弃的命运，因为它将被Akka提供的Actor实现所取代，Akka作为Scala事实上的Actor标准已经很久了。本文你将了解到Akka Actor模型的理念并学习如何使用Akka工具箱进行 基础编程 ，我们不打算深入地讨论Akka Actor的所有内容，所以，和本系列前面的多数文章不同，本文是为了让你了解一下Akka的理念，激发你对它的兴趣。</p>
+<p>#共享可变状态的问题</p>
+<p>当前主流的并发解决方案是“共享可变状态”（ Shared Mutable State），即：大量有状态的对象，它们的状态可以被应用程序的很多地方改变，每处修改都是在自己的线程上进行的。这类方案下代码通常会遍布读&#x2F;写锁，防止多个线程同时修改，以保证对象状态的改变是可控的。同时，我们还要尽量避免锁住太大的代码块，因为这会大幅度的削弱程序的性能。</p>
+<p>#Actor模型</p>
+<p>广泛使用的“共享可变状态”方案需要你时刻谨记你的代码要在并发场景下运行，你必须从头到尾用并发的方式去设计和编写你的应用，以后你将很难再为其添加支持。Actor编程模型致力于避免上述的所有问题，它允许你编写易读的高性能并发代码。</p>
+<p>Actor模型的思想是：把你的应用程序看作是由许多轻量的被称之为“Actor”的实体组成的，每个Actor只负责一个很小的任务，职责单一且清晰，复杂的业务逻辑会通过多个Actor之间相互协作来完成，比如委派任务给其他的Actor或者传递消息给协作者。</p>
+<p>#Actor系统</p>
+<p>Actor是种可怜的“生物”，它们不能独自存活。Akka中的每一个Actor都是由一个Actor系统（Actor System）来创建和维护的。一个Actor系统会提供一整套辅助功能，但是现在我们先不用关心这些。让我们从示例代码开始，要运行它们需要在基于Scala 2.10的SBT项目里添加如下的resolver和dependency：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">resolvers += &quot;Typesafe Releases&quot; at &quot;http://repo.typesafe.com/typesafe/releases&quot;</span><br><span class="line">libraryDependencies += &quot;com.typesafe.akka&quot; %% &quot;akka-actor&quot; % &quot;2.2.3&quot;</span><br></pre></td></tr></table></figure>
+
+<p>现在，让我们来创建一个ActorSystem，它将是所有用户定义的Actor的宿主环境。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> akka.actor.<span class="type">ActorSystem</span></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">Barista</span> <span class="keyword">extends</span> <span class="title">App</span> </span>&#123;</span><br><span class="line">  <span class="keyword">val</span> system = <span class="type">ActorSystem</span>(<span class="string">&quot;Barista&quot;</span>)</span><br><span class="line">  system.shutdown()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们创建了一个ActorSystem实例，把它命名为“Barista”（咖啡师），我们将以”购买和制作咖啡”这个场景来讲解，这是我们在本系列较早一篇文章 <a target="_blank" rel="noopener" href="http://danielwestheide.com/blog/2013/01/09/the-neophytes-guide-to-scala-part-8-welcome-to-the-future.html">composable futures</a> 中提到过的例子。程序的最后，作为一个好市民，当我们不再使用这个ActorSystem时，我们要记得关闭它。</p>
+<p>#定义Actor</p>
+<p>你的应用程序是由几十个还是几百万个Actor来组成取决于你的用例，但是Akka完全有能力处理百万级别数量的Actor，你可能觉得创建这么多Actor一定是疯了，但实际上， <strong>Actor和线程之间并不是一一对应的关系</strong> ，这一点非常重要，否则系统的内存很快就会被耗光的。由于Actor的非阻塞特性，一个线程可以为不同的Actor服务，Akka（译者注：具体地说是Dispatcher)会让线程在不同的Actor之间切换，依据是当前谁有消息需要被处理就分配线程给它。为了了解实际发生了什么，让我们首先创建一个简单的Actor： <code>Barista</code> ，它负责接收咖啡订单制作咖啡，我们只是简单地让它打印一条消息来表示它完成了咖啡订单的处理：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">sealed</span> <span class="class"><span class="keyword">trait</span> <span class="title">CoffeeRequest</span></span></span><br><span class="line"><span class="keyword">case</span> <span class="class"><span class="keyword">object</span> <span class="title">CappuccinoRequest</span> <span class="keyword">extends</span> <span class="title">CoffeeRequest</span></span></span><br><span class="line"><span class="keyword">case</span> <span class="class"><span class="keyword">object</span> <span class="title">EspressoRequest</span> <span class="keyword">extends</span> <span class="title">CoffeeRequest</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> akka.actor.<span class="type">Actor</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Barista</span> <span class="keyword">extends</span> <span class="title">Actor</span> </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">receive</span> </span>= &#123;</span><br><span class="line">    <span class="keyword">case</span> <span class="type">CappuccinoRequest</span> =&gt; println(<span class="string">&quot;I have to prepare a cappuccino!&quot;</span>)</span><br><span class="line">    <span class="keyword">case</span> <span class="type">EspressoRequest</span> =&gt; println(<span class="string">&quot;Let&#x27;s prepare an espresso.&quot;</span>)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>首先，我们要定义Actor能理解的消息类型。如果消息有各种参数，通常我们会使用case class来封装消息并在Actor之间传递它们。如果消息没有参数，就简单地使用case object就可以了,就像我们这里写的一样。任何情况下，要确保你的消息是不可变的，否则出现糟糕的后果。接下来，我们看一下 <code>Barista</code> 类，它是一个具体类，继承自 <code>Actor</code> 特质，这个特质定义了一个方法 <code>receive</code> ,它返回一个 <code>Receive</code> 类型的值。 <code>Receive</code> 是类型 <code>PartialFunction[Any, Unit]</code> 的一个别名。</p>
+<p>#消息处理</p>
+<p><code>receive</code> 方法的含义是什么呢？它的返回类型 <code>PartialFunction[Any, Unit]</code> 可能会让你觉得古怪。</p>
+<p>简单地说， <code>receive</code> 方法返回的这个偏函数代表着这个Actor对传递给它的所有消息的处理逻辑。无论什么时候，当你系统的其他部分（另外一个Actor或者其他什么东西）给这个Actor发送消息时，Akka最终都会通过调用这个Actor的 <code>receive</code> 方法所返回的这个偏函数来处理消息，在调用时会把这条消息作为这个偏函数的参数传递它。</p>
+<p>##副作用</p>
+<p>在处理消息的时候， <strong>你可以让Actor做任何你想做的事情，但是，它就是不能有返回值</strong> ！为什么？因为偏函数限定了返回类型只能是 <code>Unit</code> ,我们曾经强调在函数式编程里应该总是尽量地使用纯函数，所以这里可能会让你感到有些意外。对于一个并发编程模型来说，这其实是合理的，Actor接收的每一条消息都是隔离处理的，是一条一条进行的，并不需要同步或锁机制。那些可能出现副作用的地方都会以一种可控的方式去处理。</p>
+<p>##非类型化</p>
+<p>偏函数的另一个副作用是它所期望的参数类型 <code>Any</code> ，也就是消息是非类型化的，这在拥有如此强大类型系统的Scala里看上去让人困惑。非类型化配合一些重要的设计决策可以让我们做很多事情，比如转发消息给其他的Actor，负载均衡或者代理Actor从而避免发送者了解过多的细节。从实践来看，偏函数里代表消息的参数没有类型化通常不是问题，如果你使用的是强类型化的消息，你就使用模式匹配处理对应类型的消息就可以了，就像我们前面代码里做的那样。但是有些时候，弱类型的Actor确实会导致糟糕的Bug。如果你习惯并高度依赖强类型系统，你可以看一下Akka还处于实验阶段的特性：Typed Channels。</p>
+<p>##异步和非阻塞</p>
+<p>我前面提到Akka“最终”会让你的Actor去处理发送给它的消息。这句话的意思是：消息的发送和处理完成是一个异步的非阻塞的过程。发送方不会一直被阻塞到接收方处理完消息，它会直接继续它自己的工作，发送方可能会期望从处理方那里得到一个反馈消息，但也许它根本不关心消息的处理结果。当某些组件发送一条消息给一个Actor时，真正发生的事情是：这个消息被投递给了这个Actor的 <code>Mailbox</code> ， 我们基本上可以把Mailbox当成一个对列。把一条消息放到一个Actor的Mailbox的过程也是非阻塞的，比如：发送方不会一直等待消息进入接收方的Mailbox对列。</p>
+<p><code>Dispatcher</code> 会通知Actor它的Mailbox有一条新消息，如果这个Actor正在处理着手头上的消息， <code>Dispatcher</code> 会从当前的执行上下文里选一个可用的线程，一旦Actor处理完前面的消息，它会让Actor在这个准备好的线程上从Mailbox里取出这条消息去处理。Actor会阻塞分配给它的线程直到它开始处理一条消息，但这并不会阻塞消息的发送方，这意味着一个耗时较长的操作会影响整体的性能，因为所有其他的Actor不得不被安排从剩余线程中选取一个去处理消息（译者注：增加了线程调度的开销）。</p>
+<p>因此，你的Receive偏函数要遵从一个核心的准则：尽可能地缩短它的执行时间（译者注：可以把任务分解为更小的单元委派更粒度更细的Actor去执行）。更重要的是，在你的消息处理代码里尽量地避免调用会造成阻塞的代码。当然，有些事情是你无法完全避免的，比如，当今主流的数据库驱动基本都是阻塞的，如果你想让你的程序基于Actor去持久化或查询数据时，你就会面临这样的问题。现在已经有一些应对这类问题的方案了，但是作为一偏介绍性的文章，本文先不涉及。</p>
+<p>#创建一个Actor</p>
+<p>定义好Actor之后，我们如何实际地使用我们的 <code>Barista</code> 呢？为此，我需要为创建 <code>Barista</code> 的一个实例。你可能会用下面这种常规的做法，即通过调用 构造函数 来实例化一个Actor：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> barista = <span class="keyword">new</span> <span class="type">Barista</span> <span class="comment">// will throw exception</span></span><br></pre></td></tr></table></figure>
+
+<p>这样不行！Akka会用一个 <code>ActorInitializationException</code> 异常回敬你。事情是这样的：为了能让Actor良好地工作，你的Actor必须交给 <code>ActorSystem</code> 和它的组件来托管。因此，你需要通过ActorSystem来帮你创建这个实例：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> akka.actor.&#123;<span class="type">ActorRef</span>, <span class="type">Props</span>&#125;</span><br><span class="line"><span class="keyword">val</span> barista: <span class="type">ActorRef</span> = system.actorOf(<span class="type">Props</span>[<span class="type">Barista</span>], <span class="string">&quot;Barista&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>定义在AcotorSysytem上 <code>actorOf</code> 方法期望一个 <code>Props</code> 实例，针对新建的Actor的配置信息都会封装到这个 <code>Props</code> 实例里，另外，方法也给这个Actor起了一个名称。我们使用的是创建Props实例的最简单的方式，也就是通过调用Props的伴生对象的apply方法来实现的，同时指定它的类型参数。Akka随后将根据给定的类型调用它的构造函数来创建一个新的Actor实例。</p>
+<p>注意： <code>actorOf</code> 返回的对象类型不是 <code>Barista</code> 而是 <code>ActorRef</code> （译者注：Akka对Actor的托管体现在很多地方，前面提到的你不能直接创建一个Actor实例是一方面，此处，创建之后你得到的也不是Actor实例本身而是一个 <code>ActorRef</code> ）。Actor从不会与其他Actor直接通信，因此没有必要获取一个Actor实例的直接引用，而是让Actor或其他组件获取那些需要发送消息的Actor的 <code>ActorRef</code> 。</p>
+<p>因此, <code>ActorRef</code> 扮演了Actor实例代理的角色，这样做会带来很多好处，因为一个 <code>ActorRef</code> 可以被序列化，我们可以让它代理一个远程机器上的Actor，至于 <code>ActorRef</code> 后面的这个Actor是本地JVM里的还是一个远程机器上的，这对使用者来说都是透明的，我们把这种特性称作“位置透明”。</p>
+<p>请记住， <code>ActorRef</code> 不是类型参数化的，任何 <code>ActorRef</code> 都可以互相交换，以便可以让你发送任意的消息给任意的 <code>ActorRef</code> 。这种设计我们前面也提到了，它让你可以简单地修改你的Actor系统的网络拓扑而不需要对发送方做任何修改。</p>
+<p>#发送消息</p>
+<p>现在我们已经创建了一个Barista的actor实例并获得了指向它的引用 <code>ActorRef</code> 。我们现在可以给它发送消息了。这是通过调用 <code>ActorRef</code> 的 <code>!</code> 方法实现的：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">barista ! <span class="type">CappuccinoRequest</span></span><br><span class="line">barista ! <span class="type">EspressoRequest</span></span><br><span class="line">println(<span class="string">&quot;I ordered a cappuccino and an espresso&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>用 <code>!</code> 方法是一个“调用之后不管”的操作：你告诉Barista你想要一杯卡布奇诺，但是你不会一直等着它响应。这是Akka里面Actor最常见的交互方式。通过调用 <code>!</code> ，你告诉Akka把你的消息加入到收信人的邮箱队列里，如前面所述，这是非阻塞的，作为接收方的Actor最终一定会处理你的消息。由于异步的特性，上述代码的执行循序是不确定的，它可能会是这样一种结果：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">I have to prepare a cappuccino!</span><br><span class="line">I ordered a cappuccino and an espresso</span><br><span class="line">Let&#x27;s prepare an espresso.</span><br></pre></td></tr></table></figure>
+
+<p>即使我们是先给Barista的Mailbox连续发送了两条消息,但是描述顾客点完咖啡信息去先于espresso的制作完成前打印到了控制台。</p>
+<p>#消息应答</p>
+<p>有时候，你可能想通过给消息发送者发送一个应答消息。为了让你能那样做,Actor有一个叫 <code>sender</code> 的方法，它返回最后一条消息的发送方的 <code>ActorRef</code> 。</p>
+<p>但是它是怎么知道发送者是谁的呢？答案可以从 <code>!</code> 方法的函数签名看出来，它的第二个参数是一个隐式参数：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">!</span></span>(message: <span class="type">Any</span>)(<span class="keyword">implicit</span> sender: <span class="type">ActorRef</span> = <span class="type">Actor</span>.noSender): <span class="type">Unit</span></span><br></pre></td></tr></table></figure>
+
+<p>在调用某个Actor的 <code>!</code> 方法时，这个Actor的 <code>ActorRef</code> 会作为隐士参数sender传递过去。让我们改变一下 <code>Barista</code> 以便于它在工作前先发送一条账单消息 <code>Bill</code> 给 <code>CoffeeRequest</code> 的发送者：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> <span class="class"><span class="keyword">class</span> <span class="title">Bill</span>(<span class="params">cents: <span class="type">Int</span></span>)</span></span><br><span class="line"><span class="keyword">case</span> <span class="class"><span class="keyword">object</span> <span class="title">ClosingTime</span></span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Barista</span> <span class="keyword">extends</span> <span class="title">Actor</span> </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">receive</span> </span>= &#123;</span><br><span class="line">    <span class="keyword">case</span> <span class="type">CappuccinoRequest</span> =&gt;</span><br><span class="line">      sender ! <span class="type">Bill</span>(<span class="number">250</span>)</span><br><span class="line">      println(<span class="string">&quot;I have to prepare a cappuccino!&quot;</span>)</span><br><span class="line">    <span class="keyword">case</span> <span class="type">EspressoRequest</span> =&gt;</span><br><span class="line">      sender ! <span class="type">Bill</span>(<span class="number">200</span>)</span><br><span class="line">      println(<span class="string">&quot;Let&#x27;s prepare an espresso.&quot;</span>)</span><br><span class="line">    <span class="keyword">case</span> <span class="type">ClosingTime</span> =&gt; context.system.shutdown()</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上述代码里我们引入了一个新的消息 <code>ClosingTime</code> , <code>Barista</code> 应对这条消息的做法就是关闭ActorSystem，所有的Actor都可以从 <code>ActorContext</code> 获取ActorSystem。</p>
+<p>现在，让我们引入第二个Actor，它代表“顾客”。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> <span class="class"><span class="keyword">object</span> <span class="title">CaffeineWithdrawalWarning</span></span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Customer</span>(<span class="params">caffeineSource: <span class="type">ActorRef</span></span>) <span class="keyword">extends</span> <span class="title">Actor</span> </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">receive</span> </span>= &#123;</span><br><span class="line">    <span class="keyword">case</span> <span class="type">CaffeineWithdrawalWarning</span> =&gt; caffeineSource ! <span class="type">EspressoRequest</span></span><br><span class="line">    <span class="keyword">case</span> <span class="type">Bill</span>(cents) =&gt; println(<span class="string">s&quot;I have to pay <span class="subst">$cents</span> cents, or else!&quot;</span>)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这是一个咖啡成瘾的顾客，一旦咖啡因摄入量减少，他就要买咖啡喝。我们给 <code>Customer</code> 的构造函数传递一个 <code>ActorRef</code> ，即 <code>caffeineSource</code> ， <code>Customer</code> 并不知道这个 <code>ActorRef</code> 指向一个 <code>Barista</code> ，但它知道它可以发送一个 <code>CoffeeRequest</code> 消息给它，仅此而已。</p>
+<p>最后，让我们实例化这两个Actor,并给 <code>Customer</code> 发送一个 <code>CaffeineWithdrawalWarning</code> 消息（译者注：这条消息的意思是：咖啡因摄入量减少，发出警告，言下之意就是顾客的身体告诉顾客：“你该喝咖啡了！”），让程序跑起来：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> barista = system.actorOf(<span class="type">Props</span>[<span class="type">Barista</span>], <span class="string">&quot;Barista&quot;</span>)</span><br><span class="line"><span class="keyword">val</span> customer = system.actorOf(<span class="type">Props</span>(classOf[<span class="type">Customer</span>], barista), <span class="string">&quot;Customer&quot;</span>)</span><br><span class="line">customer ! <span class="type">CaffeineWithdrawalWarning</span></span><br><span class="line">barista ! <span class="type">ClosingTime</span></span><br></pre></td></tr></table></figure>
+
+<p>在这里，对于这个 <code>Customer</code> ,我们使用了一个不同的工厂方法来创建一个 <code>Props</code> 实例：我们传入Actor的类型以及它的构造函数所需要的参数。我们这样做是因为我们想把 <code>Barista</code> 的 <code>ActorRef</code> 传递给 <code>Customer</code> 构造函数。发送 <code>CaffeineWithdrawalWarning</code> 消息给咖啡因成瘾的顾客，顾客的反应是立即买一杯浓咖啡，即发送一条 <code>EspressoRequest</code> 消息给咖啡师，后者则会发送一个账单消息给顾客。相应的输出可能是这样的：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Let&#x27;s prepare an espresso.</span><br><span class="line">I have to pay 200 cents, or else!</span><br></pre></td></tr></table></figure>
+
+<p>首先，在处理 <code>EspressoRequest</code> 消息的时候， <code>Barista</code> 会发一个消息给sender,也就是 <code>Customer</code> ，但是，这个操作并不会阻塞它后面的操作。 <code>Barista</code> 可以继续处理 <code>EspressoRequest</code> ，就如像控制台打印的那样。很快， <code>Customer</code> 会处理 <code>Bill</code> 消息，然后打印到控制台。</p>
+<p>#问询（Ask）机制</p>
+<p>有时候，给一个Actor发送消息然后期待返回一个响应消息这种模式并不适用于某些场景，最常见的例子是当某些组件并不是Actor但又需要和Actor交互时，它们就无法接收来自Actor的消息。对于这种情况，Akka有一种 <code>Ask</code> 机制，它在基于Actor的并发和基于Future的并发之间提供一座桥梁，从客户端的角度看，它是这样工作的：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> akka.pattern.ask</span><br><span class="line"><span class="keyword">import</span> akka.util.<span class="type">Timeout</span></span><br><span class="line"><span class="keyword">import</span> scala.concurrent.duration._</span><br><span class="line"><span class="keyword">implicit</span> <span class="keyword">val</span> timeout = <span class="type">Timeout</span>(<span class="number">2.</span>second)</span><br><span class="line"><span class="keyword">implicit</span> <span class="keyword">val</span> ec = system.dispatcher</span><br><span class="line"><span class="keyword">val</span> f: <span class="type">Future</span>[<span class="type">Any</span>] = barista2 ? <span class="type">CappuccinoRequest</span></span><br><span class="line">f.onSuccess &#123;</span><br><span class="line">  <span class="keyword">case</span> <span class="type">Bill</span>(cents) =&gt; println(<span class="string">s&quot;Will pay <span class="subst">$cents</span> cents for a cappuccino&quot;</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>首先，你要引入对ask语法的支持（即 <code>import akka.pattern.ask</code> )，同时针对 <code>?</code> 方法返回的 <code>Future</code> 创建一个隐式变量timeout, <code>Future</code> 还需要一个 <code>ExecutionContext</code> 。这里我们只简单地使用ActorSystem默认的dispatcher，它同时也是一个 <code>ExecutionContext</code> 。</p>
+<p>如你所见，返回的Future是非类型化的，它是一个 <code>Future[Any]</code> 。这也不奇怪，既然它接收的是来自某个Actor的消息，这些Actor（ActorRef）尚未类型化，返回的Future又怎么能类型化呢？对于被问询的Actor来说，这和发送消息给被处理的消息的发送方并没有什么不同，所以我们在使用Ask机制从 <code>Barista</code> 处获取答复时， <code>Barista</code> 本身不需要做任何改动。一旦被询问的Actor发送了反馈消息给消息的发送方，返回的 <code>Future</code> 的 <code>Promise</code> 就完成了。</p>
+<p>总的来说，主动告知要比问询好，因为它耗费的资源更少，Akka不是给“礼貌”的人准备的。但是，确实有些场景你只能使用问询的方式，但那也没有什么，Akka同样可以工作地很好。</p>
+<p>#有状态的Actor</p>
+<p>每个Actor都可以维护一个内部的状态，但不是必须的。有时候，系统的整体状态很大一部分是由那些在Actor之间传递的不可变的消息所携带的信息组成的。一个Actor一次只处理一条消息，这个过程中它可能会修改它的内部状态，这意味着Actor的内部状态是可变的，但是既然每一条消息是互相隔离处理的，那么Actor的内部状态就不会因为并发而被搞乱。为了说明这一点，让我们把无状态的 <code>Barista</code> 改造成有状态的，我们给它添加一个订单计数器：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Barista</span> <span class="keyword">extends</span> <span class="title">Actor</span> </span>&#123;</span><br><span class="line">  <span class="keyword">var</span> cappuccinoCount = <span class="number">0</span></span><br><span class="line">  <span class="keyword">var</span> espressoCount = <span class="number">0</span></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">receive</span> </span>= &#123;</span><br><span class="line">    <span class="keyword">case</span> <span class="type">CappuccinoRequest</span> =&gt;</span><br><span class="line">      sender ! <span class="type">Bill</span>(<span class="number">250</span>)</span><br><span class="line">      cappuccinoCount += <span class="number">1</span></span><br><span class="line">      println(<span class="string">s&quot;I have to prepare cappuccino #<span class="subst">$cappuccinoCount</span>&quot;</span>)</span><br><span class="line">    <span class="keyword">case</span> <span class="type">EspressoRequest</span> =&gt;</span><br><span class="line">      sender ! <span class="type">Bill</span>(<span class="number">200</span>)</span><br><span class="line">      espressoCount += <span class="number">1</span></span><br><span class="line">      println(<span class="string">s&quot;Let&#x27;s prepare espresso #<span class="subst">$espressoCount</span>.&quot;</span>)</span><br><span class="line">    <span class="keyword">case</span> <span class="type">ClosingTime</span> =&gt; context.system.shutdown()</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们引入了两个变量， <code>cappuccinoCount</code> 和 <code>expressoCount</code> 分别代表两类咖啡的订单数量。这是我们在本系列文章里第一次使用 <code>var</code> ，虽然在函数式编程里我们应该尽量地避免使用 <code>var</code> ，但这是唯一让你的Actor携带”状态”的做法。既然每条消息都是隔离处理的，上述的代码和在非Actor环境里使用 <code>AtomicInteger</code> 效果上是一样的。</p>
+<p>#小结</p>
+<p>到这里，我们关于使用Actor模型进行并发编程以及如何在Akka中使用这种编程范式的介绍就要结束了。我们只是泛泛地介绍了一下，忽略了Akka里一些重要的概念，我希望这能让你对这种并发编程方法先有一个初步的了解，并激发出你的学习兴趣。在下一篇文章里，我会增强我们的例子，给它添加一些有意义的行为以便介绍更多关于Akka Actor的东西，比如在一个Actor系统里是如何进行错误处理的。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>基于Actor的并发方案</p><p><a href="https://laurence.enlightgram.com/scala/actor-based-concurrency/">https://laurence.enlightgram.com/scala/actor-based-concurrency/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2016-11-14</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E5%B9%B6%E5%8F%91/">并发</a><a class="link-muted mr-2" rel="tag" href="/tags/Scala/">Scala</a><a class="link-muted mr-2" rel="tag" href="/tags/Actor/">Actor</a><a class="link-muted mr-2" rel="tag" href="/tags/Akka/">Akka</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/scala/actor-error-handling/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Actor系统的错误处理</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/scala/scala-parentheses-and-curly-braces/"><span class="level-item">Scala之小括号和花括号（Parentheses &amp; Crurly Braces）</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><!--!--></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

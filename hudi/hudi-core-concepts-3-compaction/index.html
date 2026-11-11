@@ -1,0 +1,1033 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>探索 Apache Hudi 核心概念 (3) - Compaction - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="Compaction是MOR表的一项核心机制，Hudi利用Compaction将MOR表产生的Log File合并到新的Base File中。本文我们会通过Notebook介绍并演示Compaction的运行机制，帮助您理解其工作原理和相关配置。 运行 Notebook 本文使用的Notebook是： 《Apache Hudi Core Conceptions (4) - MOR: Compact"><meta property="og:type" content="article"><meta property="og:title" content="探索 Apache Hudi 核心概念 (3) - Compaction"><meta property="og:url" content="https://laurence.enlightgram.com/hudi/hudi-core-concepts-3-compaction/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="Compaction是MOR表的一项核心机制，Hudi利用Compaction将MOR表产生的Log File合并到新的Base File中。本文我们会通过Notebook介绍并演示Compaction的运行机制，帮助您理解其工作原理和相关配置。 运行 Notebook 本文使用的Notebook是： 《Apache Hudi Core Conceptions (4) - MOR: Compact"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/hudi/hudi-core-concepts-3-compaction/2.jpeg"><meta property="article:published_time" content="2023-04-10T17:14:06.000Z"><meta property="article:modified_time" content="2026-11-11T03:37:39.337Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Hudi"><meta property="article:tag" content="日志"><meta property="article:tag" content="Compaction"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/hudi/hudi-core-concepts-3-compaction/2.jpeg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/hudi/hudi-core-concepts-3-compaction/"},"headline":"探索 Apache Hudi 核心概念 (3) - Compaction","image":["https://laurence.enlightgram.com/images/hudi/hudi-core-concepts-3-compaction/2.jpeg"],"datePublished":"2023-04-10T17:14:06.000Z","dateModified":"2026-11-11T03:37:39.337Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"Compaction是MOR表的一项核心机制，Hudi利用Compaction将MOR表产生的Log File合并到新的Base File中。本文我们会通过Notebook介绍并演示Compaction的运行机制，帮助您理解其工作原理和相关配置。 运行 Notebook 本文使用的Notebook是： 《Apache Hudi Core Conceptions (4) - MOR: Compact"}</script><link rel="canonical" href="https://laurence.enlightgram.com/hudi/hudi-core-concepts-3-compaction/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">探索 Apache Hudi 核心概念 (3) - Compaction</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Hudi/">Hudi</a></span><span class="level-item">发表于：<time dateTime="2023-04-10T17:14:06.000Z" title="2023-04-10 10:14:06">2023-04-10</time></span><span class="level-item">阅读用时：22 分钟 (约 3266 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>Compaction是MOR表的一项核心机制，Hudi利用Compaction将MOR表产生的Log File合并到新的Base File中。本文我们会通过Notebook介绍并演示Compaction的运行机制，帮助您理解其工作原理和相关配置。</p>
+<h3 id="1-运行-Notebook"><a href="#1-运行-Notebook" class="headerlink" title="1. 运行 Notebook"></a>1. 运行 Notebook</h3><p>本文使用的Notebook是： <a target="_blank" rel="noopener" href="https://github.com/bluishglc/apache-hudi-core-conceptions/blob/master/4-mor-compaction.ipynb">《Apache Hudi Core Conceptions (4) - MOR: Compaction》</a> ，对应文件是：4-mor-compaction.ipynb，请先修改Notebook中的环境变量 <code>S3_BUCKET</code> ，将其设为您自己的S3桶，并确保用于数据准备的Notebook： <a target="_blank" rel="noopener" href="https://github.com/bluishglc/apache-hudi-core-conceptions/blob/master/1-data-preparation.ipynb">《Apache Hudi Core Conceptions (1) - Data Preparation》</a> 已经至少执行过一次。Notebook使用的Hudi版本是 <code>0.12.1</code> ，Spark集群建议配置32 vCore &#x2F; 128 GB及以上。</p>
+<h3 id="2-核心概念"><a href="#2-核心概念" class="headerlink" title="2. 核心概念"></a>2. 核心概念</h3><p>Compaction负责定期将一个File Slice里的Base File和从属于它的所有Log File一起合并写入到一个新的Base File中（产生新的File Slice），唯有如此，MOR表的日志文件才不至于无限膨胀下去。以下是与Compaction有关的几项重要配置，在后面的介绍中我们会逐一介绍它们的作用：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">默认值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinline">hoodie.compact.inline</a></td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactscheduleinline">hoodie.compact.schedule.inline</a></td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinlinemaxdeltacommits">hoodie.compact.inline.max.delta.commits</a></td>
+<td align="left">5</td>
+</tr>
+</tbody></table>
+<h4 id="2-1-排期与执行"><a href="#2-1-排期与执行" class="headerlink" title="2.1. 排期与执行"></a>2.1. 排期与执行</h4><p>Compaction的运行机制包括：排期（Schedule）和执行（Execute）两个阶段。排期阶段的主要工作是划定哪些File Slices将参与Compaction，然后生成一个计划（Compaction Plan）保存到Timeline里，此时在Timeline里会出现一个名为 <code>compaction</code> 的Instant，状态是 <code>REQUESTED</code> ；执行阶段的主要工作是读取这个计划（Compaction Plan）并执行它，执行完毕后，Timeline中的 <code>compaction</code> 就会变成 <code>COMPLETED</code> 状态。</p>
+<h4 id="2-2-同步与异步"><a href="#2-2-同步与异步" class="headerlink" title="2.2. 同步与异步"></a>2.2. 同步与异步</h4><p>从运行模式上看，Compaction又分同步、异步以及半异步三种模式（“半异步”模式是本文使用的一种叫法，为的是和同步、异步两种模式的称谓对齐，Hudi官方文档对这一模式有介绍，但没有给出命名），它们之间的差异主要体现在从（达到规定阈值的某次）提交（ Commit ）到排期（Schedule）再到执行（Execute）三个阶段的推进方式上。在Hudi的官方文档中，交替使用了Sync&#x2F;Async和Inline&#x2F;Offline两组词汇来描述推进方式，这两组词汇是有微妙差异的，为了表述严谨，我们使用同步&#x2F;异步和立即&#x2F;另行这两组中文术语与之对应。以下是Compaction三种运行模式的详细介绍：</p>
+<ul>
+<li>同步模式（Inline Schedule，Inline Execute）</li>
+</ul>
+<p> <img src="/../../images/hudi/hudi-core-concepts-3-compaction/2.jpeg" alt="请添加图片描述"></p>
+<p>同步模式可概括为：立即排期，立即执行（Inline Schedule，Inline Execute）。在该模式下，当累积的增量提交（ <code>deltacommit</code> ）次数到达一个阈值时，会立即触发Compaction的排期与执行（排期和执行是连在一起的），这个阈值是由配置项 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinlinemaxdeltacommits"> <code>hoodie.compact.inline.max.delta.commits</code> </a> 控制的，默认值是 <code>5</code> ，即：默认情况下，每5次增量提交就会触发并执行一次Compaction。锁定同步模式的配置是：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">设定值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinline">hoodie.compact.inline</a></td>
+<td align="left">true</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactscheduleinline">hoodie.compact.schedule.inline</a></td>
+<td align="left">false</td>
+</tr>
+</tbody></table>
+<ul>
+<li>异步模式（Offline Schedule，Offline Execute）</li>
+</ul>
+<p> <img src="/../../images/hudi/hudi-core-concepts-3-compaction/3.jpeg" alt="请添加图片描述"></p>
+<p>异步模式可概括为：另行排期，另行执行（Offline Schedule，Offline Execute）。在该模式下，任何提交都不会直接触发和执行Compaction，除非使用了支持异步Compaction的Writer，否则用户需要自己保证有一个独立的进程或线程负责定期执行Compaction操作。Hudi提供了四种运行异步Compaction的方式：</p>
+<ol>
+<li><p>通过hudi-cli或提交Spark作业驱动异步Compaction</p>
+</li>
+<li><p>提交Flink作业驱动异步Compaction</p>
+</li>
+<li><p>在HoodieDeltaStreamer中配置并运行异步Compaction</p>
+</li>
+<li><p>在Spark Structured Streaming中配置并运行异步Compaction</p>
+</li>
+</ol>
+<p>在后面的测试用例中，我们将使用第一种方式演示如何进行异步的Compaction排期与执行。和同步模式一样，在异步模式下，同样是当增量提交（ <code>deltacommit</code> ）次数达到一定的阈值时才会触发排期，这个阈值依然是 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinlinemaxdeltacommits"> <code>hoodie.compact.inline.max.delta.commits</code> </a> 。</p>
+<p>异步模式面临的场景要比同步模式复杂一些，同步模式下，每次提交时都会检查累积的提交次数是否已达规定阈值，所以在同步模式下，每次排期涵盖的增量提交数量基本是固定的，就是阈值设定的次数，但是在异步模式下，由于发起排期和增量提交之间没有必然的协同关系，所以在发起排期时，Timeline中可能尚未积累到足够数量的增量提交，或者增量提交数量已经超过了规定阈值，如果是前者，不会产生排期计划，如果是后者，排期计划会将所有累积的增量提交涵盖进来。锁定异步模式的配置是：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">设定值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinline">hoodie.compact.inline</a></td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactscheduleinline">hoodie.compact.schedule.inline</a></td>
+<td align="left">false</td>
+</tr>
+</tbody></table>
+<ul>
+<li>半异步模式（Inline Schedule，Offline Execute）</li>
+</ul>
+<p> <img src="/../../images/hudi/hudi-core-concepts-3-compaction/4.jpeg" alt="请添加图片描述"></p>
+<p>半异步模式可概括为：立即排期，另行执行（Inline Schedule，Offline Execute），即：排期会伴随增量提交（ <code>deltacommit</code> ）自动触发，但执行还是通过前面介绍的四种异步方式之一去完成。锁定半异步模式的配置是：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">设定值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinline">hoodie.compact.inline</a></td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactscheduleinline">hoodie.compact.schedule.inline</a></td>
+<td align="left">true</td>
+</tr>
+</tbody></table>
+<h3 id="3-同步Compaction"><a href="#3-同步Compaction" class="headerlink" title="3. 同步Compaction"></a>3. 同步Compaction</h3><h4 id="3-1-关键配置"><a href="#3-1-关键配置" class="headerlink" title="3.1. 关键配置"></a>3.1. 关键配置</h4><p><a target="_blank" rel="noopener" href="https://github.com/bluishglc/apache-hudi-core-conceptions/blob/master/4-mor-compaction.ipynb">《Apache Hudi Core Conceptions (4) - MOR: Compaction》</a> 的第1个测试用例演示了同步Compaction的运行机制。测试用的数据表有如下几项关键配置：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">默认值</th>
+<th align="left">设定值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinline">hoodie.compact.inline</a></td>
+<td align="left">false</td>
+<td align="left">true</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactscheduleinline">hoodie.compact.schedule.inline</a></td>
+<td align="left">false</td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinlinemaxdeltacommits">hoodie.compact.inline.max.delta.commits</a></td>
+<td align="left">5</td>
+<td align="left">3</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecopyonwriterecordsizeestimate">hoodie.copyonwrite.record.size.estimate</a></td>
+<td align="left">1024</td>
+<td align="left">175</td>
+</tr>
+</tbody></table>
+<p>这些配置项在介绍概念时都已提及，通过这个测试用例将会看到它们组合起来的整体效果。</p>
+<h4 id="3-2-测试计划"><a href="#3-2-测试计划" class="headerlink" title="3.2. 测试计划"></a>3.2. 测试计划</h4><p>该测试用例会先后插入或更新三批数据，然后进行同步的Compaction排期和执行，过程中将重点观察时间线和文件布局的变化，整体测试计划如下表所示：</p>
+<table>
+<thead>
+<tr>
+<th align="center">步骤</th>
+<th align="left">操作</th>
+<th align="left">数据量（单分区）</th>
+<th align="left">文件系统</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1</td>
+<td align="left">Insert</td>
+<td align="left">96MB</td>
+<td align="left">+1 Base File</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td align="left">Update</td>
+<td align="left">788KB</td>
+<td align="left">+1 Log File</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td align="left">Update</td>
+<td align="left">1.2MB</td>
+<td align="left">+1 Log File +1 Compacted Base File</td>
+</tr>
+</tbody></table>
+<p><em>提示：我们将使用色块标识当前批次的Instant和对应存储文件，每一种颜色代表一个独立的File Slice。</em> </p>
+<h4 id="3-3-第1批次"><a href="#3-3-第1批次" class="headerlink" title="3.3. 第1批次"></a>3.3. 第1批次</h4><p>第1批次单分区写入96MB数据，Hudi将其写入到一个Parquet文件中，第一个File Group随之产生，它也是后续 Log File的Base File。需要注意的一个细节是：对于MOR表来说，只有进行Compaction的那次提交才会被称为“commit”，在Compaction之前的历次提交都被称作“deltacommit”，即使对于新建Base File写入数据的那次提交也是如此，就如同这里一样。</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-3-compaction/5.jpeg" alt="请添加图片描述"></p>
+<h4 id="3-4-第2批次"><a href="#3-4-第2批次" class="headerlink" title="3.4. 第2批次"></a>3.4. 第2批次</h4><p>第2批次更新了一小部分数据，Hudi将更新数据写入到了Log文件中，大小788KB，fileVersion是1，它从属于上一步生成的Parquet文件，即Parquet文件是它的Base File ，这个Log文件的fileId和尾部的时间戳（baseCommitTime）与Parquet文件是一样的。当前的Parquet文件和Log文件组成了一个File Slice。</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-3-compaction/6.jpeg" alt="请添加图片描述"></p>
+<h4 id="3-5-第3批次"><a href="#3-5-第3批次" class="headerlink" title="3.5. 第3批次"></a>3.5. 第3批次</h4><p>第3批次再次更新了一小部分数据，Hudi将更新数据又写入到一个Log文件中，大小1.2MB，fileVersion是2。与上一个Log文件一样，fileId和尾部的时间戳（baseCommitTime）与Parquet文件一致，所以它也是Parquet文件的Delta Log，且按Timeline排在上一个Log文件之后。当前的File Slice多了一个新的Log文件。但是，不同于第2批次，第3批次的故事到这里还没有结束，在该测试用例中，当前测试表的设置是：每三次deltacommit会触发一次Compaction，因此，第3次操作后就触发了第1次的Compaction操作:</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-3-compaction/7.jpeg" alt="请添加图片描述"></p>
+<p>于是，在Timeline上出现了一个commit（No.3），同时，在文件系统上，生成了一个新的96MB的Parquet文件，它是第一个Parquet文件连同它的两个Log文件重新压缩后得到的，这个新的Parquet文件fileId没变，但是instantTime变成了Compaction对应的commit时间，于是，在当前File Group里，第二个File Slice产生了，目前它还只有一个Base File，没有Log File。</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-3-compaction/8.jpeg" alt="请添加图片描述"></p>
+<h4 id="3-6-复盘"><a href="#3-6-复盘" class="headerlink" title="3.6. 复盘"></a>3.6. 复盘</h4><p>最后，让我们将此前的全部操作汇总在一起，重新看一下整体的时间线和最后的文件布局：</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-3-compaction/9.jpeg" alt="请添加图片描述"></p>
+<h3 id="4-异步Compaction"><a href="#4-异步Compaction" class="headerlink" title="4. 异步Compaction"></a>4. 异步Compaction</h3><h4 id="4-1-关键配置"><a href="#4-1-关键配置" class="headerlink" title="4.1. 关键配置"></a>4.1. 关键配置</h4><p><a target="_blank" rel="noopener" href="https://github.com/bluishglc/apache-hudi-core-conceptions/blob/master/4-mor-compaction.ipynb">《Apache Hudi Core Conceptions (4) - MOR: Compaction》</a> 的第2个测试用例演示了异步Compaction的运行机制。测试用的数据表有如下几项关键配置：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">默认值</th>
+<th align="left">设定值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinline">hoodie.compact.inline</a></td>
+<td align="left">false</td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactscheduleinline">hoodie.compact.schedule.inline</a></td>
+<td align="left">false</td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinlinemaxdeltacommits">hoodie.compact.inline.max.delta.commits</a></td>
+<td align="left">5</td>
+<td align="left">3</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecopyonwriterecordsizeestimate">hoodie.copyonwrite.record.size.estimate</a></td>
+<td align="left">1024</td>
+<td align="left">175</td>
+</tr>
+</tbody></table>
+<p>这些配置项在介绍概念时都已提及，通过这个测试用例将会看到它们组合起来的整体效果。</p>
+<h4 id="4-2-测试计划"><a href="#4-2-测试计划" class="headerlink" title="4.2. 测试计划"></a>4.2. 测试计划</h4><p>该测试用例会先后插入或更新三批数据，然后进行异步的Compaction排期和执行，过程中将重点观察时间线和文件布局的变化，整体测试计划如下表所示：</p>
+<table>
+<thead>
+<tr>
+<th align="center">步骤</th>
+<th align="left">操作</th>
+<th align="left">数据量（单分区）</th>
+<th align="left">文件系统</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1</td>
+<td align="left">Insert</td>
+<td align="left">96MB</td>
+<td align="left">+1 Base File</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td align="left">Update</td>
+<td align="left">788KB</td>
+<td align="left">+1 Log File</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td align="left">Update</td>
+<td align="left">1.2MB</td>
+<td align="left">+1 Log File</td>
+</tr>
+<tr>
+<td align="center">4</td>
+<td align="left">Offline Schedule</td>
+<td align="left">N&#x2F;A</td>
+<td align="left">N&#x2F;A</td>
+</tr>
+<tr>
+<td align="center">5</td>
+<td align="left">Offline Execute</td>
+<td align="left">96.15MB</td>
+<td align="left">+1 Compacted Base File</td>
+</tr>
+</tbody></table>
+<p>由于该测试用例的前三步操作与第3节（第1个测试用例）完全一致，所以不再赘述，我们会从第4步操作（Notebook的3.8节）开始解读。</p>
+<h4 id="4-3-异步排期"><a href="#4-3-异步排期" class="headerlink" title="4.3. 异步排期"></a>4.3. 异步排期</h4><p>在完成了和第3节完全一样的前三批操作后，时间线和文件系统的情形如下：</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-3-compaction/10.jpeg" alt="请添加图片描述"></p>
+<p>这和3.5节执行后的状况非常不同，没有发生Compaction，连排期也没有看到，因为我们关闭了 <a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinline"> <code>hoodie.compact.inline</code> </a> 。于是，在接下来的第4步操作中（Notebook的3.8节），我们通过 <code>spark-submit</code> 手动发起了一个排期作业（ <code>--mode &#39;schedule&#39;</code> ）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> -u hadoop spark-submit \</span><br><span class="line">  --jars <span class="string">&#x27;/usr/lib/hudi/hudi-spark-bundle.jar&#x27;</span> \</span><br><span class="line">  --class <span class="string">&#x27;org.apache.hudi.utilities.HoodieCompactor&#x27;</span> \</span><br><span class="line">  /usr/lib/hudi/hudi-utilities-bundle.jar \</span><br><span class="line">  --spark-memory <span class="string">&#x27;4g&#x27;</span> \</span><br><span class="line">  --mode <span class="string">&#x27;schedule&#x27;</span> \</span><br><span class="line">  --base-path <span class="string">&quot;s3://<span class="variable">$&#123;S3_BUCKET&#125;</span>/<span class="variable">$&#123;TABLE_NAME&#125;</span>&quot;</span> \</span><br><span class="line">  --table-name <span class="string">&quot;<span class="variable">$TABLE_NAME</span>&quot;</span> \</span><br><span class="line">  --hoodie-conf <span class="string">&quot;hoodie.compact.inline.max.delta.commits=3&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>执行后，文件布局没有变化，但是在时间线中出现了一个状态为 <code>REQUESTED</code> 的 <code>compaction</code> ：</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-3-compaction/11.jpeg" alt="请添加图片描述"></p>
+<h4 id="4-4-异步执行"><a href="#4-4-异步执行" class="headerlink" title="4.4. 异步执行"></a>4.4. 异步执行</h4><p>第5步操作（Notebook的3.9节）通过 <code>spark-submit</code> 手动发起了一个执行作业（ <code>--mode &#39;execute&#39;</code> ）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> -u hadoop spark-submit \</span><br><span class="line">  --jars <span class="string">&#x27;/usr/lib/hudi/hudi-spark-bundle.jar&#x27;</span> \</span><br><span class="line">  --class <span class="string">&quot;org.apache.hudi.utilities.HoodieCompactor&quot;</span> \</span><br><span class="line">  /usr/lib/hudi/hudi-utilities-bundle.jar \</span><br><span class="line">  --spark-memory <span class="string">&#x27;4g&#x27;</span> \</span><br><span class="line">  --mode <span class="string">&#x27;execute&#x27;</span> \</span><br><span class="line">  --base-path <span class="string">&quot;s3://<span class="variable">$&#123;S3_BUCKET&#125;</span>/<span class="variable">$&#123;TABLE_NAME&#125;</span>&quot;</span> \</span><br><span class="line">  --table-name <span class="string">&quot;<span class="variable">$TABLE_NAME</span>&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>执行后，原 <code>compaction</code> 状态由 <code>REQUESTED</code> 变为 <code>COMPLETED</code> ，原Base File和两个Log File被合并打包成一个新的Base File文件，大小96MB：</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-3-compaction/12.jpeg" alt="请添加图片描述"></p>
+<h4 id="4-5-异步排期-异步执行"><a href="#4-5-异步排期-异步执行" class="headerlink" title="4.5. 异步排期 + 异步执行"></a>4.5. 异步排期 + 异步执行</h4><p>异步的排期和执行可以通过一个命令一步完成， <a target="_blank" rel="noopener" href="https://github.com/bluishglc/apache-hudi-core-conceptions/blob/master/4-mor-compaction.ipynb">《Apache Hudi Core Conceptions (4) - MOR: Compaction》</a> 的第3个测试用例演示了这一操作。它的前三步操作与第2个测试用例一样，在第四步时，使用了“Schedule + Execute”一起执行的方式（ <code>--mode &#39;scheduleAndExecute&#39;</code> ）一步完成了Compaction操作，命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> -u hadoop spark-submit \</span><br><span class="line">  --jars <span class="string">&#x27;/usr/lib/hudi/hudi-spark-bundle.jar&#x27;</span> \</span><br><span class="line">  --class <span class="string">&#x27;org.apache.hudi.utilities.HoodieCompactor&#x27;</span> \</span><br><span class="line">  /usr/lib/hudi/hudi-utilities-bundle.jar \</span><br><span class="line">  --spark-memory <span class="string">&#x27;4g&#x27;</span> \</span><br><span class="line">  --mode <span class="string">&#x27;scheduleAndExecute&#x27;</span> \</span><br><span class="line">  --base-path <span class="string">&quot;s3://<span class="variable">$&#123;S3_BUCKET&#125;</span>/<span class="variable">$&#123;TABLE_NAME&#125;</span>&quot;</span> \</span><br><span class="line">  --table-name <span class="string">&quot;<span class="variable">$TABLE_NAME</span>&quot;</span> \</span><br><span class="line">  --hoodie-conf <span class="string">&quot;hoodie.compact.inline.max.delta.commits=3&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="5-半异步Compaction"><a href="#5-半异步Compaction" class="headerlink" title="5. 半异步Compaction"></a>5. 半异步Compaction</h3><h4 id="5-1-关键配置"><a href="#5-1-关键配置" class="headerlink" title="5.1. 关键配置"></a>5.1. 关键配置</h4><p><a target="_blank" rel="noopener" href="https://github.com/bluishglc/apache-hudi-core-conceptions/blob/master/4-mor-compaction.ipynb">《Apache Hudi Core Conceptions (4) - MOR: Compaction》</a> 的第4个测试用例演示了半异步Compaction的运行机制。测试用的数据表有如下几项关键配置：</p>
+<table>
+<thead>
+<tr>
+<th align="left">配置项</th>
+<th align="left">默认值</th>
+<th align="left">设定值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinline">hoodie.compact.inline</a></td>
+<td align="left">false</td>
+<td align="left">false</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactscheduleinline">hoodie.compact.schedule.inline</a></td>
+<td align="left">false</td>
+<td align="left">true</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecompactinlinemaxdeltacommits">hoodie.compact.inline.max.delta.commits</a></td>
+<td align="left">5</td>
+<td align="left">3</td>
+</tr>
+<tr>
+<td align="left"><a target="_blank" rel="noopener" href="https://hudi.apache.org/docs/configurations/#hoodiecopyonwriterecordsizeestimate">hoodie.copyonwrite.record.size.estimate</a></td>
+<td align="left">1024</td>
+<td align="left">175</td>
+</tr>
+</tbody></table>
+<p>这些配置项在介绍概念时都已提及，通过这个测试用例将会看到它们组合起来的整体效果。</p>
+<h4 id="5-2-测试计划"><a href="#5-2-测试计划" class="headerlink" title="5.2. 测试计划"></a>5.2. 测试计划</h4><p>该测试用例会先后插入或更新三批数据，然后进行异步的Compaction Execute，过程中将重点观察时间线和文件布局的变化，整体测试计划如下表所示：</p>
+<table>
+<thead>
+<tr>
+<th align="center">步骤</th>
+<th align="left">操作</th>
+<th align="left">数据量（单分区）</th>
+<th align="left">文件系统</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1</td>
+<td align="left">Insert</td>
+<td align="left">96MB</td>
+<td align="left">+1 Base File</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td align="left">Update</td>
+<td align="left">788KB</td>
+<td align="left">+1 Log File</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td align="left">Update</td>
+<td align="left">1.2MB</td>
+<td align="left">+1 Log File</td>
+</tr>
+<tr>
+<td align="center">4</td>
+<td align="left">Offline Execute</td>
+<td align="left">96.15MB</td>
+<td align="left">+1 Compacted Base File</td>
+</tr>
+</tbody></table>
+<p>由于该测试用例的前三步操作与第3节（第1个测试用例）完全一致，所以不再赘述，我们会从第3步操作（Notebook的5.7节）开始解读。</p>
+<h4 id="5-3-同步排期"><a href="#5-3-同步排期" class="headerlink" title="5.3. 同步排期"></a>5.3. 同步排期</h4><p>在完成了和第3节完全一样的前三批操作后，时间线和文件系统的情形如下：</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-3-compaction/13.jpeg" alt="请添加图片描述"></p>
+<p>在该模式下，第3次提交自动触发了Compaction排期，状态为 <code>REQUESTED</code> 。</p>
+<h4 id="5-4-异步执行"><a href="#5-4-异步执行" class="headerlink" title="5.4. 异步执行"></a>5.4. 异步执行</h4><p>在接下来的第4步操作中，通过 <code>spark-submit</code> 手动发起了一个执行作业，排期计划被consume，原 <code>REQUESTED</code> 状态的Compaction变成了 <code>COMPLETED</code> ：</p>
+<p> <img src="/../../images/hudi/hudi-core-concepts-3-compaction/14.jpeg" alt="请添加图片描述"></p>
+<hr>
+<p>关联阅读：</p>
+<p><a href="/hudi/hudi-core-concepts-1-file-layouts/">探索Apache Hudi核心概念 (1) - File Layouts</a> </p>
+<p><a href="/hudi/hudi-core-concepts-2-file-sizing/">探索Apache Hudi核心概念 (2) - File Sizing</a> </p>
+<p><a href="/hudi/hudi-core-concepts-3-compaction/">探索Apache Hudi核心概念 (3) - Compaction</a> </p>
+<p><a href="/hudi/hudi-core-concepts-4-clustering/">探索Apache Hudi核心概念 (4) - Clustering</a> </p>
+<hr>
+<p>关于作者：耿立超，架构师，著有 <a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a> 一书，多年IT系统开发和架构经验，对大数据、企业级 应用架构 、SaaS、分布式存储和领域驱动设计有丰富的实践经验，个人技术博客： <a href="/">https://laurence.enlightgram.com</a> </p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>探索 Apache Hudi 核心概念 (3) - Compaction</p><p><a href="https://laurence.enlightgram.com/hudi/hudi-core-concepts-3-compaction/">https://laurence.enlightgram.com/hudi/hudi-core-concepts-3-compaction/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2023-04-10</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Hudi/">Hudi</a><a class="link-muted mr-2" rel="tag" href="/tags/%E6%97%A5%E5%BF%97/">日志</a><a class="link-muted mr-2" rel="tag" href="/tags/Compaction/">Compaction</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/security/dns-srv-record-ldap-kerberos/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">DNS lookup for realm name failed, SRV record for LDAP / Kerberos does not exist for IP … 解决方法</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/others/remove-office-365-shortcut/"><span class="level-item">移除Office 365快捷键</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-运行-Notebook"><span class="level-left"><span class="level-item">1. 运行 Notebook</span></span></a></li><li><a class="level is-mobile" href="#2-核心概念"><span class="level-left"><span class="level-item">2. 核心概念</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-1-排期与执行"><span class="level-left"><span class="level-item">2.1. 排期与执行</span></span></a></li><li><a class="level is-mobile" href="#2-2-同步与异步"><span class="level-left"><span class="level-item">2.2. 同步与异步</span></span></a></li></ul></li><li><a class="level is-mobile" href="#3-同步Compaction"><span class="level-left"><span class="level-item">3. 同步Compaction</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#3-1-关键配置"><span class="level-left"><span class="level-item">3.1. 关键配置</span></span></a></li><li><a class="level is-mobile" href="#3-2-测试计划"><span class="level-left"><span class="level-item">3.2. 测试计划</span></span></a></li><li><a class="level is-mobile" href="#3-3-第1批次"><span class="level-left"><span class="level-item">3.3. 第1批次</span></span></a></li><li><a class="level is-mobile" href="#3-4-第2批次"><span class="level-left"><span class="level-item">3.4. 第2批次</span></span></a></li><li><a class="level is-mobile" href="#3-5-第3批次"><span class="level-left"><span class="level-item">3.5. 第3批次</span></span></a></li><li><a class="level is-mobile" href="#3-6-复盘"><span class="level-left"><span class="level-item">3.6. 复盘</span></span></a></li></ul></li><li><a class="level is-mobile" href="#4-异步Compaction"><span class="level-left"><span class="level-item">4. 异步Compaction</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#4-1-关键配置"><span class="level-left"><span class="level-item">4.1. 关键配置</span></span></a></li><li><a class="level is-mobile" href="#4-2-测试计划"><span class="level-left"><span class="level-item">4.2. 测试计划</span></span></a></li><li><a class="level is-mobile" href="#4-3-异步排期"><span class="level-left"><span class="level-item">4.3. 异步排期</span></span></a></li><li><a class="level is-mobile" href="#4-4-异步执行"><span class="level-left"><span class="level-item">4.4. 异步执行</span></span></a></li><li><a class="level is-mobile" href="#4-5-异步排期-异步执行"><span class="level-left"><span class="level-item">4.5. 异步排期 + 异步执行</span></span></a></li></ul></li><li><a class="level is-mobile" href="#5-半异步Compaction"><span class="level-left"><span class="level-item">5. 半异步Compaction</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#5-1-关键配置"><span class="level-left"><span class="level-item">5.1. 关键配置</span></span></a></li><li><a class="level is-mobile" href="#5-2-测试计划"><span class="level-left"><span class="level-item">5.2. 测试计划</span></span></a></li><li><a class="level is-mobile" href="#5-3-同步排期"><span class="level-left"><span class="level-item">5.3. 同步排期</span></span></a></li><li><a class="level is-mobile" href="#5-4-异步执行"><span class="level-left"><span class="level-item">5.4. 异步执行</span></span></a></li></ul></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

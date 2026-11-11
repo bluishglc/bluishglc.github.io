@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>在 EMR 上启用 DominantResourceCalculator - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="说明 DominantResourceCalculator 仅工作于 capacity-scheduler 模式下，需要启用 capacity-scheduler，然后在其下面配置 DominantResourceCalculator（ EMR 默认使用的就是 capacity-scheduler，并不需要显式配置 yarn.resourcemanager.scheduler.class ，这里是"><meta property="og:type" content="article"><meta property="og:title" content="在 EMR 上启用 DominantResourceCalculator"><meta property="og:url" content="https://laurence.enlightgram.com/aws/emr-dominantresourcecalculator/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="说明 DominantResourceCalculator 仅工作于 capacity-scheduler 模式下，需要启用 capacity-scheduler，然后在其下面配置 DominantResourceCalculator（ EMR 默认使用的就是 capacity-scheduler，并不需要显式配置 yarn.resourcemanager.scheduler.class ，这里是"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/aws/emr-dominantresourcecalculator/1.png"><meta property="article:published_time" content="2023-11-10T00:39:27.000Z"><meta property="article:modified_time" content="2026-11-06T07:30:18.449Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="EMR"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/aws/emr-dominantresourcecalculator/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/aws/emr-dominantresourcecalculator/"},"headline":"在 EMR 上启用 DominantResourceCalculator","image":["https://laurence.enlightgram.com/images/aws/emr-dominantresourcecalculator/1.png"],"datePublished":"2023-11-10T00:39:27.000Z","dateModified":"2026-11-06T07:30:18.449Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"说明 DominantResourceCalculator 仅工作于 capacity-scheduler 模式下，需要启用 capacity-scheduler，然后在其下面配置 DominantResourceCalculator（ EMR 默认使用的就是 capacity-scheduler，并不需要显式配置 yarn.resourcemanager.scheduler.class ，这里是"}</script><link rel="canonical" href="https://laurence.enlightgram.com/aws/emr-dominantresourcecalculator/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">在 EMR 上启用 DominantResourceCalculator</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item article-label">付费</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/AWS/">AWS</a></span><span class="level-item">发表于：<time dateTime="2023-11-10T00:39:27.000Z" title="2023-11-09 16:39:27">2023-11-09</time></span><span class="level-item">阅读用时：2 分钟 (约 283 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><div class="hbe hbe-container" id="hexo-blog-encrypt"
+     data-hbe-format="4"
+     data-wpm="密码错误, 请重新输入."
+     data-whm="密码错误, 请重新输入."
+     data-salt="4433599ccab8e075008f37e2fc2fad395e657fc997f1aab819161739f09ca41a"
+     data-nonce="62038f656e8544ffee18bb18"
+     data-kdf-iterations="250000"
+     data-auto-save="true">
+  <script id="hbeData" type="hbeData">
+    166b5c62bcf1f31f655417ce22f47e19848ccf73fa14835f0b1147ee7065f51e5a5c511378b97bd00d5a1fdb2ce79acaacfbb7ce2f216f3d9f7f98e8f4b06dedd4b8583e2702f43ffb53f5b4b483aad11e0baf700672e49e4bb72f81cd5153ab57392d5b2ad5fe6aa1f9133fea3d1c34d757c0f519df87ca2bbce127dc7b7061c77a41c6f33a43c75ec59491621fe74863541189dfc144857da39abc1179f62cdc8bdff06da779c0de4eaa4e226a21c9d535ec297fa0fb41ed75678d4023d94912dc34b2e0d77092aab6a563476631ca924451bde7e52deb0be82be0add54d0a12a5fb5ffbc326cb984dc25677d31d33d0cd4cc27f176d4d9ded8b911b4d741e018cf05159b1c38f0688f5f6f1b833475a063734a296e077d73d466143ef3ba0d12716712fa583021c2a482ee621c5e2df4c0cf87e59d0b190690cb808c9ec1e133fa60ea2fa73ae65f51213bee3ec3db6875897f37b65ab571476dcef615f3430924b9bd10b4505780deda9308a9c0e24ea45d56fdfacd540feb0ab3ac5c4dde8910fe0f9ac6eb1fef10e41b517c5165f73150aa0d2b7a60402a5cefd82ad8b212c6f6d5aaee20cb6084da068e881cc1f4653ed2ba2d1a8c043b68cffaada395b3654905ba341979d6a36ce9b81a243a826833b2fbd1413bf7fd8b87ef0df3546a85213e711643fecf79e0c220723d596918db369603e967f19a91efe5d4920502e6036be6d372e8b975061d4323dc7910d252e82dc1b16944857251f48263b5ee400c34b75d34160cab42141bd2dcb53b7801a6547b13f2d406da5c1ffc4729dc4bb5b2bc5e7f2474b7d3ef2de63655448072a14ee55ae431af29294c182402c78953543f5df3bc7732ac7239b6aceef8cb81a82ea6ccc88f6aab05f82d534d1d7cc1c186ba9c60c0270794fea755a33304ba9b0c1a4d03c258a96e70055aba1b11efd6829ced87fa81658597555dc524307a7a3ba1f1f1b50111da24ab5aa5eaa9b4c0c81651246c2ec50d236a5adc9c3a5d48dea18207b4aa31ed0d907e13e694488dcd850e33fdb719a4b0877fd442b0b65525cac12466cd420c22ef315d2aaee37bcf9fc31ee07d911ef1515ee84137fd648a2f7d1e1ab6ecce31314e9d303e33f259d5e3d8148384b51b50f7a6eae7f5474b28ae36816c4e3fa2ed4cd47c0fff19cd3c0ca1a70ee4667b28bde8c54d6f48a6ee527788e9778be48f6aac7b3eae90c3fd42cdcbecab47666328eef65f673cf54c7d33bbf601a2d408667278acc3e4df61c291c6525dbbbea8bd8734036d8bcca4ebe1d290015420039c187ab41c2550d8214a6a91a53d45b95d0b1c9da261688cc5b0b16e39fc6349aa95fd31f4946431c71b1bdca93c14560b2ed22c1ed15a36c57f4c6f6f68e85c57955ae9dade10f301681570bbe5de25ece2c70834b3ff2b66c09062dc4bad1821866e468a42a0a2cdd8471ec854d4ae84e9dd06b3562695d269d7be9fb919e0c13b44c5b18f480bdf72e3874bd3f3a4edc025de346394fd6f9086079a7685724028000de88e184f048ff8f02ec7c93483e03872571bfa8b4b095f4aa529f3763a30e16f1384876a1ddb8089d2ef74cbe66b94a659432964cb4fc1f0e7789b54ac3151e8777492214eac0ec37688e97c6cd23f1ae7f53436bcda0c77f21f19432cbade9a49f4aac1aff0955398f009e6a874610660076514e2035be178b94a42f30e5894d24e072083743cd9d3cd68aaeac6d5088fe859f06392a0c4770c5995751056c6f3378caf38e33c4a0c45b9182efec4845190df5b5d99819524b18e22128ab1f8de5fae293ac4ba5fca67082eef68a70f33911c9f1210b1d7ee7402cdaee7c01fe65cfd9b5a13bb93a6a31857feefec6a6c025af775de641ff1939e64902adb4e90a388ca30637e90c196913f143aae1b88766d0928ff8d8dada3c3d3140d24259b819feaaa32c5095be5f56bf308dc5e171c98be3915798a3a9e4535422c1260e673a10ac2ef1c5c7686a6b110b1c87899b2c54a955d39aa74548f2c28e2e8355fa85dc7b43736c8344d1afd918ff9412ef3c213feb7e9319b4421cc37388af572dfb4a72473162019f0a5fa688e823278eeb741afad89382077d5f9b83e9c97c9323c94fdbc2fd5d7e4b1720577940afb1faa832f1e5cc137bd8442b5f3bba8c813d89dfc35c42d4ef56ff3c6f6def3fae9ebe5f7164069710e47988e73735b08009f5dbca76bccc994f9acb1eb084c28b0170c50363883d61d16cb7ba4e93df126bde303145e25ec344e80db98b6adefe9fe4603186117a3ed0b454bd9d56b2127b32bfd88d94a551e2b08f89df7fb31ec644f0edae72ab593cfccf22b372ddfa23ed3e834ed434512ad5107c7c99430fc915e024c3bc5419a3439d78c9a1fdf995914117fa547a67a3d78af74a0f6004d8f0d3c2d5bb73c678ced5663e23cd42b9bc6597f03fa3a45a18591ac2c4f124450488b5d074451bf13b14993dfa48e09f8246b83c719503ef1892e42c93b393f46abdb517baa56a464c37ee6fe34b1664cd23d5309b45ba2213d3219d6234a006f485b93af3281e568b63a95047e56ebaf4f212bc7cab112f64fcdff1ff61cc21ba39859a886da163fe6e6f20ad59f163d006d7d3e3c7d9f4b00986a943d92e1d1a81db2f284b5e77982944696459c6f3ad17bb775d6d1e2b1322785cccfb8905e691284fc0d8d0a4461a2c5c8874b1408d5b5a8d6a4ea20756188a6a6b9ccf58475762d05ddfa0992792621807751124349c859c9d4bc4ac43eb3460f19a93a0027dde8e7460a623c65381930478c1acb52189ec29990433c204eecc200af1a9b0c269e560ad0a4f1b533113de8eb64c99228cdc1aab2d0776e12efbb05120f9d7fe9e63dabebd583c6c2ced788b5a8903b1268fbec87ac7a36e134f98e91c88aff8c632c72805a5e44a378b97d90f500cca6d0fc4ddce97850d23220c0baf57877ec9d43f80f80c5469e9e4106f524c3f1354d76893f4946eb6447c81d339745be30fcf3f6429bb68d6fb366950dff1c79af99034097b1275f6d4788884b80cea95c8c793e21844e87d4ecf6e5d4b58bac2afa2c2a7a8a15238037ca0e6777dd6a195f414428662554eb06c7b26ca92f6502d3dd5139d0106d962fe636e64d125ad802247c849ccdc5233108a33d0af7876456051335b17c744c78482a9638e93f909cb30d76277fe1104d39af4a96e7f668f0068ee2f7147e63052e6b457b56fadbc70aa144d8c344933f836d459d9ff8d55b56075da7ceadb6c8a44248eefc97e89bba4aa7775b926cf65582f710de2bfbca9af382bc205dbf5144f22ae89779c231d2a0efcd66a229673a2eb4effc7cb43728db33c9c82fe342fcd1d9f2af322e179bcd3e01889c17243b66663642f9a6fe56ce2a19c09f79af5d00a9ce7b8322cda5be12ca45880ce7a55ebfea7415536b452adfe2ee4b14148fb14308cc3d0341a2f41c6b01ddc7ee1042271114af329559d13cf12563e69cb063aeaf1e875c3d23dbb72b00bf5bdbe00f25f085da5120e05a7225692e49eaa7a699fb361f60079b990b30cb9e963c7831b1249bd58d9bf852addc5be1f860709d79ba9f498280454576f300b46a1804522648baf85936d7bd0d07aeb3e509812869d6dca9a8b2c42b8b4e924ff2f4561b13b77ad19beab79222210d33e872087210c869fa29580f625c28507ad27c454525a1d6a8499eeb1a5b0c9f9860ccd24434db139717c7c4f8d322e63807a899ae500566e72cbe76f2754c7fb2d6abd2a6844eedf28eb9456818ffc843a5932e94faa2fb6890ff6ff2849e11101b2fd8687c7edc2323c780b61fb194f280b20be3f13c911ea3eedda9569123dc68b8160bb5a71e24a3d674e410d5e06ce530d9471928262dcdcee53761ea8de22cb6167c97f9e6241704649e8331d20886107b2e391783f75622dbaf49e0c38207d3b8bb277274961704e5b47ac21d430213ff062cf594cf3f036b1e2c8579814cc23b7b1765763ad58ef6f20de2d3dd7403ad7afb15ae6c7080fbcf0d65ed939bb38383b65522ad5d52458723bf35c141b8359e9d01466a469970c35be95b98c7ada19fcaa60aaa1334c3a8e61f807c3c1faf71b4b2d93f441e5daf40e9b45ad9695e34e4642f8d70610a4d544fe02a15a6ea05fb51848c12fc80814575b032f0b3f25cd679baf8c3606e9a4229fa606207dde84a360118bbc4e24a2339d613cde998849c8bc8a95e8acf16727b6126d9ed1b547aeea55e2d9e6a2c33437289d99bd9a9c10132682025e418f3a6f29156f8c3b78d97eca4299289859e732971491a945683eefe3a75609623662893403e1a33fac8c2c75745fba40d1077cb3a6d6cd8e8ba2329c1a14115101462ea478d5dcd528384cbf5d388a4dadaad085196787fe84e45a332a2508f377dba39f220cd10ab2c5275e3726098ce6e2aa3f8b4d986bff9d71cf3d83af3ba017087027a1a05aa5fdc24c49dd31bc8de03e838e36aaa0e5eef9fe16f4d82d9d15ae8152a990b480d0a1e7bb5fd5b54174f5e996d0c5d4eedc6904f77143f427e02777f043f5528b2f86d23481afb0a6275d4b660389d317dad37fd7eef463c31f18a233981faedb9452938ee634008fede82c5c71db56cb5bc7c01a11e400b1551127a088630aec7b3478d31a144539a32682bd690063c1f868460da027671fe474e5adf59267a21581366a63866c29f05bc87606934a3690cf2579a8693574b8fa88c6f6656a201dc72862bdd32e42d5f51b3bb9bf6e9e1a27af4463b1e2c0ec396b9ee09a226205b97f9f185bc8fea1d258a147bbe025639063933b3d773ec58abf8293498d0a98e60a9c33035295ea796bf780677696d143f9f7fbd5b933559ce25d08e6ff954bb5e4d2f956f261c02a84aec692d47650d977ac51592218a21d7615b9872e8aa71c458b412ee2a3e6991ade06ed923cc4292e2db7fff62d1cd640596cf60a95532c78d9165e2b8d0a1471d7d28d42c5f54eaa150a203e0e20a5e2e2e842fbc10f44dd960895246d5365cba8fdd5ca05bc54a8cde5a33ddc6e2bc06700ad0aff5407b87ccf64167ae847a5d48f97228446aca1f26c3bfb6fa4b47cff28d6d770b343025a936413a10785b3b90ff04b2abd75c55803b679cc88a526ac912bc8d79e241162c656dfe4175389b0986918b7e2e85be9fe46a88363a8c0772e58d82476a7ff03d449142cec8059a57d065f16f3a65462cf827c8e817b5666f4e605b8a99b45c81eb00889ae92be35c448d2eae3e9dd9e36505f04afec588a5c3aa54114364f21368b75710c88f9316725d6405ec8ee566b249dca5b75858c652a3f63ba8212c58246491055f23b891cd4baca7c4b6b94d264f7c5bff18598013b0a5ad40f85793c9e8cd6dc15d7cb37b5200f2e31db60e9c1d6bb6604d1777f09c27d3c1f433da9844bbf1a01af36896ac191a048e17858ccb9bf7f2ec49e3669e82a31c2eed730b3612a84cae5a0db64ca828f3304aed597b5f7cf774da4506a356ee0b77dbd62ad575455b8d7ec6ca9f233cd250f9d11c441c537b74fff50e581874cd91b0296cdfb3e450d32905c2cc590a72a3d63c723bbe5688b090de5af0b3619b046ec8df1b0330781611e90c39197f1077945572c66cdbd75b954c38a99b729b7c30cd2e2721dcfb2768d718ba840a05705e4f689c17d0889aa420c4074f36433fc3761e9de5fdae70b2caee679dfa91ae6a8643e49c7ad5e6a39be20e0329c7932f0c0c12ab9d0d558b8e49c061f55f202288194c623f2c7e165b227b89ec3dc19cbbbb3478003066ba494d1ff9ab42423a4548ee31eb8e32220bf6e31bf19f2264c6e588758423e9d04211a6fddc7eba3bff50ce219b6a23042105d0f9d7af89a76a0124913d29f816a2e4535d3f722edf7edf4892342baa04b8bf5694d907e03fe69e85e323541a9b5254f90d93e06acf5748fe7b0ac1b2639b556439e7c9d659a2fa90c73787f09ceb5a5e325a4dcc3403e043ff493776857b17c51862b17f41aeba56afb356859019a91453db73ca834a4a6bee021a8489a7d5c320efe77134afa96e1d9ead187135ea7fea3d8a6b305a2a1015e28dfb31fe4aa836451e27c82e3c2b2422dfb331330bfe700e326ab1566238676344010659b0036c96d9d5111255cb1229c89d38d3fe344d0513d1aaf18bd74a6331992642cc3d19aa1af61be602a28b14d191227df35b3f8dd9bb076d41845e8e01259cb6b1820e347ac57101fd8e6ed17d3963aaf5c754167e097366d6ede4c45f141340c224ae1566a1afdb4362511ae746ee3b19c88e2756172b5b396c6a20f0d4ab7069ff4ec67e6567254c11798b7c6b9003faccece188287c21d45e5f3291190ff8824ced556fe95add252633844cf0f15e2f54ab2cf0fec709c1587b7e45ad92ca4b080d176e1341a15fc5382ba06a6be1fae23743e1edf208062a0801307f9270f056d9263a6e3169892c840e60e6b028282776325ecaf8d3ba4475ffe61c1e5166806537394bca29160bfc8cd69c318f798bd05867543cc45194972a147159e42a337833561f9a9a1cc067a6831351e5f6517c3b89789578a624dc7f812d594987ba90c8570867d276ab4cb9aa48c8e040fe806f1baeb35d708f11cd518723cdda6d315c5a361841aa4bdee55f773b7b90302ea891779a46291bf56f8a21ef6adbbe095f1eeb60f6740c282df244c5a19c94cf0e72ce239d5e0978e8d1781257f0b6aa135112ae15461bae8c176e8e6e79201446b2465bc4675007ea4b29c90d16a6c0d70bafabe003639cd18dd74a75e875ca59da14ce50291bca9ca2f35502719c7f51d7a648fb2b1ca850bd80a7dd2ddfcb909cd8921810502843f26756871312fd08c5d424bb2c9846cc855762503286b676998a9daf133089910ab5a04321b8759f70ad71f4f94e4d7c8cd99aa1a1c11169f8c8d23d041ad673a5b92d769f675d54cd30404876649baeee0b833e00ad8e28388c476edb7faab078b78ebe884a8ef8c9a33c728863e594b3de5fa99ee8b473bbacc4c0424e52a84aa9db5c4532026a2df3f6e1134927bd03a24f944c739f5a1d83a25e13b28fccf6af612cb0a4e75b720649c9dee8be876546ab506b6500deffddda8d20a607e90f40600d50d34e1bcc75c5b765c27d6b45c6e4a8be0b6a0fe0cbecb1a4eb25aff0008bfcaf016e8ccea0bdd462ef5c64288589af18b31d33c05420cf3e302a5bcacdb0b6445c6f82717f5ebe26af7601e20745ab99510775a9ff407afe26d678fcacb64ea5b92aaa31537e13f3526e1ef5364494f38aa0f994b4d9f0bb0136a70e6b050faf132689bc25cb5950b3119b971b05db6ff6da5c9c601c9b958331530b6c99fa84831e0c0b95a032550b441c25788521e524494334086818f1f708246a8096cf6e3e93a56a16603429722f9e8e68dba8a237b86a51b76ff5d4421d0aadb0896935d5f011da96bb6fbef8fed2d540251fa677f13490d48d386f2a1b72b9f0481f70b2168ae9992aa4a0ea19674d975e4f51ea138efba896d9a5fe30836e10db9b3b40c01fb9bbe6aadb6aa8c0d2698b2244ae8159195a2ac606db3bc91b886566c60ac5e454a2e380c523af97cbc4867c1ab5b66b3e2b9f7dded2c044a31d505848168b766e8ae1f15d9cbe111d9f95a08683514cabf403578a29005ac74850406b98f35016da72c3bed6cd04e1bea1147d150b8257c25d9b9a75e10898bed938c31c3108e4414afc9ac1e432e518062e75ee3136000e227d4f984147f9ff3efe82c804b3581d555ce106c2223ca5da8b2befaf528b629d107686ba1b1f8e781ae7a9eaf2b9eb04527fdba0fed426341e92bee0eab345f9107649369525a134f99c20bbd3db970dd6544d795aaf4d8e7c2a3d5df577dfdf8beddfc5ef3f762347970ce675d73eaa53ea79a5a21e0a8b81c25391f0578e06c4446b9274dacb6a392bab3c1b7b1da8298f6cfedcb3eed5e82e5b8266972a83183735d1eb5abb1b99a17025b7f54064aca280f2330484bd827c029cfad7d6ff64a0bf42d6f83fa4b90a56d772ac2a4c3f901f947db5a4d8fa2d4cad56e980661ea1d84f00e164ffbab37af18922263987004cd480dd75c509366661bfcfba2c15ac5756e9b8286d0165d200391539034e4dfd9bb244ba043050bab6e055c3f2f2bae87cb1716249adb11e8d04e2d55d0d3f7e95792bce9e04bb6f3a8c498a4612cf7b0078f21ec8f550f6345e3f1a44a240847da7900e392fb86c88de2878a1e055af73101
+  </script>
+  <div class="hbe-preview"><h2 id="1-说明"><a href="#1-说明" class="headerlink" title="1. 说明"></a>1. 说明</h2><p>DominantResourceCalculator 仅工作于 capacity-scheduler 模式下，需要启用 capacity-scheduler，然后在其下面配置 DominantResourceCalculator（ EMR 默认使用的就是 capacity-scheduler，并不需要显式配置 <code>yarn.resourcemanager.scheduler.class</code> ，这里是为了阐述清晰而显式配置了 ）。以下是 启用 DominantResourceCalculator 的 EMR Configuration 的 Json 内容 <strong>（注意：spark-defaults 部分配置用于通过 Spark 测试时排除 DynamicAllocation 机制的影响，非必要配置，如不需要可移除）</strong> ：</p>
+</div><div class="hbe-preview-end"><span>试读结束</span></div><div class="hbe hbe-content">
+    <form id="hbeForm" class="hbe hbe-form">
+      <div class="hbe hbe-input hbe-input-default">
+      <div class="hbe-qrcode-field"><img class="hbe-qrcode not-gallery-item" src="&#x2F;images&#x2F;profile&#x2F;wechat-qrcode.jpg" alt="QR code"><input class="hbe hbe-input-field hbe-input-field-default" type="password" id="hbePass" placeholder="在此输入文章密码..."></div>
+      <label class="hbe hbe-input-label hbe-input-label-default" for="hbePass">
+        <span class="hbe hbe-input-label-content hbe-input-label-content-default">本文为付费阅读内容，扫描下方二维码，关注作者微信公众号：“十万公里通票”，搜索文章《2023年度付费文章》，付费后可在文章中获得解锁密码。</span>
+      </label>
+    </div>
+      <button class="hbe hbe-button button is-small is-size-7" type="submit">解锁全文</button>
+      <div class="hbe hbe-error" role="alert" aria-live="polite"></div>
+    </form>
+  </div>
+</div>
+<script data-pjax>(function(){var f=document.getElementById("hbePass");if(f){var focus=f.focus;f.focus=function(){focus.call(f,{preventScroll:true});};}}());</script><script data-pjax>(function(){if(window.__hbeToc){return;}window.__hbeToc=true;window.addEventListener("hexo-blog-decrypt",function(){if(!document.querySelector("#toc .menu")){return;}document.querySelectorAll("#toc .menu").forEach(function(m){var c=m.cloneNode(true);c.querySelectorAll("a[data-href]").forEach(function(a){a.setAttribute("href",a.getAttribute("data-href"));a.removeAttribute("data-href");});m.replaceWith(c);});var s=document.createElement("script");s.src="/js/toc.js";document.body.appendChild(s);});}());</script><script data-pjax src="/lib/hbe.a3b9f59caa.js"></script><link href="/css/hbe.style.css" rel="stylesheet" type="text/css"><span hidden data-yearly-password="2023"></span><script data-pjax src="&#x2F;js&#x2F;yearly_password.js"></script></div><div class="article-licensing box"><div class="licensing-title"><p>在 EMR 上启用 DominantResourceCalculator</p><p><a href="https://laurence.enlightgram.com/aws/emr-dominantresourcecalculator/">https://laurence.enlightgram.com/aws/emr-dominantresourcecalculator/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2023-11-09</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/EMR/">EMR</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/aws/s3-dist-cp/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">s3-dist-cp 介绍教程示例使用方法</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/aws/emr-disk-expansion/"><span class="level-item">EMR 磁盘挂载解读与磁盘扩容操作</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-说明"><span class="level-left"><span class="level-item">1. 说明</span></span></a></li><li><a class="level is-mobile" href="#2-操作"><span class="level-left"><span class="level-item">2. 操作</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

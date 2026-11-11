@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Spark性能调优系列二：Spark流计算重要性能参数测试与分析 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="在本系列的前一篇文章 《Spark性能调优系列一：Spark的作业模型》 中介绍了Spark作业的基础模型之后，我们要在本文讨论与Spark流计算性能相关的几个重要参数，这些参数对作业执行的并发性和资源分配有着很大的影响，我们会析这些参数以怎样的方式发挥作用，同时本文会讨论一系列的测试用例，这些用例通过设定不同的参数和数值的组合来辅助我们验证和理解这些参数配置的实际效果。本文原文链接: https"><meta property="og:type" content="article"><meta property="og:title" content="Spark性能调优系列二：Spark流计算重要性能参数测试与分析"><meta property="og:url" content="https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="在本系列的前一篇文章 《Spark性能调优系列一：Spark的作业模型》 中介绍了Spark作业的基础模型之后，我们要在本文讨论与Spark流计算性能相关的几个重要参数，这些参数对作业执行的并发性和资源分配有着很大的影响，我们会析这些参数以怎样的方式发挥作用，同时本文会讨论一系列的测试用例，这些用例通过设定不同的参数和数值的组合来辅助我们验证和理解这些参数配置的实际效果。本文原文链接: https"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/spark/spark-tuning-2-streaming-parameters/2.png"><meta property="article:published_time" content="2018-06-21T16:39:41.000Z"><meta property="article:modified_time" content="2026-11-11T03:37:39.399Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="性能调优"><meta property="article:tag" content="Spark"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/spark/spark-tuning-2-streaming-parameters/2.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/"},"headline":"Spark性能调优系列二：Spark流计算重要性能参数测试与分析","image":["https://laurence.enlightgram.com/images/spark/spark-tuning-2-streaming-parameters/2.png"],"datePublished":"2018-06-21T16:39:41.000Z","dateModified":"2026-11-11T03:37:39.399Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"在本系列的前一篇文章 《Spark性能调优系列一：Spark的作业模型》 中介绍了Spark作业的基础模型之后，我们要在本文讨论与Spark流计算性能相关的几个重要参数，这些参数对作业执行的并发性和资源分配有着很大的影响，我们会析这些参数以怎样的方式发挥作用，同时本文会讨论一系列的测试用例，这些用例通过设定不同的参数和数值的组合来辅助我们验证和理解这些参数配置的实际效果。本文原文链接: https"}</script><link rel="canonical" href="https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Spark性能调优系列二：Spark流计算重要性能参数测试与分析</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Spark/">Spark</a></span><span class="level-item">发表于：<time dateTime="2018-06-21T16:39:41.000Z" title="2018-06-21 09:39:41">2018-06-21</time></span><span class="level-item">阅读用时：30 分钟 (约 4455 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>在本系列的前一篇文章 <a href="/spark/spark-tuning-1-job-model/">《Spark性能调优系列一：Spark的作业模型》</a> 中介绍了Spark作业的基础模型之后，我们要在本文讨论与Spark流计算性能相关的几个重要参数，这些参数对作业执行的并发性和资源分配有着很大的影响，我们会析这些参数以怎样的方式发挥作用，同时本文会讨论一系列的测试用例，这些用例通过设定不同的参数和数值的组合来辅助我们验证和理解这些参数配置的实际效果。本文原文链接: <a href="https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/">https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/</a> 转载请注明出处。</p>
+<h3 id="参数介绍"><a href="#参数介绍" class="headerlink" title="参数介绍"></a>参数介绍</h3><h4 id="spark-scheduler-mode"><a href="#spark-scheduler-mode" class="headerlink" title="spark.scheduler.mode"></a>spark.scheduler.mode</h4><p>默认情况下，Spark对于Job的排期策略是FIFO,也就是 <code>spark.scheduler.mode</code> 的默认值是FIFO，这一策略的含义是：先提交的作业会先被执行，但这也不是绝对的，如果当前执行的Job并没有占用到集群的全部资源（还有空闲的executors或 cpu cores）则Spark会让后续的作业立即执行，这显然是“明智”的。当然，反方向上的极端是当一个Job很“重”需要耗用大量资源长时间才能执行结束时，后续的Job都会Delay!</p>
+<p>从Spark 0.8开始，引入了一种新的作业排期策略：“FAIR”，顾名思义，就是让所有的Job能获得相对“均等”的机会来执行。具体的作法就是：将所有job的task按一种“round robin”(轮询调度)的方式执行。注意，这里的执行粒度“下放”到了Task，并且是跨job的，这样就变成在Job之下按更细粒度的单位：Task进行轮询式的执行，宏观上起到了Job并行的效果。</p>
+<p>应该说 <code>spark.scheduler.mode</code> 是一个面向job级别的配置项，但是又不是这么简单，当它是FIFO时，我们可以认为它的“作用”粒度是Job，当它是FAIR时，为了真正能使得各个作业获得均等的执行机会，实际上的作业调度已经细化到了Task级别，在Spark的源代码 <code>org.apache.spark.scheduler.Pool#getSortedTaskSetQueue</code> 中我们可以看到，在同一个pool中，所有作业的Task都会依据配置的spark.scheduler.mode来对tasks统一进行排序，然后依次提交给Spark Core 执行，所以说，实际的控制粒度是在task层面上的，但是对于这一点的理解也不要过，从实际并行作业的event timeline上看，这种并行并不是在两个作业中频繁地交替执行Tasks（这样的做话显然是代价巨大的）， 而是在一个较长的作业中间“嵌套”进去一到两个相对短作业一直到它们执行结束再切回到长作业继续执行。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">getSortedTaskSetQueue</span></span>: <span class="type">ArrayBuffer</span>[<span class="type">TaskSetManager</span>] = &#123;</span><br><span class="line">  <span class="keyword">var</span> sortedTaskSetQueue = <span class="keyword">new</span> <span class="type">ArrayBuffer</span>[<span class="type">TaskSetManager</span>]</span><br><span class="line">  <span class="keyword">val</span> sortedSchedulableQueue =</span><br><span class="line">    schedulableQueue.asScala.toSeq.sortWith(taskSetSchedulingAlgorithm.comparator)</span><br><span class="line">  <span class="keyword">for</span> (schedulable &lt;- sortedSchedulableQueue) &#123;</span><br><span class="line">    sortedTaskSetQueue ++= schedulable.getSortedTaskSetQueue</span><br><span class="line">  &#125;</span><br><span class="line">  sortedTaskSetQueue</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="spark-streaming-concurrentJobs"><a href="#spark-streaming-concurrentJobs" class="headerlink" title="spark. streaming .concurrentJobs"></a>spark. streaming .concurrentJobs</h4><p>concurrentJobs要配合FAIR模式一起工作，同时你还要清楚你的集群是否有足够的资源来支撑更多并发作业，如果没有适当的资源的话，加大concurrentJobs的数值是不是会有显著的并行度和 吞吐量 的提升的。这里还是要再叮嘱一下：即使是concurrentJobs&#x3D;1，如果集群有空闲的计算资源，Spark也同样会激活新的作业去并行执行的。</p>
+<h4 id="scheduler线程池"><a href="#scheduler线程池" class="headerlink" title="scheduler线程池"></a>scheduler线程池</h4><p>FAIR模式给每一个作业提供了均等的执行机会，但是这未必能解决这样一类问题：假定在一个Spark Streaming应用里有一个很重的作业，比如有两三百个Task，同时还有几个很小的作业，可能只有能几个Task，按FAIR的轮询调度，每个作业都有均等的机会执行各自的Task， 这样形成的结果是在一个相对固定的时间周期内，长Job作业与众多短作业执行完毕的数量是一样，比例都是1：1：1…, 那么，如果我们的需求是让这些短作业执行的频率加快，以更加实时的速率来处理数据，那么就势必要给到这些短作业更多的资源来执行Task, 那么这时就需要为这些作业引入独立的执行线程池，并配置相应的资源占用权重来解决了，具体的做法就是在代码中加入</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Assuming sc is your SparkContext variable</span></span><br><span class="line">sc.setLocalProperty(<span class="string">&quot;spark.scheduler.pool&quot;</span>, <span class="string">&quot;pool1&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>这样，在当前线程（即调用RDD.save, count, collect的线程）中提交的作业都会使用这个指定的pool运行作业。</p>
+<p>在没有引入任何上述代码时，所有的作业实际上是在公用一个root的线程池，这样整个集群的计算资源都分配给了这一个root线程池，然后，如果我们制定了spark.scheduler.mode&#x3D;FAIR，那含义就是：所有的作业会有均等的机会轮流占用全部的资源执行任务。那么就会出现我们前面提到的那个问题。而解决方法就是：既然pool是对计算资源的划分，那么我们就可以为不同的作业引入多个独立的pool, 然后给这些pool分配相应的权重让它们来按比例来分配整体的计算资源，然后在pool内部再FAIR模式让其对应的那些Job以均等机会获取到制定配置的资源去执行！这听上去有一点抽象，我们使用会在后面的测试用例中详细的说明。</p>
+<h3 id="测试用例"><a href="#测试用例" class="headerlink" title="测试用例"></a>测试用例</h3><p>本文全部测试用例涉及到4个作业:persist_cpu_usage，persist_mem_free，evaluate_cpu_usage，evaluate_mem_free，其中前两个是短作业，只有一个Task，没有任何shuffle动作，后两个是长作业，都含有shuffle操作，我们是在一个单节点集群上执行测试用例的，计算资源有限，为了拉大长短作业的执行时间差，我们特意将spark.sql.shuffle.partitions设置成了100，这不是从性能最优来考虑的，如果从性能考虑，我们会把大大降低shuffle.partitions的数值。</p>
+<h4 id="Test-Case-Group-1-FIFO-vs-FAIR"><a href="#Test-Case-Group-1-FIFO-vs-FAIR" class="headerlink" title="Test Case Group 1: FIFO vs. FAIR"></a>Test Case Group 1: FIFO vs. FAIR</h4><h5 id="Test-Case-1-1-FIFO"><a href="#Test-Case-1-1-FIFO" class="headerlink" title="Test Case 1-1: FIFO"></a>Test Case 1-1: FIFO</h5><ul>
+<li>配置</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">spark.num.executors=1</span><br><span class="line">spark.executor.cores=1</span><br><span class="line">spark.streaming.concurrentJobs=1</span><br><span class="line">spark.scheduler.mode=FIFO</span><br><span class="line">spark.sql.shuffle.partitions=100</span><br><span class="line">所有Job使用default pool (spark.scheduler.pool=default)</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>结论</li>
+</ul>
+<p>看上去所有的Job是在并发执行的，但是Job页面在显示上是有些歧义的,它显示的进度条是从作业提交到执行结束的整个时间跨度，在本例上，前四个作业的提交动作是一个很轻量的动作，在一开始的很短的时间内变相继完成了，所以看上去几乎是在同时开始并且在“并行”执行，但是实际的情况是：作业提交后，是按0，1，2，3顺序执行的，因为我们限定了非常有限的资源，Job的排期使用的又是FIFO，所以，这此Job的实际上按先后顺序依此执行的，也就是说越后面的Job在提交之后的等待时间越多！这一点我们后面会从Task页面得到验证。</p>
+<p>Stage 0和Stage 1分属两个独立的作业，且都只有一个Task，第二个Job的Task紧紧跟随第一个Job的Task执行完成之后开始执行，这说明集群Task的并行度（slot）是1，并且作业的排期是FIFO模式，所以所有的Job都是先进先出的串行执行。</p>
+<ul>
+<li><p>Job<br> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/2.png" alt="这里写图片描述"></p>
+</li>
+<li><p>Stage 0</p>
+</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/3.png" alt="这里写图片描述"></p>
+<ul>
+<li>Stage 1</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/4.png" alt="这里写图片描述"></p>
+<h5 id="Test-Case-1-2-FAIR"><a href="#Test-Case-1-2-FAIR" class="headerlink" title="Test Case 1-2: FAIR"></a>Test Case 1-2: FAIR</h5><ul>
+<li>配置</li>
+</ul>
+<p>···<br>spark.num.executors&#x3D;1<br>spark.executor.cores&#x3D;1<br>spark.streaming.concurrentJobs&#x3D;1<br>spark.scheduler.mode&#x3D;FAIR<br>spark.sql.shuffle.partitions&#x3D;100<br>···</p>
+<ul>
+<li>结论</li>
+</ul>
+<p>FAIR模式下，作业视图和前面的FIFO区别不大，在提交时，都可以很快完成，造成各个作业是在“并行”的假象，但实际上的并行度是不能依赖作业视图来判断的（在计算资源充足的情况下另当别论，那时所有提交的作业往往可以立即被分配资源执行，这种情况下可以认为作业视图中蓝色的进度条就是做业的实际执行时间）因为我们的测试中资源都是严格限定的，这会导致很多作业从提交到能够得到资源开始执行之间有大量的等待时间，所以不能把这些蓝色进度条当作实际的Job执行时间。</p>
+<p>但是在FAIR模式下，确实发生了一些不同，我们继续看：Stage 6 &amp; 4是对FAIR模式的一个很好的诠释，从Stage 6的截图上可以看到在02：12：24到02：12：56之间有32秒的空白，而这段时间正好是Stage 4在执行，两个Stage隶属两个不同的Job,产生这一结果的原因是在FAIR模式下，不同的Job会获得同等的执行机会，也就是在所有已提交的作业中，Spark使用轮询调度的方式从各个作业中依此选取Task执行。但是本例在展示跨Job的Task轮询调度上显得不是很典型，这是还是因为我们在这个示例中的限定了很有限的计算资源导致的，后续的示例中会有更好的演示示例。</p>
+<ul>
+<li><p>Job<br> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/5.png" alt="这里写图片描述"></p>
+</li>
+<li><p>Stage 6<br> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/6.png" alt="这里写图片描述"></p>
+</li>
+<li><p>Stage 4</p>
+</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/7.png" alt="这里写图片描述"></p>
+<h4 id="Test-Case-Group-2-FIFO-1-Slot-vs-FIFO-4-Slots"><a href="#Test-Case-Group-2-FIFO-1-Slot-vs-FIFO-4-Slots" class="headerlink" title="Test Case Group 2: FIFO 1 Slot vs. FIFO 4 Slots"></a>Test Case Group 2: FIFO 1 Slot vs. FIFO 4 Slots</h4><h5 id="Test-Case-2-1-FIFO-1-Slot"><a href="#Test-Case-2-1-FIFO-1-Slot" class="headerlink" title="Test Case 2-1: FIFO 1 Slot"></a>Test Case 2-1: FIFO 1 Slot</h5><p>这个Case就是 Test Case 1-1: FIFO</p>
+<h5 id="Test-Case-2-2-FIFO-4-Slots"><a href="#Test-Case-2-2-FIFO-4-Slots" class="headerlink" title="Test Case 2-2: FIFO 4 Slots"></a>Test Case 2-2: FIFO 4 Slots</h5><ul>
+<li>配置</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">spark.num.executors=1</span><br><span class="line">spark.executor.cores=4</span><br><span class="line">spark.streaming.concurrentJobs=1</span><br><span class="line">spark.scheduler.mode=FIFO</span><br><span class="line">spark.sql.shuffle.partitions=100</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>结论</li>
+</ul>
+<p>在cores从1提长到4之后，作业层面一个宏观的改变是作业的并发度得到了提升！后续Task层面的执行历史能更准确地体现这一点。这里要着重解释的是虽然spark.scheduler.mode&#x3D;FIFO，但是这并不意味着不存在作业级别的并发，Spark文档中对FIFO的介绍中也特别强调道：如果当前提交的作业并没有占据集群的全部资源，则后续的作业会跟进提交并执行！这在我们这个测试用例中得到了很好的体现。我们可以看到在08：51：55到08：52：10这段时间，Job 0（Stage 0）和Job 1（Stage 1）这两个作业是严格意义上并行的！并且这类情况在后续频繁发生，这就是对FIFO模式在资源充裕时允许并行多个作业的展示。</p>
+<p>另外一个要补充的是，在扩充为4核之后，像Stage 3这样比较重的计算，并行程度得到提升，执行时间大幅度缩短，对比前面所有1核的测试用例我们可以发现，用于只有一个可以的core, 每个stage，特别是有100个task的重的stage, 它们的task都是串行的，在同一个时间点上，只有一个在running的task,而本例中core提升为4之后，同样的stage, 任意时刻总是有4个running的task.</p>
+<ul>
+<li>Job</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/8.png" alt="这里写图片描述"></p>
+<ul>
+<li><p>Stage 0<br> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/9.png" alt="这里写图片描述"></p>
+</li>
+<li><p>Stage 1</p>
+</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/10.png" alt="这里写图片描述"></p>
+<ul>
+<li>Stage 2</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/11.png" alt="这里写图片描述"></p>
+<ul>
+<li>Stage 3</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/12.png" alt="这里写图片描述"></p>
+<h4 id="Test-Case-Group-3-FIFO-4-Slots-vs-FAIR-4-Slots"><a href="#Test-Case-Group-3-FIFO-4-Slots-vs-FAIR-4-Slots" class="headerlink" title="Test Case Group 3: FIFO 4 Slots vs. FAIR 4 Slots"></a>Test Case Group 3: FIFO 4 Slots vs. FAIR 4 Slots</h4><h5 id="Test-Case-3-1-FIFO-4-Slots"><a href="#Test-Case-3-1-FIFO-4-Slots" class="headerlink" title="Test Case 3-1: FIFO 4 Slots"></a>Test Case 3-1: FIFO 4 Slots</h5><p>这个Case就是 Test Case 2-2: FIFO 4 Slots</p>
+<h5 id="Test-Case-3-2：FAIR-4-Slots"><a href="#Test-Case-3-2：FAIR-4-Slots" class="headerlink" title="Test Case 3-2：FAIR 4 Slots"></a>Test Case 3-2：FAIR 4 Slots</h5><ul>
+<li>配置</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">spark.num.executors=1</span><br><span class="line">spark.executor.cores=4</span><br><span class="line">spark.streaming.concurrentJobs=1</span><br><span class="line">spark.scheduler.mode=FAIR</span><br><span class="line">spark.sql.shuffle.partitions=100</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>结论</li>
+</ul>
+<p>首先，对比&lt;Test Case 3-1: FIFO 4 Slots&gt;, 本用例改为FAIR模式后最大的一个变化就是作业的整体吞吐量由原来的91个Job提升到了119个Job（concurrentJobs并没有变，依然是默认值1）, 这有力地证明了FAIR模式可以提升作业的并行度，当然，更加显著的效果要配合提升concurrentJobs，我们会在下一个测试用例中了解到。</p>
+<p>从Job页面以及前三个Stage上看，本测试和对比测试《Test Case 3-1: FIFO 4 Slots》是很类似的，对于FIFO我们前面已有解释，但是对于FAIR模式我们也要认清一点：即使concurrentJobs&#x3D;1，Spark也会遵从与FIFO同样的原则：如果集群当前尚有空闲资源，则处于等待状态中的作业一定会被激活。例如在本例中，我们就可以从Job截图上看到，虽然concurrentJobs&#x3D;1，但是依然有两个Active的Job。</p>
+<p>当然，FAIR模式作业运行的一个最基本的“特征”就是一个需要话费长时间完成的长作业会在中途被“打断”，Spark留出资源给到其他的作业去执行，例如本例stage 3和stage 6关系，同样的情况也发生在《Test Case 1-2: FAIR》</p>
+<ul>
+<li><p>Job<br> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/13.png" alt="这里写图片描述"></p>
+</li>
+<li><p>Stage 0</p>
+</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/14.png" alt="这里写图片描述"></p>
+<ul>
+<li>Stage 1</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/15.png" alt="这里写图片描述"></p>
+<ul>
+<li>Stage 2</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/16.png" alt="这里写图片描述"></p>
+<ul>
+<li>Stage 3</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/17.png" alt="这里写图片描述"></p>
+<ul>
+<li>Stage 6<br> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/18.png" alt="这里写图片描述"></li>
+</ul>
+<h4 id="Test-Case-Group-4-FAIR-4-Slots-concurrentJobs-1-vs-FAIR-4-Slots-concurrentJobs-4"><a href="#Test-Case-Group-4-FAIR-4-Slots-concurrentJobs-1-vs-FAIR-4-Slots-concurrentJobs-4" class="headerlink" title="Test Case Group 4: FAIR 4 Slots, concurrentJobs &#x3D; 1 vs. FAIR 4 Slots, concurrentJobs &#x3D; 4"></a>Test Case Group 4: FAIR 4 Slots, concurrentJobs &#x3D; 1 vs. FAIR 4 Slots, concurrentJobs &#x3D; 4</h4><h5 id="Test-Case-4-1-FAIR-4-Slots-concurrentJobs-1"><a href="#Test-Case-4-1-FAIR-4-Slots-concurrentJobs-1" class="headerlink" title="Test Case 4-1: FAIR 4 Slots, concurrentJobs &#x3D; 1"></a>Test Case 4-1: FAIR 4 Slots, concurrentJobs &#x3D; 1</h5><p>该测试用例就是《Test Case 3-2：FAIR 4 Slots》</p>
+<h5 id="Test-Case-4-2-FAIR-4-Slots-concurrentJobs-4"><a href="#Test-Case-4-2-FAIR-4-Slots-concurrentJobs-4" class="headerlink" title="Test Case 4-2: FAIR 4 Slots, concurrentJobs &#x3D; 4"></a>Test Case 4-2: FAIR 4 Slots, concurrentJobs &#x3D; 4</h5><ul>
+<li>配置</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">spark.num.executors=1</span><br><span class="line">spark.executor.cores=4</span><br><span class="line">spark.streaming.concurrentJobs=4</span><br><span class="line">spark.scheduler.mode=FAIR</span><br><span class="line">spark.sql.shuffle.partitions=100</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>结论</li>
+</ul>
+<p>concurrentJobs变为4之后，我们可以在作业视图中观察到有4个Active的作业，顾名思义，concurrentJobs参数的作用就是Spark Streaming允许并行作业的数量，具体到代码层面上就是用来执行作业的线程数。但是，从运行结果上看，可能让人出乎意料：concurrentJobs变为4之后，作业的整个吞吐量没有得到明显的提升！这说明作业执行的瓶颈已不再是并发度了，原因是我们前面所有concurrentJobs&#x3D;1的测试用例中，配置上是限定了一个并发作业，但是在鉴于部分作业只需要一个core,所以集群中某些时刻总是有空余资源，这时候Spark会启动新的作业，从而让硬件资源充分利用。即使我们在这个测试中人为的把作业并发数改为了4，也不会在整体的资源利用率上有所提升了！</p>
+<p>补充说明：</p>
+<ol>
+<li>不管是FIFO还FAIR（concurrentJobs&#x3D;1），某一时刻都是可能存在两上以上的Active Job的！！这是因为只要还有空闲资源，Spark就会激活等待中的作业！它们的Task就会进入到Pool的Task队列里！</li>
+</ol>
+<ul>
+<li>Job</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/19.png" alt="这里写图片描述"></p>
+<ul>
+<li><p>Stage 0<br> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/20.png" alt="这里写图片描述"></p>
+</li>
+<li><p>Stage 1</p>
+</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/21.png" alt="这里写图片描述"></p>
+<ul>
+<li><p>Stage 2<br> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/22.png" alt="这里写图片描述"></p>
+</li>
+<li><p>Stage 6</p>
+</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/23.png" alt="这里写图片描述"></p>
+<ul>
+<li>Stage 4</li>
+</ul>
+<p> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/24.png" alt="这里写图片描述"></p>
+<h4 id="Test-Case-Group-5-FAIR-4-Slots-concurrentJobs-4-Root-Pool-vs-FAIR-4-Slots-concurrentJobs-4-Independent-Pools"><a href="#Test-Case-Group-5-FAIR-4-Slots-concurrentJobs-4-Root-Pool-vs-FAIR-4-Slots-concurrentJobs-4-Independent-Pools" class="headerlink" title="Test Case Group 5: FAIR 4 Slots, concurrentJobs &#x3D; 4, Root Pool vs. FAIR 4 Slots, concurrentJobs &#x3D; 4, Independent Pools"></a>Test Case Group 5: FAIR 4 Slots, concurrentJobs &#x3D; 4, Root Pool vs. FAIR 4 Slots, concurrentJobs &#x3D; 4, Independent Pools</h4><h5 id="Test-Case-5-1-FAIR-4-Slots-concurrentJobs-4-Root-Pool"><a href="#Test-Case-5-1-FAIR-4-Slots-concurrentJobs-4-Root-Pool" class="headerlink" title="Test Case 5-1: FAIR 4 Slots, concurrentJobs &#x3D; 4, Root Pool"></a>Test Case 5-1: FAIR 4 Slots, concurrentJobs &#x3D; 4, Root Pool</h5><p>该测试用例就是《Test Case 4-2: FAIR 4 Slots, concurrentJobs &#x3D; 4》</p>
+<h5 id="Test-Case-5-2-FAIR-4-Slots-concurrentJobs-4-Independent-Pools"><a href="#Test-Case-5-2-FAIR-4-Slots-concurrentJobs-4-Independent-Pools" class="headerlink" title="Test Case 5-2: FAIR 4 Slots, concurrentJobs &#x3D; 4, Independent Pools"></a>Test Case 5-2: FAIR 4 Slots, concurrentJobs &#x3D; 4, Independent Pools</h5><ul>
+<li>配置</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">spark.num.executors=1</span><br><span class="line">spark.executor.cores=4</span><br><span class="line">spark.streaming.concurrentJobs=4</span><br><span class="line">spark.scheduler.mode=FAIR</span><br><span class="line">spark.sql.shuffle.partitions=100</span><br><span class="line">//在4个流上都使用了独立的pool:</span><br><span class="line">sparkSession.sparkContext.setLocalProperty(&quot;spark.scheduler.pool&quot;, s&quot;pool_persist_$metric&quot;)</span><br><span class="line">sparkSession.sparkContext.setLocalProperty(&quot;spark.scheduler.pool&quot;, s&quot;pool_evaluate_$metric&quot;)</span><br></pre></td></tr></table></figure>
+
+<p>4个独立pool的配置：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span>?&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">allocations</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">pool</span> <span class="attr">name</span>=<span class="string">&quot;pool_persist_cpu_usage&quot;</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">schedulingMode</span>&gt;</span>FAIR<span class="tag">&lt;/<span class="name">schedulingMode</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">weight</span>&gt;</span>1<span class="tag">&lt;/<span class="name">weight</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">minShare</span>&gt;</span>0<span class="tag">&lt;/<span class="name">minShare</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">pool</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">pool</span> <span class="attr">name</span>=<span class="string">&quot;pool_persist_mem_free&quot;</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">schedulingMode</span>&gt;</span>FAIR<span class="tag">&lt;/<span class="name">schedulingMode</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">weight</span>&gt;</span>1<span class="tag">&lt;/<span class="name">weight</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">minShare</span>&gt;</span>0<span class="tag">&lt;/<span class="name">minShare</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">pool</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">pool</span> <span class="attr">name</span>=<span class="string">&quot;pool_evaluate_cpu_usage&quot;</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">schedulingMode</span>&gt;</span>FAIR<span class="tag">&lt;/<span class="name">schedulingMode</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">weight</span>&gt;</span>1<span class="tag">&lt;/<span class="name">weight</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">minShare</span>&gt;</span>0<span class="tag">&lt;/<span class="name">minShare</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">pool</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">pool</span> <span class="attr">name</span>=<span class="string">&quot;pool_evaluate_mem_free&quot;</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">schedulingMode</span>&gt;</span>FAIR<span class="tag">&lt;/<span class="name">schedulingMode</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">weight</span>&gt;</span>1<span class="tag">&lt;/<span class="name">weight</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">minShare</span>&gt;</span>0<span class="tag">&lt;/<span class="name">minShare</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">pool</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">allocations</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>结论</li>
+</ul>
+<p>这是变化最剧烈的一个测试用例，也就是意味着 <code>spark.scheduler.pool</code> 是一个效用非常大的配置项！我们先看一下Job页面，最大的变化是完成的作业数激增到935个！在之前的所有用例里， 四个作业（包含两个短作业：persist_cpu_usage和persist_mem_free以及两个长作业： evaluate_cpu_usage和evaluate_mem_free），无论长短，都是保持1：1：1：1的比例，而在本测试中两个短作业persist_cpu_usage和persist_mem_free的数量明显增多，远远超过了两个长作业数量的N倍！那么造成这一现象的原因是什么呢？关键点就是pool的weight属性！我们来看一下Spark官方文档对pool的weight属性的介绍：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">weight: This controls the pool’s share of the cluster relative to other pools. By default, all pools have a weight of 1. If you give a specific pool a weight of 2, for example, it will get 2x more resources as other active pools. Setting a high weight such as 1000 also makes it possible to implement priority between pools—in essence, the weight-1000 pool will always get to launch tasks first whenever it has jobs active.</span><br></pre></td></tr></table></figure>
+
+<p>不难看出：对于多个pool, 它们的weight决定了它们所能分得的硬件资源的“份额”！我们来对比地理解一下这个差别：在前面所有使用FAIR模式的测试用例中，都没有特别地配置pool, 它们都使用同一个默认的root pool, 则在同一个pool内，应用FAIR模式，四个作业得到的是均等的执行机会，因此4个作业完成的比例是1：1：1：1，而在本测试用例中，我们为四个作业配备了独立的pool, 而pool与pool之间是按占有资源的份额划分的，这就变成四个作业获得的执行资源是均等的，这一变化的实质效果就是提升了短作业占有资源的份额！因为之前4个作业是按均等的执行机会分配的，对于那些短作业，它们获得了资源之后，只需要很短的时间就完成了工作，所以宏观上它们实际占用资源的份额并不高，而现在的模式变成了，分配给它们均等的资源，则实质上短作业获得了更多的资源份额，因此完成作业数量就成倍地激增了！</p>
+<p>但是这一定是好的吗？这要看我们到底想如何协调长短作业之间的资源竞争关系！因为总的资源就这么多了，分配给了短作业更多的资源就意味了长作业获得的资源别消减了，这可以从长作业完成的数量上得到验证，在本测试用例中，一共完成了28个长作业（evaluate_cpu_usage和evaluate_mem_free），而在前一个对比测试中，完成的长作业数量是122&#x2F;2&#x3D;61个，所以总结下来最重点的结论是： <strong>pool是从整体计算资源上按份额(weight)进行切分的，在一个pool内部，如果是FAIR模式，则作业是按均等的执行机会来划分的。</strong> </p>
+<ul>
+<li>Job<br> <img src="/../../images/spark/spark-tuning-2-streaming-parameters/25.png" alt="这里写图片描述"></li>
+</ul>
+</div><div class="article-licensing box"><div class="licensing-title"><p>Spark性能调优系列二：Spark流计算重要性能参数测试与分析</p><p><a href="https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/">https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2018-06-21</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/">性能调优</a><a class="link-muted mr-2" rel="tag" href="/tags/Spark/">Spark</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/spark/spark-watermark-and-mapgroupswithstate/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Spark基于事件时间的“状态”流的深层分析 - withWatermark与mapGroupsWithState的关系</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/spark/spark-tuning-1-job-model/"><span class="level-item">Spark性能调优系列一：Spark的作业模型</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#参数介绍"><span class="level-left"><span class="level-item">参数介绍</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#spark-scheduler-mode"><span class="level-left"><span class="level-item">spark.scheduler.mode</span></span></a></li><li><a class="level is-mobile" href="#spark-streaming-concurrentJobs"><span class="level-left"><span class="level-item">spark. streaming .concurrentJobs</span></span></a></li><li><a class="level is-mobile" href="#scheduler线程池"><span class="level-left"><span class="level-item">scheduler线程池</span></span></a></li></ul></li><li><a class="level is-mobile" href="#测试用例"><span class="level-left"><span class="level-item">测试用例</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#Test-Case-Group-1-FIFO-vs-FAIR"><span class="level-left"><span class="level-item">Test Case Group 1: FIFO vs. FAIR</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#Test-Case-1-1-FIFO"><span class="level-left"><span class="level-item">Test Case 1-1: FIFO</span></span></a></li><li><a class="level is-mobile" href="#Test-Case-1-2-FAIR"><span class="level-left"><span class="level-item">Test Case 1-2: FAIR</span></span></a></li></ul></li><li><a class="level is-mobile" href="#Test-Case-Group-2-FIFO-1-Slot-vs-FIFO-4-Slots"><span class="level-left"><span class="level-item">Test Case Group 2: FIFO 1 Slot vs. FIFO 4 Slots</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#Test-Case-2-1-FIFO-1-Slot"><span class="level-left"><span class="level-item">Test Case 2-1: FIFO 1 Slot</span></span></a></li><li><a class="level is-mobile" href="#Test-Case-2-2-FIFO-4-Slots"><span class="level-left"><span class="level-item">Test Case 2-2: FIFO 4 Slots</span></span></a></li></ul></li><li><a class="level is-mobile" href="#Test-Case-Group-3-FIFO-4-Slots-vs-FAIR-4-Slots"><span class="level-left"><span class="level-item">Test Case Group 3: FIFO 4 Slots vs. FAIR 4 Slots</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#Test-Case-3-1-FIFO-4-Slots"><span class="level-left"><span class="level-item">Test Case 3-1: FIFO 4 Slots</span></span></a></li><li><a class="level is-mobile" href="#Test-Case-3-2：FAIR-4-Slots"><span class="level-left"><span class="level-item">Test Case 3-2：FAIR 4 Slots</span></span></a></li></ul></li><li><a class="level is-mobile" href="#Test-Case-Group-4-FAIR-4-Slots-concurrentJobs-1-vs-FAIR-4-Slots-concurrentJobs-4"><span class="level-left"><span class="level-item">Test Case Group 4: FAIR 4 Slots, concurrentJobs = 1 vs. FAIR 4 Slots, concurrentJobs = 4</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#Test-Case-4-1-FAIR-4-Slots-concurrentJobs-1"><span class="level-left"><span class="level-item">Test Case 4-1: FAIR 4 Slots, concurrentJobs = 1</span></span></a></li><li><a class="level is-mobile" href="#Test-Case-4-2-FAIR-4-Slots-concurrentJobs-4"><span class="level-left"><span class="level-item">Test Case 4-2: FAIR 4 Slots, concurrentJobs = 4</span></span></a></li></ul></li><li><a class="level is-mobile" href="#Test-Case-Group-5-FAIR-4-Slots-concurrentJobs-4-Root-Pool-vs-FAIR-4-Slots-concurrentJobs-4-Independent-Pools"><span class="level-left"><span class="level-item">Test Case Group 5: FAIR 4 Slots, concurrentJobs = 4, Root Pool vs. FAIR 4 Slots, concurrentJobs = 4, Independent Pools</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#Test-Case-5-1-FAIR-4-Slots-concurrentJobs-4-Root-Pool"><span class="level-left"><span class="level-item">Test Case 5-1: FAIR 4 Slots, concurrentJobs = 4, Root Pool</span></span></a></li><li><a class="level is-mobile" href="#Test-Case-5-2-FAIR-4-Slots-concurrentJobs-4-Independent-Pools"><span class="level-left"><span class="level-item">Test Case 5-2: FAIR 4 Slots, concurrentJobs = 4, Independent Pools</span></span></a></li></ul></li></ul></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

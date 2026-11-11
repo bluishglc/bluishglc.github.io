@@ -1,0 +1,1012 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Rust “一致性”和“孤儿规则”深度解读 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="Rust 的“一致性”（Coherence）是要解决：一种 “type + trait” 组合，只允许有一种 impl 这样一个问题，“孤儿规则”（Orphan Rule）是构建这种“一致性”（Coherence）的规则框架。大部分情况下，人们只使用简单的孤儿规则即可判断出一种 impl 是否合法，但是在一些较为特殊的场景下，为了能为外部的 trait 和 类 型添加 impl，Rust 引入了一"><meta property="og:type" content="article"><meta property="og:title" content="Rust “一致性”和“孤儿规则”深度解读"><meta property="og:url" content="https://laurence.enlightgram.com/rust/rust-coherence-and-orphan-rule/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="Rust 的“一致性”（Coherence）是要解决：一种 “type + trait” 组合，只允许有一种 impl 这样一个问题，“孤儿规则”（Orphan Rule）是构建这种“一致性”（Coherence）的规则框架。大部分情况下，人们只使用简单的孤儿规则即可判断出一种 impl 是否合法，但是在一些较为特殊的场景下，为了能为外部的 trait 和 类 型添加 impl，Rust 引入了一"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/rust/rust-coherence-and-orphan-rule/1.png"><meta property="article:published_time" content="2026-10-29T15:00:00.000Z"><meta property="article:modified_time" content="2026-11-11T03:07:47.355Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Rust"><meta property="article:tag" content="一致性"><meta property="article:tag" content="孤儿规则"><meta property="article:tag" content="Coherence"><meta property="article:tag" content="Orphan Rule"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/rust/rust-coherence-and-orphan-rule/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/rust/rust-coherence-and-orphan-rule/"},"headline":"Rust “一致性”和“孤儿规则”深度解读","image":["https://laurence.enlightgram.com/images/rust/rust-coherence-and-orphan-rule/1.png"],"datePublished":"2026-10-29T15:00:00.000Z","dateModified":"2026-11-11T03:07:47.355Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"Rust 的“一致性”（Coherence）是要解决：一种 “type + trait” 组合，只允许有一种 impl 这样一个问题，“孤儿规则”（Orphan Rule）是构建这种“一致性”（Coherence）的规则框架。大部分情况下，人们只使用简单的孤儿规则即可判断出一种 impl 是否合法，但是在一些较为特殊的场景下，为了能为外部的 trait 和 类 型添加 impl，Rust 引入了一"}</script><link rel="canonical" href="https://laurence.enlightgram.com/rust/rust-coherence-and-orphan-rule/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Rust “一致性”和“孤儿规则”深度解读</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Rust/">Rust</a></span><span class="level-item">发表于：<time dateTime="2026-10-29T15:00:00.000Z" title="2026-10-29 08:00:00">2026-10-29</time></span><span class="level-item">阅读用时：1 小时 (约 8799 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/rust/rust-coherence-and-orphan-rule/1.png" alt="Rust “一致性”和“孤儿规则”深度解读" fetchpriority="high"></figure><div class="content"><p><strong>引言</strong> </p>
+<p>Rust 的“一致性”（Coherence）是要解决：一种 “type + trait” 组合，只允许有一种 impl 这样一个问题，“孤儿规则”（Orphan Rule）是构建这种“一致性”（Coherence）的规则框架。大部分情况下，人们只使用简单的孤儿规则即可判断出一种 impl 是否合法，但是在一些较为特殊的场景下，为了能为外部的 trait 和 类 型添加 impl，Rust 引入了一个狭窄的豁免条款（RFC 2451），这是真正完备的“孤儿规则”，但复杂得有点可怕。“孤儿规则”是可以推导出来的，经历一遍推导过程可以让我们彻底理解它，本文，我们希望把大家带到“河的对岸”。</p>
+<p><strong>正文</strong> </p>
+<p>一致性（Coherence）和孤儿规则（Orphan Rule）在 Rust 中的影响面非常之广，但大多数情况下，我们根本感觉不到它们的存在，当真正遇到问题的时候，我们才会发现它们是如此复杂和烧脑。比如下面这个问题：</p>
+<blockquote>
+<p>为什么在 <code>impl&lt;T&gt; From&lt;LocalType&lt;T&gt;&gt; for Vec&lt;T&gt;</code> 中 <code>From</code> 和 <code>Vec</code> 都不在当前 crate 中，但这种 impl 却是合法的?</p>
+</blockquote>
+<p>我们并不想拿一些奇特、生僻的示例进行某种炫技式的表演，以上 impl 并不算复杂，在平时的工作中是有可能会写出来的，更重要的是，这个案例其实对应的是“孤儿规则”中最深的一个逻辑分支，是我们本文将会探索到的最深的地方。此外，还有一个并不是那么重要，但想搞清楚也并不容易的问题：</p>
+<blockquote>
+<p>为什么 <code>impl&lt;T&gt; LocalTrait&lt;T&gt; for Vec&lt;T&gt;</code> 会被视作 blanket impl，而 <code>impl&lt;T&gt; LocalTrait&lt;Vec&lt;T&gt;&gt; for Vec&lt;T&gt;</code> 则不是？</p>
+</blockquote>
+<p>这看似是一个关于 blanket impl 的问题，但解答它需要借用“孤儿规则”建立的理论工具，所以它也是我们本文要探讨的支线话题之一。当然，本文的主旨是全面、深入地介绍“一致性”和“孤儿规则”，并不是针对以上两个问题展开的，它们的答案会在理解了本文的全部内容后不言自明。</p>
+<p>备注：本文以 Rust for Rustaceans 一书中的 Coherence and the Orphan Rule 一节的内容为蓝本，参考 <a target="_blank" rel="noopener" href="https://rust-lang.github.io/rfcs/2451-re-rebalancing-coherence.html">RFC 2451</a> 的官方解释，追加了大量的解读和示例说明，要比两个原始出处的介绍理解起来容易得多，但即便如此，本文自第 5、6 两节的内容依然是很艰深的，需要耐心地花一些时间才能完全吃透。另外，推荐本公众号近期的一篇精华好文： <a href="/gpui/gpui-zed-action-mechanism/">《Zed &#x2F; GPUI 设计觉醒：现代编辑器 Action 机制解读》</a> </p>
+<h2 id="1-什么是一致性？"><a href="#1-什么是一致性？" class="headerlink" title="1. 什么是一致性？"></a>1. 什么是一致性？</h2><p>在 Rust 语言中，有 <strong>type</strong> （struct, enum , union）和 <strong>trait</strong> ，我们经常需要为一个 type 去实现一个 trait，也就是编写一个 <strong>impl 语句块</strong> ，构建出一个集属性和行为于一体的实用类型，所以，在 Rust 中我们构建和使用的其实一直是： <strong>“type + trait” 的组合</strong> 。由于 type、trait、impl 语句块都是独立的语法结构，可以分散在不同的地方编写，于是，不同的人可能会在不同的地方各自实现了同一种 “type + trait” 组合。</p>
+<p>也许这在单一 项目 中不会发生，但如果 type 和 trait 分别来自于两个不同的被广泛使用的 crate 的话，那么，它们的组合实现将会爆炸式增长，每一个需要使用它们的第三方库和项目都需要编写自己的实现。而如果再把泛型引入进来的话，就会在另一种维度上增加这种“重复实现”的可能性。针对同一种 “type + trait” 组合的多种实现势必会带来混乱，编译器无法确定应该采用哪一种实现，于是， <strong>Rust 规定：针对一种 “type + trait” 组合，只允许有一种 impl，这就是所谓的“一致性”（Coherence）</strong> 。</p>
+<h2 id="2-孤儿规则：杜绝多重实现，维持一致性"><a href="#2-孤儿规则：杜绝多重实现，维持一致性" class="headerlink" title="2. 孤儿规则：杜绝多重实现，维持一致性"></a>2. 孤儿规则：杜绝多重实现，维持一致性</h2><p>规定有了，要采取什么措施才能杜绝“多重实现”呢？我们假设 type 和 trait 分属两个 crate，这是常态，则：</p>
+<p><strong>方法一：impl 完全倒向 trait 那一侧</strong> </p>
+<p>只允许在 trait 所在的库中为一个外部的 type 编写它的实现代码，也就是限制 impl 语句块只能和它的 trait 待在同一个 crate 中，如此一来，只有 trait 所在的库才能实现 trait，别的库实现不了，这样就不会有重复实现了。但这一决策的副作用也是非常大的，如果大量的第三方库也想为自己的类型实现这个 trait，它们不能在自己的 crate 中编写，只能在 trait 所在的这个库中为各种第三方类型编写这个 trait 的实现，也就是说：这个海量的工作会落到 trait 库的维护者身上，这是不切实际的（工作量大，且无法穷尽）。</p>
+<p><strong>方法二：impl 完全倒向 type 这一侧</strong> </p>
+<p>只允许在 type 所在的库中为一个外部的 trait 编写它的实现代码，也就是限制 impl 语句块只能和它的 type 待在同一个 crate 中，这虽然解决了方法一面临的问题，却带来了方法一没有的问题，那就是：如果想为大量的第三方库中的类型实现这个 trait，不能在 trait 所在的 crate 中编写，只能到各个第三方库中去为它们的类型编写这个 trait 的实现，也就是说：这个海量的工作会分散到各个第三方库的维护者身上，这同样是不切实际的（根本没有这种协作模式）。</p>
+<p><strong>以上两种“单边倒”的策略都会“顾此失彼”，理想的处理方式是找到一种均衡的策略，避免以上两种方法中出现的极端状况。这种平衡策略就是：既允许 impl 在 trait 所在的 crate 中写，也允许 impl 在 type 所在的 crate 中写，但前提是 impl 针对的 trait 或 type 必须有一个是定义在当前 crate 中的，也就是说：只有当 trait 或 type 二者有其一是定义在你的 crate 中时，你才能在自己的 crate 中为这个 type 实现这个 trait，这就是“孤儿规则”（Orphan Rule）</strong> 。</p>
+<p>有了“孤儿规则”之后，你就能为一个外部（定义在其他 crate 中）的 type 实现自己的 trait，同时也可以为你自己的 type 添加外部 trait 的实现。典型的案例就是：你既可以为自己的类型实现标准库中的 <code>Display</code> trait，又可以为 <code>Vec&lt;T&gt;</code> 类型实现你自己的 <code>Paginate</code> trait（一个由你自定义的分页功能），但你却不能为 <code>Vec&lt;T&gt;</code> 类型实现 <code>Display</code> ，因为这里的 type 和 trait 都不属于你的 crate，孤儿规则会禁止这种行为。</p>
+<p>然而，需要提前告诉大家的是：以上关于孤儿规则的解释其实并不完全准确，它只是一个易于理解的简化版本，因为你没法用它去解释我们在文章开头提到的那种情形：为什么在 <code>impl&lt;T&gt; From&lt;LocalType&lt;T&gt;&gt; for Vec&lt;T&gt;</code> 中 <code>From</code> 和 <code>Vec</code> 都不在当前 crate 中，但这种 impl 却是合法的？要解释这个问题，必须使用完备版的“孤儿规则”，这要等到 5.3 节才能展开。</p>
+<h2 id="3-Fundamental-Types：孤儿规则排除在外的类型"><a href="#3-Fundamental-Types：孤儿规则排除在外的类型" class="headerlink" title="3. Fundamental Types：孤儿规则排除在外的类型"></a>3. Fundamental Types：孤儿规则排除在外的类型</h2><p>有些类型极为重要，因此必须允许任何人为其实现各种特性，即便这似乎违反了孤儿规则。这些类型会被标记上 <code>#[fundamental]</code> 属性，例如 <code>&amp;</code> 、 <code>&amp;mut</code> 以及 <code>Box</code> 。就孤儿规则而言，这类基本类型几乎可以被视为“不存在”或者说“透明”， <strong>孤儿规则判断一个 type 或 trait 归谁时，如果遇到 <code>&amp;</code> 、 <code>&amp;mut</code> 、 <code>Box</code> 这些类型，会直接跳过这一层，往里看</strong> 。比如： <code>Box&lt;Local&gt;</code> 会被视为 <code>Local</code> ，从而被判定为本地类型，但 <code>Vec&lt;Local&gt;</code> 则不可以。这样规定的原因是：像 <code>&amp;</code> 、 <code>&amp;mut</code> 以及 <code>Box</code> 这些“修饰”和“包裹”太过普遍，而人们需要的是为它们“修饰”和“包裹”的类型实现 trait，所以，在判定一个类型是本地还是外部时，并不考虑类型中的 <code>&amp;</code> 、 <code>&amp;mut</code> 、 <code>Box</code> 这些类型的修饰和包裹。</p>
+<p>这样我们就可以为 <code>&amp;MyType</code> 实现 <code>IntoIterator</code> 这样的特性了。如果仅依据“孤儿规则”，这种实现方式是不被允许的，因为它是为一种非标准类型的特性而实现的，毕竟 <code>IntoIterator</code> 和 <code>&amp;</code> 都来自标准库。Fundamental Type 可以被视作是“孤儿规则”为一些极为常用的类型开的一个“后门”。</p>
+<h2 id="4-Covered-Implementations：孤儿规则特许的为外部-type-实现外部-trait-的一类-impl"><a href="#4-Covered-Implementations：孤儿规则特许的为外部-type-实现外部-trait-的一类-impl" class="headerlink" title="4. Covered Implementations：孤儿规则特许的为外部 type 实现外部 trait 的一类 impl"></a>4. Covered Implementations：孤儿规则特许的为外部 type 实现外部 trait 的一类 impl</h2><p>孤儿规则禁止为外部 type 实现外部 trait，这个规则其实是非常严格的，特别是当 type 和 trait 都来自于重度使用的库，比如标准库时，于是，“孤儿规则”在 Fundamental Type 之外，开了另外一个“后门”。考虑这样一种典型的场景：在我们当前自己的 crate （也称“本地”）中，有一个名为 <code>Pair&lt;T&gt;</code> 的结构体，它有 <code>a</code> 、 <code>b</code> 两个字段，我们很希望能在它和 <code>Vec&lt;T&gt;</code> 之间建立 from&#x2F;into 的转换关系，就是这样：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> <span class="variable">p</span> = Pair &#123; a: <span class="number">10</span>, b: <span class="number">20</span> &#125;;</span><br><span class="line"><span class="keyword">let</span> <span class="variable">v</span> = <span class="type">Vec</span>::<span class="title function_ invoke__">from</span>(p);</span><br></pre></td></tr></table></figure>
+
+<p>这需要我们为 <code>Vec&lt;T&gt;</code> 实现 <code>From&lt;T&gt;</code> ，这个 impl 语句块应该是这样的：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span>&lt;T&gt; <span class="built_in">From</span>&lt;Pair&lt;T&gt;&gt; <span class="keyword">for</span> <span class="title class_">Vec</span>&lt;T&gt; &#123;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">from</span>(pair: Pair&lt;T&gt;) <span class="punctuation">-&gt;</span> <span class="keyword">Self</span> &#123;</span><br><span class="line">        <span class="built_in">vec!</span>[pair.a, pair.b]</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>对于 <code>Pair</code> 所在的这个 crate 来说， <code>Vec&lt;T&gt;</code> 和 <code>From&lt;T&gt;</code> 都是外部的，按照前面介绍的孤儿规则，这是不允许的，然而实际上，它却是可行的， <strong>上面这种 impl 形式就是“Covered Implementation”</strong> （注意，这个名称并不是 Rust 的官方术语，而是 Rust for Rustaceans 一书的作者起的，因为官方没有针对这种 impl 起名，但这个名称起得非常好，covered 一词抓住了这个 impl 的关键特征，阅读完后面的章节你会体会到这一点），因为，在这里， <strong>孤儿规则引入了一个狭窄的豁免条款（在 RFC 2451 中正式提出），允许在非常特定的情况下为外部类型实现外部 trait</strong> 。</p>
+<p>如果我们能找到一种约束规则，允许为外部 type 实现外部 trait 而不会引发重复的 impl，这当然是一件天大的好事，但问题就在于：绝大多数情况下，为外部 type 实现外部 trait 的 impl 根本找不到这种规则，而 Covered Implementations 是目前唯一能“圈选”出所有可能的重复实现并“确定”其中一种实现的规则，所以它才能被引入进来，关于对 Covered Implementations 更深刻的解读，要等我们重新认识孤儿规则之后，才会对它有更深刻的认识。</p>
+<h2 id="5-重新认识孤儿规则"><a href="#5-重新认识孤儿规则" class="headerlink" title="5. 重新认识孤儿规则"></a>5. 重新认识孤儿规则</h2><p>我们在第 2 节介绍了孤儿规则，在第 3、4 节介绍了孤儿规则的两种例外情形，特别是对于 Covered Implementations，我们不得不问的是：为什么 <code>impl&lt;T&gt; From&lt;Pair&lt;T&gt;&gt; for Vec&lt;T&gt;</code> 这种 impl 能被允许？还有别的类似形式吗？这里总该有个“标准”吧？当然得有，而且，这个“标准”还是“孤儿规则”定的，准确地说是完备的“孤儿规则”，而我们在第 2 节介绍的孤儿规则其实是一个简化版本。在这一节，我们来重新认识一下孤儿规则。</p>
+<h3 id="5-1-impl-的声明形式"><a href="#5-1-impl-的声明形式" class="headerlink" title="5.1 impl 的声明形式"></a>5.1 impl 的声明形式</h3><p>首先，为了让解释更加准确和清晰，我们必须对 impl 声明中出现的各种类型进行一下编号，因为这些编号以及它们的顺序也会在规则中提到。我们用下面这种形式来表示（注意：这是 Rust 语言 参考手册 中使用的官方描述形式）：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span>&lt;P1..=Pn&gt; Trait&lt;T1..=Tn&gt; <span class="keyword">for</span> <span class="title class_">T0</span></span><br><span class="line">    ^^^^^^^^  ^^^^^ ^^^^^^^^     ^^</span><br><span class="line">     泛型参数 |<span class="keyword">trait</span> |类型：T1..Tn |类型：T0</span><br></pre></td></tr></table></figure>
+
+<p><code>..=</code> 是借用了 Rust 的闭区间语法： <code>1..=n</code> 表示 <code>1</code> , <code>2</code> , …, <code>n</code> 。所以：</p>
+<ul>
+<li><p><code>P1..=Pn</code> ：表示 <code>P1</code> , <code>P2</code> , …, <code>Pn</code> ，即一组泛型参数；</p>
+</li>
+<li><p><code>T1..=Tn</code> ：表示 <code>T1</code> , <code>T2</code> , …, <code>Tn</code> ，即一组类型；</p>
+</li>
+<li><p><code>T0</code> ：就是 Self 的类型，它被当作“第 0 个类型”，要和 trait 的类型参数一起排序，在后面的检查规则中会使用这个编号。</p>
+</li>
+</ul>
+<p><strong>注意： <code>T0</code> 是 for 后面的整个部分，如果是 <code>for Vec&lt;T&gt;</code> ，那 <code>T0 = Vec&lt;T&gt;</code> ，而 <code>T1..=Tn</code> 则是 trait 尖括号里的类型，如果是 <code>MyTrait&lt;T&gt; for</code> ，那 <code>T1 = T</code> ，如果是 <code>MyTrait&lt;Vec&lt;T&gt;&gt; for</code> ，那 <code>T1 = Vec&lt;T&gt;</code></strong> ，此外，后面还会出现 <code>T0..Ti</code> ， <code>..</code> 是左闭右开区间，表示 <code>T0</code> , <code>T1</code> , …, <code>T(i-1)</code> ，不包含 <code>Ti</code> 。以上标记完全展开的话就是下面的样子：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span>&lt;P1, P2, …, Pn&gt; Trait&lt;T1, T2, …, Tn&gt; <span class="keyword">for</span> <span class="title class_">T0</span></span><br><span class="line">    ^^^^^^^^^^^^^^^ ^^^^^ ^^^^^^^^^^^^^      ^^</span><br><span class="line">    泛型参数: P1..Pn |<span class="keyword">trait</span>|类型：T1..Tn       |类型：T0</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-2-简单示例"><a href="#5-2-简单示例" class="headerlink" title="5.2 简单示例"></a>5.2 简单示例</h3><p>为了能更好地理解并熟练认出以上 impl 描述形式中的符号和编号，我们需要做几个小练习，从易到难，慢慢递进。</p>
+<p><strong>例 1：impl 没有泛型参数，trait 也没有类型实参</strong> </p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span> <span class="title class_">Display</span> <span class="keyword">for</span> <span class="title class_">Meters</span></span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th align="left">记号</th>
+<th align="left">内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">P</td>
+<td align="left">没有</td>
+</tr>
+<tr>
+<td align="left">T0</td>
+<td align="left"><code>Meters</code></td>
+</tr>
+<tr>
+<td align="left">T1…Tn</td>
+<td align="left">没有（ <code>Display</code> 不带类型实参）</td>
+</tr>
+</tbody></table>
+<p><strong>例 2：impl 没有泛型参数，trait 有一个类型实参</strong> </p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span> <span class="title class_">From</span>&lt;<span class="type">i32</span>&gt; <span class="keyword">for</span> <span class="title class_">Meters</span></span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th align="left">记号</th>
+<th align="left">内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">P</td>
+<td align="left">没有</td>
+</tr>
+<tr>
+<td align="left">T0</td>
+<td align="left"><code>Meters</code></td>
+</tr>
+<tr>
+<td align="left">T1</td>
+<td align="left"><code>i32</code></td>
+</tr>
+</tbody></table>
+<p><strong>例 3：impl 有多个泛型参数，trait 也有多个类型实参</strong> </p>
+<p>假设有一个带两个类型参数的 trait： <code>trait Convert&lt;A, B&gt; {}</code> 。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span>&lt;X, Y&gt; Convert&lt;X, <span class="type">Vec</span>&lt;Y&gt;&gt; <span class="keyword">for</span> <span class="title class_">Option</span>&lt;X&gt;</span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th align="left">记号</th>
+<th align="left">内容</th>
+<th align="left">其中的 P 是否 covered</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">P1</td>
+<td align="left"><code>X</code></td>
+<td align="left">类型参数声明，不适用</td>
+</tr>
+<tr>
+<td align="left">P2</td>
+<td align="left"><code>Y</code></td>
+<td align="left">类型参数声明，不适用</td>
+</tr>
+<tr>
+<td align="left">T0</td>
+<td align="left"><code>Option&lt;X&gt;</code></td>
+<td align="left"><code>X</code> 被 <code>Option</code> 包着，所以， <code>X</code> 是 <strong>covered type</strong></td>
+</tr>
+<tr>
+<td align="left">T1</td>
+<td align="left"><code>X</code></td>
+<td align="left"><code>X</code> 单独出现，没被任何类型包裹，所以， <code>X</code> 是 <strong>uncovered type</strong></td>
+</tr>
+<tr>
+<td align="left">T2</td>
+<td align="left"><code>Vec&lt;Y&gt;</code></td>
+<td align="left"><code>Y</code> 被 <code>Vec</code> 包着，所以， <code>Y</code> 是 <strong>covered type</strong></td>
+</tr>
+</tbody></table>
+<p>在这个示例中，我们第一次看到 covered type 和 uncovered type 这两个概念，这是 Rust 语言参考手册中定义的重要概念，简单介绍一下：</p>
+<ul>
+<li><p><strong>covered type</strong> ：作为另外一种泛型类型的类型参数出现的类型。covered 意为：有一层覆盖物的，以示例中出现在 <code>T0</code> 位置上的 <code>Option&lt;X&gt;</code> 为例，类型 <code>X</code> 就是被类型 <code>Option</code> 覆盖着的，所以， <code>T0</code> 位置上的 <code>X</code> 是 covered（注意，指的是 <code>X</code> 不是包裹它的外层类型）</p>
+</li>
+<li><p><strong>uncovered type</strong> ：就是单独出现，没有作为另外一种泛型类型的类型参数出现的类型，以示例中出现在 <code>T1</code> 位置上的 <code>X</code> 为例，类型 <code>X</code> 单独出现，没有被任何类型覆盖，所以， <code>T1</code> 位置上的 <code>X</code> 是 uncovered</p>
+</li>
+</ul>
+<h3 id="5-3-完备的“孤儿规则”"><a href="#5-3-完备的“孤儿规则”" class="headerlink" title="5.3 完备的“孤儿规则”"></a>5.3 完备的“孤儿规则”</h3><p>OK, 所有的基础概念都已介绍完毕，我们重新看一下真正的“孤儿规则”描述吧：</p>
+<ol>
+<li><p><strong>trait 是本地的吗？即：trait 是在当前 crate 中定义的吗</strong> ？若是，直接 ☑ 允许（就是前面给出的简化版的孤儿规则）；</p>
+</li>
+<li><p>否则， <strong>从 T0 开始往后找，找到第一个本地类型，记为 Ti</strong> 。若一个都没找到，直接 ☒ 禁止；</p>
+</li>
+<li><p>若找到， <strong>检查 Ti 前面的那些 T（不含 Ti）有没有 uncovered 的 P</strong> 。没有则 ☑ 允许，有则 ☒ 禁止；</p>
+</li>
+</ol>
+<p>其中， <code>Ti</code> ，也就是第一个本地类型，在孤儿规则的判定中非常重要，后面会反复提到它，所以得给它起一个名字，本文我们把它叫：“锚点”，至于为什么会这么叫，后面会再解释。以上判定规则用下图会表示得更清晰一些：</p>
+<p><img src="/../../images/rust/rust-coherence-and-orphan-rule/2.png"></p>
+<p>让我们拿几个例子练习一下， <code>From</code> 是标准库中的 trait，显然是外部的， <code>Local</code> 是一个本地类型，下面的表格列举了几种 impl 形式，然后给出了判定它们是否合法的过程：</p>
+<table>
+<thead>
+<tr>
+<th align="left">本地书写的 impl</th>
+<th align="left">第 1 步</th>
+<th align="left">第 2 步：第一个本地类型 Ti</th>
+<th align="left">第 3 步：Ti 之前有没有 uncovered P</th>
+<th align="left">结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><code>impl From&lt;Local&gt; for Vec&lt;Local&gt;</code></td>
+<td align="left"><code>From</code> 不是本地 trait，继续往下看</td>
+<td align="left">T0 &#x3D; <code>Vec&lt;Local&gt;</code> 不是本地类型；T1 &#x3D; <code>Local</code> 是，所以 i &#x3D; 1</td>
+<td align="left">只需检查 T0，T0 里没有任何 P</td>
+<td align="left">☑允许</td>
+</tr>
+<tr>
+<td align="left"><code>impl&lt;T&gt; From&lt;Local&gt; for Vec&lt;T&gt;</code></td>
+<td align="left"><code>From</code> 不是本地 trait，继续往下看</td>
+<td align="left">T1 &#x3D; <code>Local</code> ，i &#x3D; 1</td>
+<td align="left">T0 &#x3D; <code>Vec&lt;T&gt;</code> ， <code>T</code> 是 covered</td>
+<td align="left">☑允许（通过 RFC 2451 新放开的写法）</td>
+</tr>
+<tr>
+<td align="left"><code>impl&lt;T&gt; From&lt;Local&gt; for T</code></td>
+<td align="left"><code>From</code> 不是本地 trait，继续往下看</td>
+<td align="left">T1 &#x3D; <code>Local</code> ，i &#x3D; 1</td>
+<td align="left">T0 &#x3D; <code>T</code> ，是 uncovered</td>
+<td align="left">☒ 禁止</td>
+</tr>
+<tr>
+<td align="left"><code>impl&lt;T&gt; From&lt;T&gt; for Vec&lt;T&gt;</code></td>
+<td align="left"><code>From</code> 不是本地 trait，继续往下看</td>
+<td align="left">T0 &#x3D; <code>Vec&lt;T&gt;</code> 不是本地类型，T1 &#x3D; <code>T</code> 也不是</td>
+<td align="left">第 2 步已经失败</td>
+<td align="left">☒ 禁止</td>
+</tr>
+</tbody></table>
+<p>这个完备版本的“孤儿规则”能完全兼容前面所说的：只有当 trait 或 type 二者有其一是定义在你的 crate 中时，你才能在自己的 crate 中为其实现该 trait，同样也能解释第 5 节介绍的 Covered Implementations，同时，还能杜绝后面会提及的一种被称为“对称冲突”的漏洞，所以以上的描述是最完备的。</p>
+<p>最后，我们用上面介绍的新规则来推导一下它是否真的兼容“简化版”的孤儿规则：</p>
+<ul>
+<li><p>当 type 是本地类型时： <code>impl&lt;P1, P2, …, Pn&gt; ForeignTrait&lt;T1, T2, …, Tn&gt; for LocalType</code> </p>
+<p>第 1 步：ForeignTrait 不是本地 trait，继续往下看；</p>
+<p>第 2 步：第一个本地类型是 T0 &#x3D; LocalType，i &#x3D; 0；</p>
+<p>第 3 步：Ti 之前(T0 之前)已无任何 T 类型，自然也不会有 uncovered 的 P</p>
+<p>结论：合法</p>
+</li>
+<li><p>当 trait 是本地 trait 时： <code>impl&lt;P1, P2, …, Pn&gt; LocalTrait&lt;T1, T2, …, Tn&gt; for ForeignType</code> </p>
+<p>第 1 步：LocalTrait 是本地 trait，直接通过检查；</p>
+<p>结论：合法</p>
+</li>
+</ul>
+<h2 id="6-孤儿规则的推导"><a href="#6-孤儿规则的推导" class="headerlink" title="6. 孤儿规则的推导"></a>6. 孤儿规则的推导</h2><p>完备版本的“孤儿规则”非常强大，如同公式一样准确，但这正是我们困惑的地方：为什么？为什么是这样“无厘头”的规则？这背后肯定有某种内在的逻辑，所以我们还得再往下深挖一层，我们来试着推导一下孤儿规则。</p>
+<h3 id="6-1-目标和现状"><a href="#6-1-目标和现状" class="headerlink" title="6.1 目标和现状"></a>6.1 目标和现状</h3><p><strong>目标</strong> ：任意一个具体的 “type + trait” 组合，全世界最多只有一个 impl。</p>
+<p><strong>现状</strong> ：crate 之间的依赖关系构成一个“有向无环图”，一个 crate 只能看到自己和自己的上游依赖，两个 crate 之间只可能是：“上下游关系”或“互不依赖关系”中的一种。</p>
+<p>“上下游关系”就是依赖关系，“上游”指的是你的 crate 所依赖的 crate，而“下游”则是指依赖你这个 crate 的那些 crate；“互不依赖关系”则是指两个 crate 彼此没有出现在对方的上游中，也可称之为“平行关系”。</p>
+<p>注意，crate 之间的关系其实就是一个单纯的“有向无环图”问题， <strong>不管是“上下游关系”还是“互不依赖关系”，它们都不是限定在某个项目中的关系，而是在所有 crate 构成的全局 DAG 中，crate A 是否依赖 crate B，由 A 自己的 Cargo.toml 决定，和 A 被用在哪个项目里无关。所以“A、B 之间是‘上下游关系’还是‘互不依赖关系’在所有项目中都一样”</strong> 。上述两种关系，在 DAG 中其实是有专门术语的，分别叫：可比较（comparable）和不可比（incomparable），只不过太抽象了，所以我们还是用“上下游关系”和“互不依赖关系”来描述。</p>
+<p>与此同时，在一个项目中，项目本身是一个 crate，它会依赖多种 crate，这些 crate 之间也有两种关系：“父子关系”和**“兄弟关系”**，它们和“上下游关系”与“互不依赖关系”是两套不同的关系。比如： <strong>原本是“互不依赖关系”的两个 crate，它们在项目中可以通过 <code>Cargo.toml</code> 安排成“兄弟关系”</strong> ，原本是“父子关系”的两个 crate 也可以通过 <code>Cargo.toml</code> 安排成“兄弟关系”，但这些“安排”改变不了两个 crate 之间本来的关系，因为这些依赖都是从项目所对应的这个 crate 到这两个 crate 建立的 DAG 中的“边”，而不是两个 crate 之间的“边”。你可能会认为：项目所对应的这个 crate 不就是在这两个 crate 中间建立的新“边”吗？不是，因为边是有方向的！看一下图就知道了，假设 A 和 B 是两个互不依赖的 crate，在 app 中它们被定义成了“兄弟”，这并不表示 A 和 B 通过 app 建立了“间接”的关联，因为依赖（也就是边）是有方向的，从 A 或 B 是无法走到对方的，因为没有 A -&gt; app 或 B -&gt; app 这样的“边”：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">  app</span><br><span class="line"> /   \</span><br><span class="line">↓     ↓</span><br><span class="line">A     B</span><br></pre></td></tr></table></figure>
+
+<p>上面这个示例正好能揭示产生冲突的 impl 的原因，我们假设 A 和 B 都写了覆盖同一种 Covered Implementations，由于它们是“互不依赖”关系，彼此看不到对方，所以它们各自独立编译和使用时不会出现冲突， <strong>但当 app（第三个 crate）同时引入它们时，冲突就暴露出来了</strong> ：</p>
+<table>
+<thead>
+<tr>
+<th align="left">编译</th>
+<th align="left">能看到两个 impl 吗</th>
+<th align="left">结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">A</td>
+<td align="left">只能看到自己的</td>
+<td align="left">通过</td>
+</tr>
+<tr>
+<td align="left">B</td>
+<td align="left">只能看到自己的</td>
+<td align="left">通过</td>
+</tr>
+<tr>
+<td align="left">app</td>
+<td align="left">两个都能看到</td>
+<td align="left"><strong>冲突在这里才暴露</strong> ，但 app 改不了 A 和 B 的代码</td>
+</tr>
+</tbody></table>
+<p>孤儿规则正是为了解决这一问题才提出的。我们说：基于 crate 间的这两种拓扑关系，假设有 A、B 两个 crate，在两种情况下，两个 crate 可能会写出冲突的 impl：</p>
+<table>
+<thead>
+<tr>
+<th align="left">情形</th>
+<th align="left">拓扑关系</th>
+<th align="left">例子</th>
+<th align="left">冲突能否被编译器发现</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">1</td>
+<td align="left">上下游关系</td>
+<td align="left">A 在 B 的上游依赖中（或 B 在 A 的上游依赖中）</td>
+<td align="left"><strong>能</strong> 。B 编译时能看到 A 的 impl，有冲突编译器会报错</td>
+</tr>
+<tr>
+<td align="left">2</td>
+<td align="left">互不依赖关系</td>
+<td align="left">A、B 在各自的上游依赖里看不到对方</td>
+<td align="left"><strong>不能</strong> 。各自编译都通过，直到第三个 crate 同时依赖 A 和 B 时才会发现冲突</td>
+</tr>
+</tbody></table>
+<p><strong>孤儿规则的提出就是要杜绝第 2 种情形：让两个互不依赖的 crate 写不出相互冲突的 impl</strong> ，因为第 1 种情形在编译时可以检查出来，而第 2 种情形编译器是检查不来的，只能通过一些“规则”事先规避，这些规则当然也是编译器的规则，但跟编译器检查上下游关系中的 impl 冲突完全不同，这些规则是“事前干预”，是通过检查 impl 的形式在发生冲突前就报错规避掉了，而检查上下游关系中的 impl 冲突则是“事后干预”，是发现了具体的 impl 冲突后才报的错。那这个”规则“要怎么定呢？一定是要围绕目的去设计，我们继续往下分析。</p>
+<h3 id="6-2-第-1-条规则：为什么本地-trait-不用检查，直接允许？"><a href="#6-2-第-1-条规则：为什么本地-trait-不用检查，直接允许？" class="headerlink" title="6.2 第 1 条规则：为什么本地 trait 不用检查，直接允许？"></a>6.2 第 1 条规则：为什么本地 trait 不用检查，直接允许？</h3><p>在第 1 条规则中：若 trait 是本地的，则直接判定合法，为什么呢？因为：一个 trait 只会定义在一个 crate 里，任何别的 crate 想给这个 trait 写 impl，必须能“看到”它，也就是必须依赖 trait 所在的 crate。所以 trait 所在的 crate 和其他想要为这个 trait 写 impl 的 crate 必定是上下游关系，这自然会有编译器负责检查冲突，孤儿规则不用管。</p>
+<h3 id="6-3-第-2-条规则：如果是外部-trait，为什么必须要“锚定”一个本地类型"><a href="#6-3-第-2-条规则：如果是外部-trait，为什么必须要“锚定”一个本地类型" class="headerlink" title="6.3 第 2 条规则：如果是外部 trait，为什么必须要“锚定”一个本地类型?"></a>6.3 第 2 条规则：如果是外部 trait，为什么必须要“锚定”一个本地类型?</h3><p>在第 2 条规则中，我们需要找到第一个本地类型 <code>Ti</code> ，我们管它叫“锚点”，为什么需要一个“锚点”呢？因为，对于没有锚点的 impl 来说，如果 Rust 允许它被写出来，那人们就可以在无数个 crate 里写出无数种冲突的 impl。像下面这种典型的无锚点 impl，如果这种 impl 形式被放开，那冲突的 impl 将无法避免:</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span>&lt;T&gt; ForeignTrait&lt;T&gt; <span class="keyword">for</span> <span class="title class_">ForeignType</span>&lt;T&gt;</span><br></pre></td></tr></table></figure>
+
+<p>如果我们能找到一种合理的规则，让针对某种“type + trait”组合的 impl 只能写在一个特定的 crate 中，那冲突就能化解。一种可能的思路是：只要在 impl 的头部声明中有一个本地类型，不管是在 for 后面，还是在外部 trait 的尖括号中，便算是跟当前的 crate “有些关系”，借着这层“本地类型”的关系，让这种 impl 只能在当前这个 crate 中书写，也就是把这个 impl “锚定”到当前的 crate 中。</p>
+<p>这个想法是靠得住的，因为本地类型只有当前 crate 以及它的下游 crate 知道，与这个 crate 互不依赖的 crate 看不到这个类型，也就写不出它的 impl，而下游的 crate 虽然能写出重复的 impl，但编译器可以帮助识别出来，这样分析的话，这个规则几乎已经是完备的了。</p>
+<p>但坦率地讲， <strong>我没法正向推导这个设想，也就是说：我不知道“锚定一个本地类型“的点子是怎么被想来的</strong> ，尽管可以借助 AI，但很快我就意识到这是一个极为复杂的命题，里面有多种变量，且这些变量也不都是自变量，部分变量之间还有耦合关系，这让这个问题异常难解，所以，我没能完成这项工作。</p>
+<p>这里，我们只能给出一个关键性的结论： <strong>锚点规则生效之后，能覆盖一种“type + trait”组合的 impl 被限制到了一类 crate 上，这些 crate 在一条上下游链中，如果出现冲突的 impl，编译器可以发现</strong> 。</p>
+<h3 id="6-4-第-3-条规则：解决“对称冲突”"><a href="#6-4-第-3-条规则：解决“对称冲突”" class="headerlink" title="6.4 第 3 条规则：解决“对称冲突”"></a>6.4 第 3 条规则：解决“对称冲突”</h3><p>不过，这一逻辑有一个漏洞：假设 <code>ForeignTrait</code> 是定义在第三方 crate F 中的一个 trait，A 和 B 是互不依赖（彼此不可见）的两个 crate，在它们各自的 crate 中可能出现下面两种 impl：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// 在 crate A 中</span></span><br><span class="line"><span class="keyword">impl</span>&lt;T&gt; F::ForeignTrait&lt;A::Local&gt; <span class="keyword">for</span> <span class="title class_">T</span> &#123;&#125;       <span class="comment">// 包含本地类型 A::Local</span></span><br><span class="line"></span><br><span class="line"><span class="comment">/// 在 crate B 中</span></span><br><span class="line"><span class="keyword">impl</span>&lt;T&gt; F::ForeignTrait&lt;T&gt; <span class="keyword">for</span> <span class="title class_">B</span>::Local &#123;&#125;       <span class="comment">// 包含本地类型 B::Local</span></span><br></pre></td></tr></table></figure>
+
+<p>两个 impl 都包含各自的本地类型，但当 A 中的 <code>T = B::Local</code> 、B 中的 <code>T = A::Local</code> 时，两者就会覆盖同一种“type + trait” 组合：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(B::Local, F::ForeignTrait&lt;A::Local&gt;)</span><br></pre></td></tr></table></figure>
+
+<p>两个互不依赖的 crate 出现了冲突，原因在于： <strong>A 自己的锚点在 T1，但 A 在 T0 留了一个 uncovered 的 P，B 可以把自己的锚点填进这个位置；B 也同样在 T1 给 A 留了位置，A 也可以把自己的锚点填进这个位置。 两边都允许“type + trait”组合中的另一个位置可以是“任何人”，所以才出现了冲突的实现。我们把这种冲突称为“对称冲突”</strong> 。</p>
+<p>“对称冲突”发生在两个互不依赖的 crate 中，编译器是检查不出来的，只能靠添加规则来修补漏洞，这就是孤儿规则中的：规则 2、3 要解决的问题！ <strong>孤儿规则的 2、3 条款合在一起表述就是：从 T0 往后找，每个 crate 以自己的第一个本地类型 Ti 作为锚点，并且锚点之前不能有 uncovered 的 P，这个看上去很无厘头的规则其实是在“对称冲突”这个场景下作出的一个“二选一”的决定，那具体来说，这个“二选一”到底是什么样的呢？</strong> </p>
+<p><strong>把“对称冲突”这个问题摊开来看，之所以会出现对称冲突是因为：从 T0 到 Tn，我们选中了第一个本地类型 Ti 作为锚点后，T 的集合中出现了 uncovered 的 P，只要出现 uncovered 的 P，就有出现“对称冲突”的可能</strong> ，原因我们在上一节的示例中已经解释过了，这里再复述一遍，因为：A 自己的锚点在 T1，但 A 在 T0 留了一个 uncovered 的 P，B 可以把自己的锚点填进这个位置；B 也同样在 T1 给 A 留了位置，A 也可以把自己的锚点填进这个位置。 <strong>假如我们能找出对称冲突中两种 impl 的不同，那我们就可以借助它们的差异，选出其中的一种作为合法的 impl，然后杜绝另一种，对称冲突就可以化解，可以说，这就是孤儿规则最原始的设计动机，那对称冲突中的两种 impl 有不同吗？有！虽然它们的最终形式是完全一样的，但是那个促成它们最终一模一样的“变量”：uncovered 的 P 的位置是不一样的！在两种冲突的 impl 中，这个 uncovered 的 P 会分别出现在本地类型（也就是 Ti）的前面和后面</strong> ！看下面的例子就清楚了：</p>
+<table>
+<thead>
+<tr>
+<th align="left">impl</th>
+<th align="left">锚点</th>
+<th align="left">uncovered 的 P 位置</th>
+<th align="left">结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">A： <code>impl&lt;T&gt; F::ForeignTrait&lt;A::Local&gt; for T</code></td>
+<td align="left">T1</td>
+<td align="left">uncovered 的 P（T0），在锚点之前</td>
+<td align="left">☒ 禁止</td>
+</tr>
+<tr>
+<td align="left">B： <code>impl&lt;T&gt; F::ForeignTrait&lt;T&gt; for B::Local</code></td>
+<td align="left">T0</td>
+<td align="left">uncovered 的 P（T1），在锚点之后</td>
+<td align="left">☑允许</td>
+</tr>
+</tbody></table>
+<p><strong>孤儿规则中的“锚点之前不能有 uncovered 的 P”实际上就是选择了“uncovered 的 P 出现在锚点之后”的那个 impl 实现，禁止了“uncovered 的 P 出现在锚点之前”的那个 impl 实现</strong> 。实际上，如果你是 Rust 语言的主导者，如果你有那个权力的话，完全可以把规则反过来，也就是改为：“锚点之后不能有 uncovered 的 P”，可以非常确定的是：反过来的规则和现在的规则是一样安全的。至于， <strong>为什么 Rust 选择了“锚点之前不能有 uncovered 的 P”</strong> ，我们没有找到官方的解释，在 RFC 1023（最早引入“第一个本地类型 Ti”这条规则的 RFC）和 RFC 2451 都没有给出解释。但 <strong>原因是可以推测出来的，因为现有的规则更符合人们的设计习惯，人们往往习惯性地把 Self 当作 impl 关系中的主要对象，把 trait 当作次要对象。因此，常见的扩展往往是类型的作者为自己的类型实现外部 trait，而现有规则会优先认领 for Self 的 impl 形式，这就顺应了人们的设计习惯</strong> 。</p>
+<h2 id="7-Blanket-Implementations：孤儿规则理论衍生的-impl-分类"><a href="#7-Blanket-Implementations：孤儿规则理论衍生的-impl-分类" class="headerlink" title="7. Blanket Implementations：孤儿规则理论衍生的 impl 分类"></a>7. Blanket Implementations：孤儿规则理论衍生的 impl 分类</h2><p>最后，让我们来聊聊 Blanket Implementations，这好像是个临时插入的话题，因为它和我们的主线“孤儿规则”关系不大，但有一点交集，应该说，无论是否有孤儿规则，Blanket Implementations 都会存在，但是，在盘点一个 impl 是否是 Blanket Implementations 时需要使用到“孤儿规则”建立的理论工具。我们先简单介绍一下什么是 Blanket Implementation，它指的是这样一种 impl 形式：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span>&lt;T: Bond&gt; MyTrait <span class="keyword">for</span> <span class="title class_">T</span> &#123;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>这一形式的一个鲜明特征就是：for 后面是一个 uncovered 的 T</strong> ！这意味着：它一次性地为多种类型实现了 <code>MyTrait</code> 这个 trait。其中文名称可以叫“统一实现”，我个人觉得翻译成“地毯式实现”会更好，借用“地毯式轰炸”一词可以清楚地理解它的含义。blanket impl 只能在 trait 所在的 crate 中实现，因为 type 那一侧是泛型，不对应某个具体的 crate。如果一个 crate 在引入一个 trait 之初没有为其提供对应的 blanket impl 的话，则若在后续的版本中再添加 blanket impl，就会被视为破坏性变更（breaking change，是指原来能正常编译、运行的代码，在库升级版本之后编译失败、无法运行的情况），因为那些使用了 <code>impl MyTrait for Foo</code> 的 crate 可能会因为定义该 trait 所在的 crate 更新而导致编译失败，出现与现有实现冲突的错误。</p>
+<p>关于 Blanket Implementations，有一个非常 tricky 的问题，也就是文章开头提到的那个问题：为什么 <code>impl&lt;T&gt; LocalTrait&lt;T&gt; for Vec&lt;T&gt;</code> 会被视作 blanket impl，而 <code>impl&lt;T&gt; LocalTrait&lt;Vec&lt;T&gt;&gt; for Vec&lt;T&gt;</code> 则不是？刚接触 Blanket Implementations 概念的读者一般会认为：只有像前面示例中的那样出现了一个“裸 T”的时候，才能叫“地毯式”实现，显然问题中的两种形式都不算。实际上，这一理解还是过于“表面”，并没有认识到 Blanket Implementations 概念的实质，那它的实质是什么呢？</p>
+<p>实际上， <strong>Blanket Implementations 的判定规则是：只要 impl 的头部声明中出现了 uncovered 的 P，都是 blanket impl</strong> ，这里完全复用了孤儿规则为 impl 头部声明设置的术语。基于这个判定原则，我们来重新分析一下文章开头给出的两个示例：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span>&lt;T&gt; LocalTrait&lt;T&gt; <span class="keyword">for</span> <span class="title class_">Vec</span>&lt;T&gt;</span><br></pre></td></tr></table></figure>
+
+<p>首先，trait 是本地的，所以，这是一个合法的 impl，然后， <code>T0 = Vec&lt;T&gt;</code> ， <code>T1 = T</code> ，T1（也就是 P1）是 uncovered，所以，这是一个 Blanket Implementation。再看下面这个示例：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span>&lt;T&gt; LocalTrait&lt;<span class="type">Vec</span>&lt;T&gt;&gt; <span class="keyword">for</span> <span class="title class_">Vec</span>&lt;T&gt;</span><br></pre></td></tr></table></figure>
+
+<p>同样的，trait 是本地的，所以，这是一个合法的 impl，然后， <code>T0 = Vec&lt;T&gt;</code> ， <code>T1 = Vec&lt;T&gt;)</code> ，T1 中的 P1 是被 <code>Vec&lt;&gt;</code> covered 的，所以，这不是一个 Blanket Implementation。</p>
+<h2 id="8-重新梳理知识结构"><a href="#8-重新梳理知识结构" class="headerlink" title="8. 重新梳理知识结构"></a>8. 重新梳理知识结构</h2><p>在透彻理解了以上所有概念之后，我们就可以清晰地看到这些概念之间的逻辑脉络了，作为本文的收尾，是很好的一个总结。首先，“一致性”是总的纲领，也是所有规则和概念的最终目的，那就是：保证一种 “type + trait” 组合，只能有一种 impl。在这个愿景之下，人们最初的设想是：“单边倒”策略，即：要么让 impl 完全定义在 type 所在的 crate，要么让 impl 完全定义在 trait 所在的 crate，但两种方案都有问题，于是，Rust 设计了“孤儿规则”，在两套方案中做了平衡，即：既允许 impl 在 trait 所在的 crate 中写，也允许 impl 在 type 所在的 crate 中写，但前提是 impl 针对的 trait 或 type 必须有一个是定义在当前 crate 中的，这基本上确立了“一致性”的整体框架。</p>
+<p>但是，由于孤儿规则要求 impl 针对的 trait 或 type 必须有一个是本地的，这就完全禁止了为外部 type 实现外部 trait 的可能，但在某些特殊场景下（就是 Covered Implementations 所对应的场景），人们确实有充足的理由需要这样做，于是 Rust 给“孤儿规则”添加了一个狭窄的“豁免条款”，即：RFC 2451，让像 Covered Implementations 那样的实现合法化。</p>
+<p>而 Fundamental Types 则是孤儿规则针对类型设立的“过滤规则”，所有被 Fundamental Types 修饰或包裹的类型，在判断类型是本地还是外部时，并不会把外层的 Fundamental Types 考虑进去，而是直接忽略它们，直接考察它们修饰或包裹的类型。Blanket Implementations 则是相对于 Conditional Implementations 的一种 impl 分类。它跟孤儿规则之间并没有太直接的关系，但是判定一个 impl 是不是 Blanket Implementation 需要使用到孤儿规则建立的理论工具。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>Rust “一致性”和“孤儿规则”深度解读</p><p><a href="https://laurence.enlightgram.com/rust/rust-coherence-and-orphan-rule/">https://laurence.enlightgram.com/rust/rust-coherence-and-orphan-rule/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-10-29</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Rust/">Rust</a><a class="link-muted mr-2" rel="tag" href="/tags/%E4%B8%80%E8%87%B4%E6%80%A7/">一致性</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%AD%A4%E5%84%BF%E8%A7%84%E5%88%99/">孤儿规则</a><a class="link-muted mr-2" rel="tag" href="/tags/Coherence/">Coherence</a><a class="link-muted mr-2" rel="tag" href="/tags/Orphan-Rule/">Orphan Rule</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/rust/rust-newtype-pattern/"><span class="level-item">Rust 设计模式：newtype</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-什么是一致性？"><span class="level-left"><span class="level-item">1. 什么是一致性？</span></span></a></li><li><a class="level is-mobile" href="#2-孤儿规则：杜绝多重实现，维持一致性"><span class="level-left"><span class="level-item">2. 孤儿规则：杜绝多重实现，维持一致性</span></span></a></li><li><a class="level is-mobile" href="#3-Fundamental-Types：孤儿规则排除在外的类型"><span class="level-left"><span class="level-item">3. Fundamental Types：孤儿规则排除在外的类型</span></span></a></li><li><a class="level is-mobile" href="#4-Covered-Implementations：孤儿规则特许的为外部-type-实现外部-trait-的一类-impl"><span class="level-left"><span class="level-item">4. Covered Implementations：孤儿规则特许的为外部 type 实现外部 trait 的一类 impl</span></span></a></li><li><a class="level is-mobile" href="#5-重新认识孤儿规则"><span class="level-left"><span class="level-item">5. 重新认识孤儿规则</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#5-1-impl-的声明形式"><span class="level-left"><span class="level-item">5.1 impl 的声明形式</span></span></a></li><li><a class="level is-mobile" href="#5-2-简单示例"><span class="level-left"><span class="level-item">5.2 简单示例</span></span></a></li><li><a class="level is-mobile" href="#5-3-完备的“孤儿规则”"><span class="level-left"><span class="level-item">5.3 完备的“孤儿规则”</span></span></a></li></ul></li><li><a class="level is-mobile" href="#6-孤儿规则的推导"><span class="level-left"><span class="level-item">6. 孤儿规则的推导</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#6-1-目标和现状"><span class="level-left"><span class="level-item">6.1 目标和现状</span></span></a></li><li><a class="level is-mobile" href="#6-2-第-1-条规则：为什么本地-trait-不用检查，直接允许？"><span class="level-left"><span class="level-item">6.2 第 1 条规则：为什么本地 trait 不用检查，直接允许？</span></span></a></li><li><a class="level is-mobile" href="#6-3-第-2-条规则：如果是外部-trait，为什么必须要“锚定”一个本地类型"><span class="level-left"><span class="level-item">6.3 第 2 条规则：如果是外部 trait，为什么必须要“锚定”一个本地类型?</span></span></a></li><li><a class="level is-mobile" href="#6-4-第-3-条规则：解决“对称冲突”"><span class="level-left"><span class="level-item">6.4 第 3 条规则：解决“对称冲突”</span></span></a></li></ul></li><li><a class="level is-mobile" href="#7-Blanket-Implementations：孤儿规则理论衍生的-impl-分类"><span class="level-left"><span class="level-item">7. Blanket Implementations：孤儿规则理论衍生的 impl 分类</span></span></a></li><li><a class="level is-mobile" href="#8-重新梳理知识结构"><span class="level-left"><span class="level-item">8. 重新梳理知识结构</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

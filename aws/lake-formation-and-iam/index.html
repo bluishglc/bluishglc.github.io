@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Lake Formation 和 IAM 之间的区别与联系 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="IAM 和 Lake Formation 都是 AWS 上的权限管理服务，且默认都是自动开启并生效的，只是如果你没有特别配置过它们，可能感觉不到它们的存在，特别是Lake Formation（后文简写为 LF），通常情况下都是“透明”的，但它确实在每次请求时进行了权限检查。本文会详细介绍一下两者之间的区别和联系，特别是 Lake Formation 的作用机理。 整体介绍 下图能很好地解释两者之间"><meta property="og:type" content="article"><meta property="og:title" content="Lake Formation 和 IAM 之间的区别与联系"><meta property="og:url" content="https://laurence.enlightgram.com/aws/lake-formation-and-iam/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="IAM 和 Lake Formation 都是 AWS 上的权限管理服务，且默认都是自动开启并生效的，只是如果你没有特别配置过它们，可能感觉不到它们的存在，特别是Lake Formation（后文简写为 LF），通常情况下都是“透明”的，但它确实在每次请求时进行了权限检查。本文会详细介绍一下两者之间的区别和联系，特别是 Lake Formation 的作用机理。 整体介绍 下图能很好地解释两者之间"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/aws/lake-formation-and-iam/1.png"><meta property="article:published_time" content="2023-10-20T18:00:23.000Z"><meta property="article:modified_time" content="2026-11-06T07:30:18.468Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="AWS"><meta property="article:tag" content="数据湖"><meta property="article:tag" content="IAM"><meta property="article:tag" content="Lake Formation"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/aws/lake-formation-and-iam/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/aws/lake-formation-and-iam/"},"headline":"Lake Formation 和 IAM 之间的区别与联系","image":["https://laurence.enlightgram.com/images/aws/lake-formation-and-iam/1.png"],"datePublished":"2023-10-20T18:00:23.000Z","dateModified":"2026-11-06T07:30:18.468Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"IAM 和 Lake Formation 都是 AWS 上的权限管理服务，且默认都是自动开启并生效的，只是如果你没有特别配置过它们，可能感觉不到它们的存在，特别是Lake Formation（后文简写为 LF），通常情况下都是“透明”的，但它确实在每次请求时进行了权限检查。本文会详细介绍一下两者之间的区别和联系，特别是 Lake Formation 的作用机理。 整体介绍 下图能很好地解释两者之间"}</script><link rel="canonical" href="https://laurence.enlightgram.com/aws/lake-formation-and-iam/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Lake Formation 和 IAM 之间的区别与联系</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item article-label">付费</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/AWS/">AWS</a></span><span class="level-item">发表于：<time dateTime="2023-10-20T18:00:23.000Z" title="2023-10-20 11:00:23">2023-10-20</time></span><span class="level-item">阅读用时：10 分钟 (约 1511 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><div class="hbe hbe-container" id="hexo-blog-encrypt"
+     data-hbe-format="4"
+     data-wpm="密码错误, 请重新输入."
+     data-whm="密码错误, 请重新输入."
+     data-salt="15c6ed45103e35e26b274328ba7429527d1db50b18f01aeefd74839ca6a590ef"
+     data-nonce="30d2eac2dc7d9d06897df21d"
+     data-kdf-iterations="250000"
+     data-auto-save="true">
+  <script id="hbeData" type="hbeData">
+    1e5d6762caaea2859c80baed42d0fc05a2734b69273f4e2b54617dfcf3f04c29e1cba4dbb3ef84b403b5d2684a3c9a8abb244228372cdba73c6e6a080bb2c68ef60008373a2c6efe9b9df7616a536e1e8029e52c6dd8f0bfff6fe0863b5d5c0e7b88a3101c50fde2e454a209cb0ece58c3734e2764172759baeea7d8e3da242cb91b4082a33573d1d9f1aaabbf2a034b3baf6c3cb6813c45ae8baad0059da393f7e51d246fca7e3eb08cd38fe6a6337a38a073ee7ee404a04045b33542005e836951ed6414e3ecab8f24a70d8531265089002eb8c9447c2b8f1c5a0f41e4312f16a43a2c14a2373c35f10d19d5b52f09e805a4ccc635fca7bb7874760fd2fd90f8dbce6736ead654b7d2ba7ebf229af38009391d9b861b282e1c15098e8c554e01aaf9ad486116358137808a5533d11f982a28e4cd20da640e25d58dc332d7a7a98d7520b7fb1e81101dc45859f3b2651b5e1cd9b793ace2c9f8bda048367a3d983379fef277ee4d9390e0734008845d935c13098dc27545f1c94955edf4aaed1f88a876b0a9a89a39554dde3ea49348d98bb174e2fac336af0c5d7cfc30a99d3707bd0e7a0f082d40dbe05ad2a9950933c4cff7568bc920b2d65c517411677db726cde0c7692a6cd1783c593cc100a5860dcff7831ebcd7fd41c4b2655fb3d43b9ca48bbc52a7981fe6a6bbb998524ab6ce0168674da376f5885d6b3e28b19b53421c656a490934d1415f5838a4d5d83aeb9b372a154f03cb76aa44b4d70c9cbada65ad00b38eada5cef4a5f6d57974187fa33c5cfc645265c37646d0c962d394e2c7c4a58f525d8558f21483f068a8524cd954f0df0f90848db7dd6408ca75be188d2b5428d5ac31205d0aa7fb79c53ca32b0ca8b780a1cb521a5b91992e1a1553ba07abd6e040adeddbde0d257f129a1d5b229e71710b82b3adebfce40513e66cae79838e0992cb5246908cf3e310deadbca77bf63fb5466f358b0962372514777e090ffc3ddd8dfdcf3e11ebc35af47ae34a7afa4f9d1395334f0a384d31bbaf8071f6968f14d7431e73f92fda875f5b5524e489d034a7e293d6f67e711ad87c388c00683e5538aa9352f2e702f6757a37e54714832a377e95707b3ea9896b60b866381476419a4c74e09d018071b9f653070c263570e349b329fa37c69af3ebc795b87d226ea441caaaadd94a91fabcb734f1be2969696f400c782bfc91110e723e639a43afe9c47e4eb34d3954ca068eebd7e517f20f9645ea46780b3104c2a5623e209a07c3cb7d905b9304e015839a4475f2b8a11b3b548ea9b17eba34a0d3c890fe533639c4378a7c1b29863214e8b5232fb6501a94d54c0240527eb379a146538d4056c74f266bac4afcb8a912552aa2b2c9f36869ec90cf4b3d87f5027c34cb025c2c76364a9b7fbd0eeda190dc6edff8b37a8f0363fe8d518fd628b865fa62c555b4893ab3ee95b897fce7d05ad6bb142d04cb392591dc291a4fd808d114f31b4af826201e2365d050dcc7bbed32967ec9acfbb8b95f6e3c2a4df0bc209ec93edb91b4630bc662f0c8dffe4ba5f5bacce44454e74e1c50abb0f7552e28ac2dda24e4c6e4de7df9478196800fa3aec326e6d37cde9b290a9d4eabf12389aecc55d18e0e5ae06d3a0f4be8d0334c5d7e2ae58dd2f72118cbcd1caca840d916d08e7c70079868f5f1f502a3016e2662818e03a034338359c641b64a2f9ba7fbfb29510a8cbe6b869bac9bc596451584758995476c3715071dc150e988621eb6a1d1be2a6a458ba7571ec0fc507b15324575f6795fca7f78bc48e72e7cf4aa53e4ab79509992a90c5fc882aeffb5a9b0e36ddbd2f77c612128018a3b375608cf2d346a1b54168c0df930ff4a9d7b1a767a59fe152aa1034c1beae72f7b8f83f9099ddaf815b3dbd41b5d066d9e21f8114a5338c1c2c6013ad598c2f54ba3459a7bbf2145a9fb7a736749f26c29f9c86f0ce4824e3df11d4765552302014e135b75655ca824c6bfa1a7e701a899a68c3fd0f9e215653d6b929ec2fe8b19f64f1632bee4c67124c1e4013036fd8717f6a0204b43f29a612a05d418d6c712c0754ff4ddbb4b7bf99b5881bcaf4a659540f76a4aa64b776c54bb61caf1996b292b6a3fac451ef8db231ef1553e2fe8afd55c4f7651e822740ed04690179fc139b8f94e103aea27b90517fd05030cc5c9075ab7b58e497cedf44638be1e76286a8b8a9ac9c183c53eca56dbc094e840aa82524fa99c02d3ebe7b8d315d974239f9d2a2cca8dbf521b267676008523e03da5472cce9d83ed040178e7ea797f5b4be18526cc097a4a0021324b1bad99310f81620d70f032373b554d72db4b779bb28fbecb26aca6b34b1da6fbfdfd1f4d9d3b2bad81bfdb3ee082c633ef7e181332db8df4c0c38504d51f0d67a9d0d7ffd6c64f2ac08d130c3333db1628cd0ee79144e58582ee76eac76e7f6e992c1b9637e0409af4c75aa8746b66c26510a61f1c61efc813bded945a1cee4159a749d8376c92f49d565f9c76876c1e1624f46ad203220184519abe05016b16c990e18f1781b4307a1fca82aa6dd7f12f71f608e40e5611ccc4db4055cb9caf33ef1a386f3f731b9d2892eedfc27ce57945ddc91c38275f3f34687a0c4bf2f6bfcaee850fbc0607d6c7ed5764366c9320a84850ebe632d5938257e5a8d7b329c0835c8d6371a4038df383835d896495926df222c7ab5670a2e4862f05db1b8ffbad49976bec6fbfd5b7484e0642dcb39546d3c5f8b5dfdc7c07b0dcde48985759f29585bad997114f819d7195860b96c3a0fda59718374a34638361594fc5a3a3b457a0aba70b2c950f5a48b9d7245b35aec66c0f63f1a77a484c95cc6ef6e83114fe6f0fbe590e993f70852be22190aa880e8d1e09dabaf173cb6fa94d942aed9ebb48b9b0d8b7d5c84e3efae19834e1644cef3767dac4d670cb7c2d2d27dfc656e5d1fe49dce3d1abdab74b92ad95f4bd6fe4a97c014ea851e2765e0e3a5f58988e8a04242f6b40e1e2626786b5473b5971a2dfcf88b9de728b6150e60e64594c1ec30119d9c5e5a8daae4a61559959064122c0f7065670c7488dabd54bd87a969774fda2192d8cf296a440cdb221df8388aaab31a2c75b8ae97d2f281c539608e52c98a13423bb60ac9ae9ff30b52c7515e2f4fdcc53b97a53ec286b091cb57bc746b0db975743ad52cfb23f4bb5d368ff468f272acfcb57ef3461afb71c8ce60125451f359cfe8f4929c3397b17f7d8c75dd9d3da49e451361539d5f4cd269f6fd4ebd9156b2cf3a4a62aade76da346c96448b5e5874fe48e5d6a73021d6b639b66982cad55838fa36bf4a46e0a4f1788cec2ce05b32c110eba758299e7a58567c30f305218a8bd648926e90e0c31221e46d50410175f2f6dfae6732d97fcef69e12eb9379b7517ec56cb7ee9076fd38c6f6093cffd8e8b1048b19fc97b8caaa95f1c41e2f14b5453e6e6e2204a7cb047821fd22e488ee1838e680bd22015c1e2c93bcf51c4ace592b2b51589097023c6890eda25baf22b80c5e616a25b68d543cf162a94e6aef718f3e9c9e15be3c12846ad3771898e649222da495b4e2af1c1af8dcd9af0c1170e6b72527ce00860d8eaf2e7e02f63a40dc609bd47f32453d55dbd239edf56df13528254912dde1a5e8581ecac61d0574c00eb81fbd8343763d3d4db7224872f95662d96bc6b978ea0307b85495b9e82c7487817238ee6175bdc046afa6689677634b1e25cfc28374bf7e39b04c267de2f7384c93a318888e1503d11aa2e3977c4f2cb58a404e8b6ef1edd2b4ba8807d24973a776e7468e61522321e4ac7639ad2540194521f435876e6d611adbe53629d17c9a42a8e31691e57301bcde80079a81c908e726755816311c65e80d98cede3f94eefc1c2c091bce5a0c6b32886b027871c3aa049d27856c9d94f2121ac73c0cf8ecbee687cb2d2177f9f0de22266728e594c421186dfcaecd4b62c671c9fb76fb359da800d52f2dc921ca936314f24456ad26cb5cd85a0a4596b75c55c9f58b689b052d9d00c36aeaacf35be5ed1c11d2341a981a219c6acf309ef26a2d45085ba1d610cd8edbe4898421e9fab8444f616263781f90ac7073204a1b174c664469c282a3d603c0742815915cc0134d6f4924ed96fe83dff266a092ff8c5bab3654b33252c7e20cc6c04ac72aaa85aaf1d33ee66c05455653231a1ed6de86f7fbdcd5f801560016d4cd64bc45cfedc260096ced0d192b8e979336dac5046ead6aa7b01a4d613c1c4f080f278a3ad6366cf31c39f51f112d97168578a6e17c737af8e46c7bf2a9fe3945c4d047765884eb3ccb3a0acc934be4f8a25098676cee770fe633b8fce100a641028f3cb9ae43f29723b588779834f7415b15466c6061a231311ce24cb1844e91af045fe95dbd4c6a78cacbcf86194b6b9e31d8fcfb83f527bd0e81223337af4da6772494a0eeec6692cb25c17f512993081cfa35a1b8e8919cb61e446229321d7dc06801ba860c81bb5ce359f8934941fd3cc2542e6fbd91e5521b103f9fe6252821e492c162afa699c972c7c0e2b6abedd64f17f208330798f1c5d7c556544fc591d9b1bd238b52d1214644d126cf0c4e244e7ac0a42940577faf536a2f89147ad9028f973bd8316b0144515ed166c8c115833499114a6e6ed49caaf92ee9848bd00f18aa34e440bdc489f8cfef2d6fbaf32c2ac000c11f99e1e65008042fd92e060aa7af214935507bbb71247e5aeb8f23e7897a1be6d28799d8ec37811f7dd2d3a42fa22c1cb0fb09de9a670f15075d1c3a60e77f13f2feeb354708c9a7a8553b31db823f8f995d22a3e5bad18e458ee7122eef220b6eae272bd4bcf89f1586bd38fd391ba1fbdabe40f7d494df975a66b4f30bf49dcd05d36fa787dbf78161e8de38e07ad19d78f7b4bf5df1ec447981e4f6aa32ce93a2d5cd7e8ac5bbf10cb31bd25ec2f3e48ab529704a1cfa780b64c5308f585c264c6aa0bdbf703933f4f06e8a89691254d28750c7336107ffd817b8f2d9bc8a50930f349abcc7a6b9ede27b3cfde133499e09d7d37b7377e2d1086930fa5127f09b14eaf29626f4de6f0967bf5b2cb08769a4eea3bed533f962d053a86fee701b16d06615ad9b77dff6c127c7132c9ef78f4be4bebe4238b620c7fe1f65c2b1c2b48b8436a045573508ecbabc7f674aa81999e2f2642fac98e82281b47eadab60f9f032dcf7051ae824e2e67d249df77a50be0d2c0a0f315f33a5132a9c815a1e20fdd07d84324a02a8596db555a857f4de446621d8de86d311908647ad597026747806ff47da9e98f717ea3cc9cbf79f4a92de8b8c5f31e54bdfb3d53986ecc2140561b9c765049f71f3de265f7c98d5fa3666daf4acd893e7178e0db38d2fb3697c5609876ca1a18c521e2d316016812048ba4e8fe28c4785bcc08d112f5b84aac15671880bd269934527cfd1686e6afc94249850c255b827cb96ecf574faa78d85c4830979b05aa409c0e8464bf016661fc3fef267af1b0705f86dc00c51a8e798d24f4a61370a8835f470a12224baf8f53e45b9a491d40507bbd53b8a026300253cb7f463073758d0af4868049a0551db0d985c5e0d9b10efe9e7d0042ff4d4ae80ec51fe936768558b82a72b591949d19c81b7e8efdf079a907c04948771269583be95ef3d59a17dc1cf42e0c9b3d9d0f8a473e0c628c980057bd6bc2a15c1b4b8c925d718aa386c447026cf7645b0d4094e23ccdd43da897d5759046cfbd1e5b53bf847ff8fd476f9665933303918f1322a7ff1ffd0e34496923bafa79a2a962e9977a91c5d4b1a51d43a597b42aa79d232be85b178745595574449d3e8903d3a19e5f187f6e2efa44c5d3345704cb88210bbef66ca3443c0b9825be14868fb6faa38942dccf347eafe5c8f124d5828c6e53067d39973b629850c36ac5b2993c96ebf7cdabfd6739d93f666aa0b6e8d8966147d7905664dde7946a352f990f5f73b7e018e625489d2f612b36fd6f1f5463707528715e76eec92eddba9ad45f0824be6d8cd3203388e26c25dad709ba158eb57548bd60c309bf291b62abf25cb3f1aff511b33de88e5ca16f5f43a6273f1e88aa0c6f2b48edb2a9fc842cc1d361ead52502e36df9e2713b24f24e354cb2d11b225349ea621931d7a0d599f0dfdf8dedc06db2ce83c449d1e6757cef4807896d382ef10f64e2ee47f860c3740155f884ad597aea71b73b00e33a3131fea00fe44a785d6e945c6cd3b034febe43e3f2aba6d773fb67f646a4b383b094d7ee8262d1cc2cb643eb45aed4750fc1d094028bf8fe965023765975e50d067e4ddcd8d38611a06437505dc6c55e296aefa3f9ca349c7e655158fd6cd8795cb6c25b14dbad501cba5d180a8d9401444eeda13962a6d35d6437e537effd58a7213db9cabfc3d00291310bc4b86f5df1980137aedb6871a9bd92280dbbd8a6a0a7b5d3cd68b6ea0fbd21ba2cdfdb6ac08967d0055c0ce9e370351246dde4ed2b337ad1691ea0a604d7abb57ef884f93c5152cb3f364c268665545df7385874cbee549fcfcd8269be8ce663ea4fd639ae5890b32c8951bfe4a9cd94256be3fcb397b4eff42fa78832cc306badb0d035311a55b4eb1fe44d5165e34ad5dde245fae87d9d3c58a42a84f0c5e9468274612a078f326021b1e81b80b1a7f720aa8b6bd3892cb7cad95d75cb939c7830fd017f460e43b4e726fa141733fc68e2abae062c6d7c75361e237457de991c2bcc61dbd3a12df3ea26be6f8acf3850038c6fa012c4a154b4d3f4fa8e4dff4429b63c0034080a5059889a5fcb5efaac1aa38d164f0d0ff3124eae0cf7c5be7a564a3c09fac53f075e337da40a868a54c6abf69f4a3e401e08eac36b6cf19ca825c3463c8e72f6a8c781b09338354813953ed5ba87dfbf5e50f47d153802b524022573701935a87c4573c908015d5c196bbb1fe25c90cfb0f4e5c25d6ab4f571ad2d5a7740401b68c061697b340f13631aa805c75bd974a5487ee41b398d5309c18fecd2304d4f67afeba6c190eb1809c22b887fb7ba90951f8e67e023570cd047a64c8e8730acf929441b9e18d12b3be3999dd48558093cae0e576042c06fe87bf5cc97d6950329524deccca1fdf19a87a04f49bba23ec7aa1dac66e023691039f54e573abf8fc4c96383493da5f0dc7d26946d8d208c2db1480625a2bc3daf30d9647f07047c650eb0fe4d81754cf5424857f282c7bf756c5ace1413557e22e6742dd20ddc4eee43988c9938a38aecec283b4542afd4c19e28b395e1f216301573dcaff4c8c8a243ad70c1559d06b2b4c05aae4f404ce57f7b7c0f83e04bd13a018cf279dfbb8b54b614fb256c72d171f4248911431fc4c050933d25fcf3375c28621191506386a5bc17ea15303789978ec92ebfa4607fc1ae972bc69cac69edc8bb1e6b3035ff1967acccd9950e6acdd61099ea981ade1cdc47e39c31df57e736f4093a14d84d2d8bc80246245f0d318a9f652e978db9995c42fd8c5d04dbd232bef10dba1d3a91905bf7c5e0d10ef7c8c39d162dcfb21720bed3855e4b9f200bdf668025144d8af851724957a41ec1b42c45c542fae2fc17a6d02379accdc6159578b146935d0ac55f8710bbad3948bc7d7fd45cda44e78c724f918d927b59df9f17f7c6b022ea6ce2cef4f628160b2f7c39cd94b49798fc6fb87ac771b7f03d9942391458e7587e76aa37d72388c00402c4c962fc21fcf2c48e6d684c50bed9b0bc7b35e74f8bfc6b4cd99f256f7ddf43a2df0b1d420bfc11fb2b2bdb80d0313f2ef1fc8b48b05bd281fe221fdaafdfcc0cb85d173c2fadefe2640bd52a1662f1f8a00a0f2fb951319fa3c08cc3dc916687c72b3e82d8b5bcd77888a7c2cd184a561a6b1d391d8410e668daf252c741ca5ed30815e6e793d3e37c5a78c956e11a4b7ae63822c06ce945d21d90e5aefa9fcf6a42db73cae53e77b75a2314b359afd6c1341cf67a8dccd3c8e01116e9841f9b0c94d7cd6de5d845493bddd41a4c9d2f0578f3b6e33e0c457b322228cb377c2a7658ae842a7b2f12f7ebe9aa80826055e3850f9db67b8376390b595134cc56077b7eff8ee920dcb9d56549a350c9d91b0a8606a6726b2084ea88895cf78164a13dafb4410d48f1a923b1dbcd014c0aa15b6a4d1a65a3424f98134cd477431d870366293fe3755bb5f7eaf73e995b8d653164f9bed5c2b461e3c5d9f817d9788b49183a57d8a94f9ce500125ec41c2d73a87b50b324061f91640115777e61ca7f93fcd158d4894a6a80e8bf41410b8d7064d2fdd6182b2256a7ffa9c0f99fcfe8c29894bc350e2ed3acca1811f79a10ddd8173f8e7244297b1e6c86729749e1381b9fcb0e2f2d98339373a9f5c90e3d6ae26ba4c707a80e18c74932e107f11bfba82b83dc4430c0876e332587dd09ce16a40a6b8fa6d199eedd67179a4e2798e76ce3992ba75500a0cb94bd315bec463897a3f618432b78ab9e6c0e358ea03de6ad93e5f20278636b247565c2360eb6d4fce46d112c4ca2853d6e48ac54d5db75e6ac9f5a882de84d6db372d55ba457d59026e1b9aa251ff3fca312079b66a8773e87f4767cab68dcd6d1644c5eb1f6abe90f6851cc1a5493fa6c8479f9b2107c850ee792474cc84ee68bd6a51c3e538551a30634b2102e3ce6776897c5f976a9763e9b8e3dedf1943dc3d147a898b7cee1afd0cfcfd173b86b59a0b583a670e82fe690c28d9d1e2d24783e1a612ac35c7fcaa8fdff76f0763c1afeef7998ee4d10ff6e74b0ebebafa631b9382c7f3b7932e1b0ec785fc32d16c4d5a3b8921a9aaf7ed304846059d89db6b8ed5d66e0f0ea7578334fdaa67f814c6146374b790d6901082d9eb2b679b8e1d4734cd1dc6bbe4391b05b614f56903686f659285fa61c65eade0624fbc47e703fd50867ea9f22936d7af55833b7236c751dc8fa73f52feef1ff40562dd8ea9604e5e2f074a2a010c40391c48143bcc9a38a984d3317b6a1824646b46bc800ce37dc2330bee4232d7ca460a9cf027bb68a25110b399dc16b53f2be3fea6ba91e4fc8bb2962020eeab499d836793d50cf30963e573baeadb81bc3c0e48ed8dec84f564e0e1973094a64a4b4865a57a9490ade4f2910cfd9fff869822f4b2ba93c6874da9f19d0c63cd27192785adbdd3ecad5a917d2feb4b1996cd4a345c7a82c915a0755e7bcd5ab482e52e49220356bd3124625bb4a9a19140086f3ce4abd3e414e21b21bb21f5cfe883d62f2340b6f0fc7aa785de181b02902bd3c87a6cb79499a0811f10e409fab7f8f3bb349b8aa8741dcccf43c9529baaa5d46acb9e866fdb746fb477b24cc9fe391463e4c88bdad1b7f497b43a86e47855010b606587b6cf1c6c2b4bfb3e728091da13e6497826dd6c4f79c79fa054bc7fccb5fec127a5632a4c52c51765f595c9ef3973b280864184e9d9b1d086eaca42f61317f0b194e754b735105d13b1b9bbdd57aa371759ec715074a824e8a49664c7799fd1ae75d489f767c24a481ed7910c38ec5f26b956e383c875bc97aadc1b0b5856dc82f28937f5c3bee30fcb38950e332cfcfaa92d8bb0c9d3949b6ac7e08906a060c8ef071b1fabce31dcd5ec56340992ac79cc3f56aa72847355b3ad2b3fac9308ea8ba1356f349a7345db57fde91985577dda09bdf50a3c4fb475db814aa1414efa9c6e94a96f6a6778b78560f4849c097270fdda3cfbcd7e5f9c91cb1ad97a29f40e54b8e75312e92d8754022616c0e1a6536cae753d71b97705a3053040d3d3c07405e4a13bc948e2fada953ac77c94745f8c1db2da913842daec8a48113f88e0541d2e344c81ba2d48fe959cf1df59b8c68ba2646abce57a43f09160da44c65a0da05d7edbe01a455d8494c8c1fe8d1ea0dfce3082302cb64310f8a0b56ed27617e14d46376fa6a0611a5d0cf16e417b84a0c30455b347edfef2d1a0351a0773bb89d9e02253511148e22b79c70fddfdf553ea167334f3746e88e92dbf5503ffcb19ac31a317e9e14b210903af64240ed356c4372738942ee94f7d08a8d49fe9abdbf1df9ab41c2a060a2f448685c3afe27a3084423ac690585659199376fd174c678abe57a67e2fa804eeb351d8afd542aabb37b75b1dcb5ac5ba77ec1e1f19a1772b5a1f7ee492dc734831e3e664d443e67c5214c7a53f798706ec00d4946d6b3148c8cb4df09cd8726318ebe885dca6640e907403c3410cc938210952d938d7f5a4e5a021c816dd2a6062978873510639e0e163cba63de0b4c8e2add9f25e4bfb1d4bd46a132c67b1a408e0ae0fb6e01f0778fb2acf8829956c643fd4337449922588084d35f338218635af01b3c8a401465cf98a96554ace63b5d8a1d3f25b9b6b37bb823f461ef7d76846d2c47a6d67f7524962de4a030a388b529d1ab2d67b3d493da19b1d8cb404836e7112e41a4921233e1f33cfb9b74938ad8acc2932a9f69c9c7528535
+  </script>
+  <div class="hbe-preview"><p>IAM 和 Lake Formation 都是 AWS 上的权限管理服务，且默认都是自动开启并生效的，只是如果你没有特别配置过它们，可能感觉不到它们的存在，特别是Lake Formation（后文简写为 LF），通常情况下都是“透明”的，但它确实在每次请求时进行了权限检查。本文会详细介绍一下两者之间的区别和联系，特别是 Lake Formation 的作用机理。</p>
+<h2 id="1-整体介绍"><a href="#1-整体介绍" class="headerlink" title="1. 整体介绍"></a>1. 整体介绍</h2><p>下图能很好地解释两者之间的关系，简单讲：在AWS上，用户想要访问一项资源（这里的资源仅限 Glue Data Catalog 上的 数据库 、数据表和 S3，除此之外的资源并不归 LF 管理），用户需要经过两层权限检查，第一层是 IAM，如果用户的 IAM Policies 就没有访问相关库和表的元数据和S3路径的权限，会直接“出局”；如果通过了 IAM 检查，还要再由 LF 检查一遍当前用户在 LF 这一层的权限配置上有没有权访问目标资源：</p>
+<p> <img src="/../../images/aws/lake-formation-and-iam/1.png"></p>
+</div><div class="hbe-preview-end"><span>试读结束</span></div><div class="hbe hbe-content">
+    <form id="hbeForm" class="hbe hbe-form">
+      <div class="hbe hbe-input hbe-input-default">
+      <div class="hbe-qrcode-field"><img class="hbe-qrcode not-gallery-item" src="&#x2F;images&#x2F;profile&#x2F;wechat-qrcode.jpg" alt="QR code"><input class="hbe hbe-input-field hbe-input-field-default" type="password" id="hbePass" placeholder="在此输入文章密码..."></div>
+      <label class="hbe hbe-input-label hbe-input-label-default" for="hbePass">
+        <span class="hbe hbe-input-label-content hbe-input-label-content-default">本文为付费阅读内容，扫描下方二维码，关注作者微信公众号：“十万公里通票”，搜索文章《2023年度付费文章》，付费后可在文章中获得解锁密码。</span>
+      </label>
+    </div>
+      <button class="hbe hbe-button button is-small is-size-7" type="submit">解锁全文</button>
+      <div class="hbe hbe-error" role="alert" aria-live="polite"></div>
+    </form>
+  </div>
+</div>
+<script data-pjax>(function(){var f=document.getElementById("hbePass");if(f){var focus=f.focus;f.focus=function(){focus.call(f,{preventScroll:true});};}}());</script><script data-pjax>(function(){if(window.__hbeToc){return;}window.__hbeToc=true;window.addEventListener("hexo-blog-decrypt",function(){if(!document.querySelector("#toc .menu")){return;}document.querySelectorAll("#toc .menu").forEach(function(m){var c=m.cloneNode(true);c.querySelectorAll("a[data-href]").forEach(function(a){a.setAttribute("href",a.getAttribute("data-href"));a.removeAttribute("data-href");});m.replaceWith(c);});var s=document.createElement("script");s.src="/js/toc.js";document.body.appendChild(s);});}());</script><script data-pjax src="/lib/hbe.a3b9f59caa.js"></script><link href="/css/hbe.style.css" rel="stylesheet" type="text/css"><span hidden data-yearly-password="2023"></span><script data-pjax src="&#x2F;js&#x2F;yearly_password.js"></script></div><div class="article-licensing box"><div class="licensing-title"><p>Lake Formation 和 IAM 之间的区别与联系</p><p><a href="https://laurence.enlightgram.com/aws/lake-formation-and-iam/">https://laurence.enlightgram.com/aws/lake-formation-and-iam/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2023-10-20</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/AWS/">AWS</a><a class="link-muted mr-2" rel="tag" href="/tags/%E6%95%B0%E6%8D%AE%E6%B9%96/">数据湖</a><a class="link-muted mr-2" rel="tag" href="/tags/IAM/">IAM</a><a class="link-muted mr-2" rel="tag" href="/tags/Lake-Formation/">Lake Formation</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/aws/emr-disk-expansion/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">EMR 磁盘挂载解读与磁盘扩容操作</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/python/python-mamba-conda-pip/"><span class="level-item">Python 环境构建最佳实践：Mamba + Conda + PIP</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-整体介绍"><span class="level-left"><span class="level-item">1. 整体介绍</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-Lake-Formation-对新建库-表的默认配置"><span class="level-left"><span class="level-item">2. Lake Formation 对新建库/表的默认配置</span></span></a></li><li><a class="level is-mobile" href="#3-让-LF-接管权限管理"><span class="level-left"><span class="level-item">3. 让 LF 接管权限管理</span></span></a></li><li><a class="level is-mobile" href="#4-关于-IAMAllowedPrincipals-的解释"><span class="level-left"><span class="level-item">4. 关于 IAMAllowedPrincipals 的解释</span></span></a></li></ul></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

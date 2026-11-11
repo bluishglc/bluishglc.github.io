@@ -1,0 +1,1000 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>集成 OpenLDAP 与 Kerberos 实现统一认证 (1)：整合后台数据库 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="写作背景 写作本系列文章的背景是我们要在大数据平台/企业数据湖场景下给出中心化的用户身份认证方案。此前，我们实现过Windows AD + Kerberos的集成方案，由于Windows AD是LDAP和Kerberos的双重实现，这种天然优势使得Windows AD可以实现真正意义上的（大数据集群的）Kerberos账号与企业用户账号的统一管理。当我们想在OpenLDAP + Kerberos上"><meta property="og:type" content="article"><meta property="og:title" content="集成 OpenLDAP 与 Kerberos 实现统一认证 (1)：整合后台数据库"><meta property="og:url" content="https://laurence.enlightgram.com/security/openldap-kerberos-1-backend-database/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="写作背景 写作本系列文章的背景是我们要在大数据平台/企业数据湖场景下给出中心化的用户身份认证方案。此前，我们实现过Windows AD + Kerberos的集成方案，由于Windows AD是LDAP和Kerberos的双重实现，这种天然优势使得Windows AD可以实现真正意义上的（大数据集群的）Kerberos账号与企业用户账号的统一管理。当我们想在OpenLDAP + Kerberos上"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/security/openldap-kerberos-1-backend-database/2.jpeg"><meta property="article:published_time" content="2022-06-08T00:02:40.000Z"><meta property="article:modified_time" content="2026-11-11T03:37:39.394Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="数据库"><meta property="article:tag" content="认证"><meta property="article:tag" content="Kerberos"><meta property="article:tag" content="OpenLDAP"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/security/openldap-kerberos-1-backend-database/2.jpeg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/security/openldap-kerberos-1-backend-database/"},"headline":"集成 OpenLDAP 与 Kerberos 实现统一认证 (1)：整合后台数据库","image":["https://laurence.enlightgram.com/images/security/openldap-kerberos-1-backend-database/2.jpeg"],"datePublished":"2022-06-08T00:02:40.000Z","dateModified":"2026-11-11T03:37:39.394Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"写作背景 写作本系列文章的背景是我们要在大数据平台/企业数据湖场景下给出中心化的用户身份认证方案。此前，我们实现过Windows AD + Kerberos的集成方案，由于Windows AD是LDAP和Kerberos的双重实现，这种天然优势使得Windows AD可以实现真正意义上的（大数据集群的）Kerberos账号与企业用户账号的统一管理。当我们想在OpenLDAP + Kerberos上"}</script><link rel="canonical" href="https://laurence.enlightgram.com/security/openldap-kerberos-1-backend-database/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">集成 OpenLDAP 与 Kerberos 实现统一认证 (1)：整合后台数据库</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Security/">Security</a></span><span class="level-item">发表于：<time dateTime="2022-06-08T00:02:40.000Z" title="2022-06-07 17:02:40">2022-06-07</time></span><span class="level-item">阅读用时：43 分钟 (约 6397 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><h3 id="1-写作背景"><a href="#1-写作背景" class="headerlink" title="1. 写作背景"></a>1. 写作背景</h3><p>写作本系列文章的背景是我们要在大数据平台&#x2F;企业数据湖场景下给出中心化的用户身份认证方案。此前，我们实现过Windows AD + Kerberos的集成方案，由于Windows AD是LDAP和Kerberos的双重实现，这种天然优势使得Windows AD可以实现真正意义上的（大数据集群的）Kerberos账号与企业用户账号的统一管理。当我们想在OpenLDAP + Kerberos上实现同样的目标时，发现这一领域的知识与方案琐碎而凌乱，缺少统一连贯，脉络清晰的讲解，在经过大量技术调研和系统梳理后，我们特别撰写了本系列文章，希望可以借此将这一话题全面彻底地阐述清楚。本系列由三篇文章组成，将沿着“如何集成OpenLDAP与Kerberos实现统一认证管理”这一主线推进，在实现过程中会详细介绍使用到的技术和原理并给出完备的执行脚本用于实际环境的搭建。我们假设读者已经具备OpenLDAP和Kerberos的基本知识，不再对两者进行单独介绍。此外，本系列文章写作期间正值2022年4月-5月上海疫情最严重的时期，特以此文纪念这段艰难的特殊时光。（本文发表于作者技术博客，原文链接： <a href="/security/openldap-kerberos-1-backend-database/">https://laurence.enlightgram.com/security/openldap-kerberos-1-backend-database/</a> ）</p>
+<h3 id="2-既定目标"><a href="#2-既定目标" class="headerlink" title="2. 既定目标"></a>2. 既定目标</h3><p>系统安全有两个重要领域：身份认证和权限管理，前者要解决“系统里有没有这个人？”的问题，后者要解决“他有没有权限执行某项操作？”的问题。在大数据领域，权限管理一般由 Apache Ranger负责，这是一个与众多大数据组件均有集成的权限管理工具（由于众所周知的原因，另一款工具Sentry的前景已经非常暗淡），但是在身份认证方面，情况则有一些复杂：一方面，很多企业都建立了以Windows AD或OpenLDAP为代表的中心化账号管理基础设施，各IT系统通常都需要与之对接，以便实现统一的身份认证，大数据平台&#x2F;数据湖作为企业IT生态的一部分，也不例外。但是，在大数据生态圈里，最被广泛支持的认证机制其实是Kerberos，虽然有部分组件（如HiverServer2，Hue等）也支持LDAP，但是普及程度远不如Kerberos，如果仅针对大数据平台&#x2F;数据湖建立一套统一认证机制的话，Kerberos几乎是唯一的选择。于是，一个很直接的问题就摆在了面前：如何将OpenLDAP与Kerberos对接，把大数据平台&#x2F;数据湖的身份认证统一到企业的中心化认证服务上？</p>
+<p>下图描绘的就是集成OpenLDAP与Kerberos后，大数据集群&#x2F;企业数据湖进行用户身份认证和权限控制的全景视图：</p>
+<p><img src="/../../images/security/openldap-kerberos-1-backend-database/2.jpeg" alt="在这里插入图片描述"></p>
+<center>图1: 大数据领域的场景下用户身份认证与权限控制全景视图</center>
+
+<p>在这个生态系统架构中，OpenLDAP作为企业全局的用户认证中心独立于大数据集群存在；Kerberos KDC作为大数据集群的身份认证中心，既可以是集群专属的，也可以是一个独立于集群的全局KDC（如果存在的话），管理员会为用户在Kerberos和OpenLDAP上分别创建账号，然后通过一系列技术将两套认证系统的账号打通；大数据集群的各个节点通过SSSD与OpenLDAP对接后，用户可以凭借LDAP账号（准确地说是账号中的用户名）登录集群的各个节点。在Kerberos和OpenLDAP账号打通的前提下，用户还可以使用同一账号完成Kerberos认证，进而可以提交作业或访问大数据相关服务；Ranger负责集群用户的权限管理，其账号数据同样来自于OpenLDAP。这样，OpenLDAP、Kerberos和Ranger三方的用户数据一致，就可以实现统一的用户认证和权限管理了。</p>
+<p>在展开介绍OpenLDAP与Kerberos的集成方案前，需要读者清楚提前接受这样一个事实：OpenLDAP与Kerberos作为两套独立的认证系统，是无法做到绝对意义上的统一的，这一点随着后续的深入介绍，读者应该会有所体会。但是在实际应用中，由于绝大多数以OpenLDAP和Kerberos作为用户认证源的外围系统通常只验证或同步两系统账号中的“用户名”部分，即OpenLDAP账号中的uid部分和Kerberos账号中的Principal Name（(@前面的）)部分，这为统一两个认证系统的账号创造了可利用的外部条件，只要我们能将两套账号的用户名部分和密码统一在一起，就可以达到“使用效果”上的账号统一，这是目前各类技术方案之所以可行的一个重要支点。</p>
+<p>下面就是本系列文章给出的集成OpenLDAP与Kerberos的整体方案，也是接下来三篇文章的技术路线图：</p>
+<p><img src="/../../images/security/openldap-kerberos-1-backend-database/3.jpeg" alt="在这里插入图片描述"></p>
+<center>图2: OpenLDAP与Kerberos集成方案</center>
+
+<p>这个方案涉及OpenLDAP和Kerberos KDC两个身份认证源（两台 服务器 ）；Linux主机代表大数据集群的各个节点，由于其需要与OpenLDAP和Kerberos KDC进行通信，所以每一个Linux主机同时也是OpenLDAP和Kerberos KDC的客户端（客户端的安装会在后续章节中介绍）；参与人员有管理员和用户。方案整体的工作机制如下：</p>
+<p>①：管理员会为用户创建Kerberos和OpenLDAP两个配套账号，并保证两个账号中的用户名部分相同。用户并不需要区分和记忆这两个账号，实际上，管理员只需要将两账号中相同的用户名部分和一个密码发送给用户即可，作为用户，只需要知道自己的用户名和密码即可（至于在登录过程中走的是OpenLDAP认证还是Kerberos认证，对用户来说其实是透明的）；<br>②：将Kerberos的后台数据库迁移到OpenLDAP上，并将用户在这两个系统上的配套账号统一存储为一条记录（LDAP Entry）；<br>③：配置并启用SSSD，允许Linux主机（大数据集群各个节点）通过SSSD连接到OpenLDAP进行账号认证；<br>④：完成上述操作后，用户就可以使用自己的用户名和密码以常规的SSH方式登录Linux主机（大数据集群各个节点）了，此时，用户的身份认证链路是：用户 -&gt; Linux主机 -&gt; OpenLDAP；<br>⑤：配置SASL&#x2F;GSSAPI，赋予Kerberos账号登录OpenLDAP的能力；<br>⑥：配置OpenLDAP的账号映射规则，将Kerberos账号映射到目标OpenLDAP账号上，实现“账号（用户名）统一”；<br>⑦：配置saslauthd，让OpenLDAP委托Kerberos验证密码，实现“密码统一”；<br>⑧：完成上述操作后，用户就可以使用自己的用户名和密码以GSSAPI方式SSH登录Linux主机（大数据集群各个节点）了，在登录的同时还将自动完成Kerberos认证，为提交大数据作业铺平了道路，此时，用户的身份认证链路是：用户 -&gt; Linux主机 -&gt; Kerberos KDC；</p>
+<p>我们将在第一篇文章完成第①、②两步操作；在第二篇文章完成第③、④步操作；剩余的第⑤、⑥、⑦、⑧四步操作将在第三篇文章中完成。其他未标记数字的操作均为常规机制，无需额外配置。</p>
+<h3 id="3-环境说明"><a href="#3-环境说明" class="headerlink" title="3. 环境说明"></a>3. 环境说明</h3><p>为了更好地说明和演示，我们将在一套真实环境上执行各项操作，这套环境将贯穿整个系列文章，以下是实操环境的各项信息：</p>
+<p>※ 提示：以下环境信息（主机名，账号等）将会频繁出现在脚本中，如果读者要进行实操，建议将文章拷贝至文本编辑器，然后根据自己的实际环境，统一查找并替换相关的信息项。其中，只有OpenLDAP和Kerberos KDC的主机名是每次安装必须替换的项，其他项可视需求自行调整。</p>
+<ul>
+<li>主机信息</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th align="left">角色</th>
+<th align="left">主机名</th>
+<th align="left">操作系统</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">OpenLDAP</td>
+<td align="left">ip-10-0-0-70.cn-north-1.compute.internal</td>
+<td align="left">Amazon Linux 2</td>
+</tr>
+<tr>
+<td align="left">Kerberos KDC</td>
+<td align="left">ip-10-0-1-90.cn-north-1.compute.internal</td>
+<td align="left">Amazon Linux 2</td>
+</tr>
+<tr>
+<td align="left">大数据集群各个节点</td>
+<td align="left">操作中无需引用节点主机名进行配置，故省略</td>
+<td align="left">Amazon Linux 2</td>
+</tr>
+</tbody></table>
+<p>大数据集群通常由多个节点组成，由于后续操作没有需要显示配置或使用节点主机名的地方，所以在此省略。但是读者需要注意的是：后续文章中凡标记需在[ 大数据集群各个节点 ] 上执行的操作，均需逐一登录集群各个节点重复执行相关操作。此外，从OpenLDAP和Kerberos KDC的视角看，大数据集群的每一个节点同时也是一个OpenLDAP和Kerberos的客户端。</p>
+<p>※ 备注：本系列文章的所有操作均在 Amazon Linux 2上测试通过，原则上同样适用于CentOS&#x2F;RHEL 7.0+</p>
+<ul>
+<li>OpenLDAP环境</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th align="left">项目</th>
+<th align="left">取值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">Base DN</td>
+<td align="left">dc&#x3D;example,dc&#x3D;com</td>
+</tr>
+<tr>
+<td align="left">Root DN</td>
+<td align="left">cn&#x3D;admin,dc&#x3D;example,dc&#x3D;com</td>
+</tr>
+<tr>
+<td align="left">版本</td>
+<td align="left">2.4.44</td>
+</tr>
+</tbody></table>
+<ul>
+<li>OpenLDAP账号</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th align="left">USER&#x2F;SERVICE</th>
+<th align="left">密码</th>
+<th align="left">说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">cn&#x3D;admin,dc&#x3D;example,dc&#x3D;com</td>
+<td align="left">Admin1234!</td>
+<td align="left">OpenLDAP Root DN</td>
+</tr>
+<tr>
+<td align="left">uid&#x3D;user1,ou&#x3D;users,dc&#x3D;example,dc&#x3D;com</td>
+<td align="left">Admin1234!</td>
+<td align="left">测试用的普通账号</td>
+</tr>
+<tr>
+<td align="left">cn&#x3D;sssd,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com</td>
+<td align="left">Admin1234!</td>
+<td align="left">分配给SSSD的Bind DN</td>
+</tr>
+</tbody></table>
+<ul>
+<li>OpenLDAP OU与Container DN</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th align="left">OU&#x2F;Container DN</th>
+<th align="left">说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">ou&#x3D;users,dc&#x3D;example,dc&#x3D;com</td>
+<td align="left">普通用户所属的OU</td>
+</tr>
+<tr>
+<td align="left">ou&#x3D;services,dc&#x3D;example,dc&#x3D;com</td>
+<td align="left">服务账号所属的OU</td>
+</tr>
+<tr>
+<td align="left">cn&#x3D;kerberos,dc&#x3D;example,dc&#x3D;com</td>
+<td align="left">Kerberos Principal所属的Container DN</td>
+</tr>
+</tbody></table>
+<ul>
+<li>Kerbersos环境</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th align="left">项目</th>
+<th align="left">取值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">REALM</td>
+<td align="left">CN-NORTH-1.COMPUTE.INTERNAL</td>
+</tr>
+<tr>
+<td align="left">版本</td>
+<td align="left">krb5 1.15.1</td>
+</tr>
+</tbody></table>
+<ul>
+<li>Kerberos账号</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th align="left">Principal</th>
+<th align="left">密码</th>
+<th align="left">说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><a href="mailto:&#117;&#115;&#x65;&#114;&#49;&#64;&#x43;&#x4e;&#x2d;&#x4e;&#79;&#x52;&#84;&#x48;&#45;&#x31;&#x2e;&#x43;&#79;&#x4d;&#80;&#x55;&#84;&#69;&#46;&#73;&#78;&#84;&#69;&#x52;&#x4e;&#65;&#x4c;">user1@CN-NORTH-1.COMPUTE.INTERNAL</a></td>
+<td align="left">Admin1234!</td>
+<td align="left">一个测试用的普通账号</td>
+</tr>
+<tr>
+<td align="left">ldap&#x2F;<a href="mailto:&#105;&#112;&#x2d;&#49;&#x30;&#45;&#48;&#x2d;&#x30;&#45;&#55;&#48;&#x2e;&#x63;&#x6e;&#45;&#x6e;&#111;&#114;&#x74;&#104;&#x2d;&#x31;&#x2e;&#x63;&#111;&#x6d;&#x70;&#117;&#116;&#101;&#46;&#x69;&#x6e;&#116;&#x65;&#114;&#110;&#97;&#x6c;&#64;&#67;&#x4e;&#x2d;&#78;&#79;&#82;&#84;&#72;&#45;&#x31;&#x2e;&#67;&#79;&#77;&#80;&#x55;&#84;&#x45;&#x2e;&#73;&#78;&#84;&#x45;&#x52;&#78;&#x41;&#76;">ip-10-0-0-70.cn-north-1.compute.internal@CN-NORTH-1.COMPUTE.INTERNAL</a></td>
+<td align="left">基于keytab</td>
+<td align="left">OpenLDAP服务的Principal</td>
+</tr>
+<tr>
+<td align="left">host&#x2F;<a href="mailto:&#x69;&#112;&#x2d;&#x31;&#x30;&#x2d;&#48;&#x2d;&#x30;&#45;&#55;&#x30;&#46;&#x63;&#x6e;&#45;&#x6e;&#x6f;&#114;&#116;&#x68;&#45;&#49;&#x2e;&#x63;&#111;&#109;&#112;&#x75;&#x74;&#x65;&#46;&#x69;&#x6e;&#116;&#101;&#x72;&#110;&#97;&#x6c;&#x40;&#x43;&#x4e;&#45;&#78;&#x4f;&#82;&#x54;&#72;&#45;&#49;&#46;&#67;&#x4f;&#x4d;&#x50;&#x55;&#84;&#69;&#x2e;&#73;&#x4e;&#x54;&#69;&#82;&#78;&#65;&#76;">ip-10-0-0-70.cn-north-1.compute.internal@CN-NORTH-1.COMPUTE.INTERNAL</a></td>
+<td align="left">基于keytab</td>
+<td align="left">OpenLDAP服务器主机的Principal</td>
+</tr>
+</tbody></table>
+<h3 id="4-安装操作"><a href="#4-安装操作" class="headerlink" title="4. 安装操作"></a>4. 安装操作</h3><p>※ 提示：本文所有命令均以root用户身份执行，不再显式使用sudo修饰。</p>
+<h4 id="4-1-安装OpenLDAP"><a href="#4-1-安装OpenLDAP" class="headerlink" title="4.1 安装OpenLDAP"></a>4.1 安装OpenLDAP</h4><h5 id="4-1-1-安装软件包"><a href="#4-1-1-安装软件包" class="headerlink" title="4.1.1 安装软件包"></a>4.1.1 安装软件包</h5><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<p>登录准备安装OpenLDAP的主机，执行如下安装命令：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum -y install openldap openldap-clients openldap-servers compat-openldap openldap-devel migrationtools</span><br></pre></td></tr></table></figure>
+
+<h5 id="4-1-2-启动服务"><a href="#4-1-2-启动服务" class="headerlink" title="4.1.2 启动服务"></a>4.1.2 启动服务</h5><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<p>安装完毕后，需要启动OpenLDAP，OpenLDAP Server端的守护进程是“slapd”，使用如下命令启动：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">systemctl <span class="built_in">enable</span> slapd</span><br><span class="line">systemctl start slapd</span><br><span class="line">systemctl status slapd</span><br></pre></td></tr></table></figure>
+
+<h5 id="4-1-3-初始化"><a href="#4-1-3-初始化" class="headerlink" title="4.1.3 初始化"></a>4.1.3 初始化</h5><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<p>启动OpenLDAP服务后，需要进行必要的初始化工作，包括配置Base CN、Root DN，导入常用Schema等等，命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Base CN、Root DN等基础配置</span></span><br><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF | ldapadd -Y EXTERNAL -H ldapi:///</span></span><br><span class="line"><span class="string">dn: olcDatabase=&#123;1&#125;monitor,cn=config</span></span><br><span class="line"><span class="string">changetype: modify</span></span><br><span class="line"><span class="string">replace: olcAccess</span></span><br><span class="line"><span class="string">olcAccess: &#123;0&#125;to * by dn.base=&quot;gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth&quot; read by dn.base=&quot;cn=admin,dc=example,dc=com&quot; read by * none</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">dn: olcDatabase=&#123;2&#125;hdb,cn=config</span></span><br><span class="line"><span class="string">changetype: modify</span></span><br><span class="line"><span class="string">add: olcRootPW</span></span><br><span class="line"><span class="string">olcRootPW: $(slappasswd -s Admin1234!)</span></span><br><span class="line"><span class="string">-</span></span><br><span class="line"><span class="string">replace: olcRootDN</span></span><br><span class="line"><span class="string">olcRootDN: cn=admin,dc=example,dc=com</span></span><br><span class="line"><span class="string">-</span></span><br><span class="line"><span class="string">replace: olcSuffix</span></span><br><span class="line"><span class="string">olcSuffix: dc=example,dc=com</span></span><br><span class="line"><span class="string">-</span></span><br><span class="line"><span class="string">add: olcAccess</span></span><br><span class="line"><span class="string">olcAccess: &#123;0&#125;to attrs=userPassword by self write by dn.base=&quot;cn=admin,dc=example,dc=com&quot; write by anonymous auth by * none</span></span><br><span class="line"><span class="string">olcAccess: &#123;1&#125;to * by dn.base=&quot;cn=admin,dc=example,dc=com&quot; write by self write by * read</span></span><br><span class="line"><span class="string">EOF</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 导入常用schema</span></span><br><span class="line">ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/core.ldif</span><br><span class="line">ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/cosine.ldif</span><br><span class="line">ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/nis.ldif</span><br><span class="line">ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/inetorgperson.ldif</span><br></pre></td></tr></table></figure>
+
+<p>这是我们初次对OpenLDAP进行配置，需要说明一点：目前网络上流传的不少关于OpenLDAP的文章都是让读者去修改 <code>slapd.conf</code> 等配置文件，这种做法已不再推荐，自OpenLDAP 2.4之后，所有的配置都已统一为使用ldif文件，也就是我们上面采用的做法。</p>
+<h5 id="4-1-4-禁止匿名访问"><a href="#4-1-4-禁止匿名访问" class="headerlink" title="4.1.4 禁止匿名访问"></a>4.1.4 禁止匿名访问</h5><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<p>OpenLDAP默认是允许匿名访问的，可以使用如下命令禁用：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF | ldapmodify -Y EXTERNAL -H ldapi:///</span></span><br><span class="line"><span class="string">dn: cn=config</span></span><br><span class="line"><span class="string">changetype: modify</span></span><br><span class="line"><span class="string">add: olcDisallows</span></span><br><span class="line"><span class="string">olcDisallows: bind_anon</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">dn: cn=config</span></span><br><span class="line"><span class="string">changetype: modify</span></span><br><span class="line"><span class="string">add: olcRequires</span></span><br><span class="line"><span class="string">olcRequires: authc</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">dn: olcDatabase=&#123;-1&#125;frontend,cn=config</span></span><br><span class="line"><span class="string">changetype: modify</span></span><br><span class="line"><span class="string">add: olcRequires</span></span><br><span class="line"><span class="string">olcRequires: authc</span></span><br><span class="line"><span class="string">EOF</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="4-1-5-创建O和OU"><a href="#4-1-5-创建O和OU" class="headerlink" title="4.1.5 创建O和OU"></a>4.1.5 创建O和OU</h5><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<p>我们需要先创建 <code>example</code> 这个organization（(简称O），然后在其下面创建两个OU： <code>ou=users,dc=example,dc=com</code> 用于存放用户账号； <code>ou=services,dc=example,dc=com</code> 用户存放服务账号，创建命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF | ldapadd -D &quot;cn=admin,dc=example,dc=com&quot; -w Admin1234!</span></span><br><span class="line"><span class="string">dn: dc=example,dc=com</span></span><br><span class="line"><span class="string">objectClass: dcObject</span></span><br><span class="line"><span class="string">objectClass: organization</span></span><br><span class="line"><span class="string">dc: example</span></span><br><span class="line"><span class="string">o: example</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">dn: ou=users,dc=example,dc=com</span></span><br><span class="line"><span class="string">objectclass: top</span></span><br><span class="line"><span class="string">objectclass: organizationalUnit</span></span><br><span class="line"><span class="string">ou: users</span></span><br><span class="line"><span class="string">description: OU for user accounts</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">dn: ou=services,dc=example,dc=com</span></span><br><span class="line"><span class="string">objectclass: top</span></span><br><span class="line"><span class="string">objectclass: organizationalUnit</span></span><br><span class="line"><span class="string">ou: services</span></span><br><span class="line"><span class="string">description: OU for service accounts</span></span><br><span class="line"><span class="string">EOF</span></span><br></pre></td></tr></table></figure>
+
+<p>至于环境介绍中的 <code>cn=kerberos,dc=example,dc=com</code> 这个Container DN，不需要显式创建，后续操作中将由命令行工具自动创建。</p>
+<h4 id="4-2-迁移Kerberos数据库"><a href="#4-2-迁移Kerberos数据库" class="headerlink" title="4.2 迁移Kerberos数据库"></a>4.2 迁移Kerberos数据库</h4><p>本系列文章的预设场景是：在Kerberos集群已存在的前提下，将KDC的后台数据库迁移到OpenLDAP上。这一预设场景符合绝大多数用户和数据团队面临的现状，因为主流的Hadoop发行包（如CDH）以及云平台上的大数据产品（如AWS的EMR）都已内置了Kerberos功能，这些产品都能自动安装Kerberos并将大数据集群纳入到Kerberos的管控中，采用这种方式安装Kerberos是比较明智的。所以，本文会跳过Kerberos的安装环节，直接从迁移现有Kerberos数据库开始介绍。</p>
+<h5 id="4-2-1-导入Kerberos-Schema"><a href="#4-2-1-导入Kerberos-Schema" class="headerlink" title="4.2.1 导入Kerberos Schema"></a>4.2.1 导入Kerberos Schema</h5><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<p>登录OpenLDAP服务器，使用如下命令将Kerberos的Schema文件下载到本地</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">wget https://raw.githubusercontent.com/krb5/krb5/master/src/plugins/kdb/ldap/libkdb_ldap/kerberos.openldap.ldif -O /etc/openldap/schema/kerberos.ldif</span><br></pre></td></tr></table></figure>
+
+<p>然后，导入该Schema文件：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/kerberos.ldif</span><br></pre></td></tr></table></figure>
+
+<h5 id="4-2-2-创建Kerberos在OpenLDAP上的服务账号"><a href="#4-2-2-创建Kerberos在OpenLDAP上的服务账号" class="headerlink" title="4.2.2 创建Kerberos在OpenLDAP上的服务账号"></a>4.2.2 创建Kerberos在OpenLDAP上的服务账号</h5><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<p>在配置&#x2F;var&#x2F;kerberos&#x2F;krb5kdc&#x2F;kdc.conf时，有这样两个配置项：</p>
+<ul>
+<li><p><code>ldap_kdc_dn</code> ：给krb5kdc服务使用的LDAP账号</p>
+</li>
+<li><p><code>ldap_kadmind_dn</code> ：给kadmin服务使用的LDAP的账号</p>
+</li>
+</ul>
+<p>配置的这两个账号必须要具备一定的读写权限，因为Kerberos要使用这两个账号在LDAP上对Principal数据进行增删查改操作。针对这两个LDAP账号，我们有两种选择：</p>
+<ul>
+<li><p>新建专职账号</p>
+</li>
+<li><p>使用LDAP的admin账号</p>
+</li>
+</ul>
+<p>如果只是单纯的将OpenLDAP作为Kerberos后台数据库使用，我们推荐使用专职账号，因为默认情况下Kerberos的所有账号都会放置在 <code>ldap_kerberos_container_dn</code> 定义的子树下面，此时使用专职账号可以为其配置精准的权限管控范围。</p>
+<p>但是，由于本系列文章的最终目标是要实现Kerberos和OpenLDAP的账号统一，在后续的第三篇文章中我们会将一个Kerberos账号映射为一个普通的LDAP账号，那时，大多数的Kerberos账号将不在 <code>ldap_kerberos_container_dn</code> 定义的子树下面，两个专职账号的权限范围就会难以定义，因此，我们选择直接以LDAP的admin账号作为Kerberos的服务账号。</p>
+<h5 id="4-2-3-添加索引"><a href="#4-2-3-添加索引" class="headerlink" title="4.2.3 添加索引"></a>4.2.3 添加索引</h5><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<p>为了迁移后能在LDAP中快速检索到Kerberos账号，建议给 <code>krbPrincipalName</code> 和 <code>krbPwdPolicyReference</code> 两个属性添加索引，具体操作如下命令：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF | ldapmodify -Y EXTERNAL -H ldapi:/// </span></span><br><span class="line"><span class="string">dn: olcDatabase=&#123;2&#125;hdb,cn=config</span></span><br><span class="line"><span class="string">changetype: modify</span></span><br><span class="line"><span class="string">add: olcDbIndex</span></span><br><span class="line"><span class="string">olcDbIndex: krbPrincipalName eq,pres,sub</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">dn: olcDatabase=&#123;2&#125;hdb,cn=config</span></span><br><span class="line"><span class="string">changetype: modify</span></span><br><span class="line"><span class="string">add: olcDbIndex</span></span><br><span class="line"><span class="string">olcDbIndex: krbPwdPolicyReference eq</span></span><br><span class="line"><span class="string">EOF</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="4-2-4-备份现有Kerberos数据"><a href="#4-2-4-备份现有Kerberos数据" class="headerlink" title="4.2.4 备份现有Kerberos数据"></a>4.2.4 备份现有Kerberos数据</h5><p>※ 提示：本节操作在 [ Kerberos KDC ] 上执行</p>
+<p>对Kerberos进行配置前，须提前备份好现有Kerberos数据，以便在新的OpenLDAP数据库创建完成后可以将备份数据恢复到OpenLDAP上。备份前，建议先打印一份Kerberos账号列表并保存到文件中，以便在后续恢复数据时有一个参照。具体操作为登录Kerberos KDC，执行命令：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kadmin.local -q <span class="string">&quot;listprincs&quot;</span> | <span class="built_in">tee</span> principals.txt</span><br></pre></td></tr></table></figure>
+
+<p>然后，执行正式的备份操作：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kdb5_util dump kdc-db.dump</span><br></pre></td></tr></table></figure>
+
+<p>该命令会在当前目录生成kdc-db.dump和kdc-db.dump.dump_ok两个文件，后续4.2.10一节将会使用这两个文件恢复数据。</p>
+<h5 id="4-2-5-安装-krb5-server-ldap"><a href="#4-2-5-安装-krb5-server-ldap" class="headerlink" title="4.2.5 安装 krb5-server-ldap"></a>4.2.5 安装 <code>krb5-server-ldap</code></h5><p>※ 提示：本节操作在 [ Kerberos KDC ] 上执行</p>
+<p>由于后续操作需要使用krb5-server-ldap这个软件包，需要先行安装：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum -y install krb5-server-ldap</span><br></pre></td></tr></table></figure>
+
+<h5 id="4-2-6-创建密码文件"><a href="#4-2-6-创建密码文件" class="headerlink" title="4.2.6 创建密码文件"></a>4.2.6 创建密码文件</h5><p>※ 提示：本节操作在 [ Kerberos KDC ] 上执行</p>
+<p>继续在KDC上使用如下命令生成admin的password文件，该文件会在配置kdc.conf时使用到：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kdb5_ldap_util stashsrvpw -f /etc/openldap-admin.keyfile <span class="string">&quot;cn=admin,dc=example,dc=com&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>命令执行后会要求输入账号密码，验证完毕后会在指定位置上生成密码文件。</p>
+<p>注意：使用 <code>kdb5_ldap_util</code> 这个命令需要安装 <code>krb5-server-ldap</code> ，而 <code>krb5-server-ldap</code> 又依赖 <code>krb5-server</code> ，所以： <code>krb5-server-ldap</code> 应安装在Kerberos KDC 上，这个操作也是在KDC上执行的。</p>
+<h5 id="4-2-7-修改KDC配置"><a href="#4-2-7-修改KDC配置" class="headerlink" title="4.2.7 修改KDC配置"></a>4.2.7 修改KDC配置</h5><p>※ 提示：本节操作在 [ Kerberos KDC ] 上执行</p>
+<p>这是配置KDC改用OpenLDAP作为后台数据库的关键一步，涉及OpenLDAP的各种信息都要配置到kdc.conf中。具体操作是打开 <code>/var/kerberos/krb5kdc/kdc.conf</code> 文件，在realm中将原有的文件数据库配置： <code>database_name = /var/kerberos/krb5kdc/principal</code> 注释掉，同时添加 <code>database_module = openldap_ldapconf</code> ，然后添加 <code>[dbmodules]</code> 模块，提供OpenLDAP的若干配置，具体内容如下：</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">[realms]</span></span><br><span class="line">    <span class="attr">CN-NORTH-1.COMPUTE.INTERNAL</span> = &#123;</span><br><span class="line">        ...</span><br><span class="line">        <span class="comment"># database_name = /var/kerberos/krb5kdc/principal</span></span><br><span class="line">        ...</span><br><span class="line">        <span class="attr">database_module</span> = openldap_ldapconf</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="section">[dbmodules]</span></span><br><span class="line">    <span class="attr">openldap_ldapconf</span> = &#123;</span><br><span class="line">        <span class="attr">db_library</span> = kldap</span><br><span class="line">        <span class="attr">ldap_servers</span> = ldap://ip-<span class="number">10</span>-<span class="number">0</span>-<span class="number">0</span>-<span class="number">70</span>.cn-north-<span class="number">1</span>.compute.internal</span><br><span class="line">        <span class="attr">ldap_kerberos_container_dn</span> = cn=kerberos,dc=example,dc=com</span><br><span class="line">        <span class="attr">ldap_kdc_dn</span> = cn=admin,dc=example,dc=com</span><br><span class="line">        <span class="attr">ldap_kadmind_dn</span> = cn=admin,dc=example,dc=com</span><br><span class="line">        <span class="attr">ldap_service_password_file</span> = /etc/openldap-admin.keyfile</span><br><span class="line">        <span class="attr">ldap_conns_per_server</span> = <span class="number">5</span></span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+
+<p>关于上述配置，有如下几项需要特别解释一下:</p>
+<ul>
+<li><p><code>ldap_kerberos_container_dn</code> : Kerberos会将账号集中存放该配置项指定的子树下面，这个DN不需要提前创建，Kerberos在初始化数据库时会自动创建它；</p>
+</li>
+<li><p><code>ldap_kdc_dn</code> : Kerberos KDC的服务账号，如前所述，本文不会创建专职账号而是使用LDAP的admin账号；</p>
+</li>
+<li><p><code>ldap_kadmind_dn</code> : Kerberos的管理员账号，如前所述，本文不会创建专职账号而是使用LDAP的admin账号；</p>
+</li>
+<li><p><code>ldap_service_password_file</code> ：用于存放 <code>ldap_kdc_dn</code> 和 <code>ldap_kadmind_dn</code> （即LDAP的admin）密码的stash文件，已在上一节创建完成</p>
+</li>
+</ul>
+<p>上述配置可以通过以下脚本直接完成：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cp</span> -f /var/kerberos/krb5kdc/kdc.conf /var/kerberos/krb5kdc/kdc.conf.$(<span class="built_in">date</span> +%s)</span><br><span class="line"><span class="comment"># 找到database_name这一行，将其注释掉;</span></span><br><span class="line"><span class="comment"># 并在下一行插入：database_module = openldap_ldapconf</span></span><br><span class="line">sed -i <span class="string">&#x27;s/\(^\s*\)database_name\(.*\)/\1#database_name\2\n\1database_module = openldap_ldapconf/g&#x27;</span> /var/kerberos/krb5kdc/kdc.conf</span><br><span class="line"><span class="comment"># 在文件尾部追加[dbmodules]部分</span></span><br><span class="line"><span class="built_in">tee</span> -a /var/kerberos/krb5kdc/kdc.conf &lt;&lt;<span class="string">EOF</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">[dbmodules]</span></span><br><span class="line"><span class="string">    openldap_ldapconf = &#123;</span></span><br><span class="line"><span class="string">        db_library = kldap</span></span><br><span class="line"><span class="string">        ldap_servers = ldap://ip-10-0-0-70.cn-north-1.compute.internal</span></span><br><span class="line"><span class="string">        ldap_kerberos_container_dn = cn=kerberos,dc=example,dc=com</span></span><br><span class="line"><span class="string">        ldap_kdc_dn = cn=admin,dc=example,dc=com</span></span><br><span class="line"><span class="string">        ldap_kadmind_dn = cn=admin,dc=example,dc=com</span></span><br><span class="line"><span class="string">        ldap_service_password_file = /etc/openldap-admin.keyfile</span></span><br><span class="line"><span class="string">        ldap_conns_per_server = 5</span></span><br><span class="line"><span class="string"> &#125;</span></span><br><span class="line"><span class="string">EOF</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="4-2-8-创建数据库"><a href="#4-2-8-创建数据库" class="headerlink" title="4.2.8 创建数据库"></a>4.2.8 创建数据库</h5><p>※ 提示：本节操作在 [ Kerberos KDC ] 上执行</p>
+<p>接下来就要在OpenLDAP上创建Kerberos数据库了，命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kdb5_ldap_util -D cn=admin,dc=example,dc=com -w Admin1234! -H ldap://ip-10-0-0-70.cn-north-1.compute.internal create -r CN-NORTH-1.COMPUTE.INTERNAL -subtrees dc=example,dc=com</span><br></pre></td></tr></table></figure>
+
+<p>执行时会要求输入“KDC database master key”，统一输入默认密码： <code>Admin1234!</code> 。该命令和安装Kerberos时执行的建库操作 <code>kdb5_util create -r &lt;YOUR-REALM&gt; -s</code> 在性质上是一样的，只是后者创建的数据库是以文件（(&#x2F;var&#x2F;kerberos&#x2F;krb5kdc&#x2F;principal）)形式存储在KDC上，而这条命令会将数据库建到OpenLDAP上。执行成功后可登录OpenLDAP查看结果，此时 <code>cn=kerberos,dc=example,dc=com</code> 会被自动创建出来，并且下面还会有若干Kerberos的初始账号数据。</p>
+<p>对于4.2.7，4.2.8和4.2.9三节的执行顺序要注意一下，本节4.2.8在执行时需要读取&#x2F;var&#x2F;kerberos&#x2F;krb5kdc&#x2F;kdc.conf中与OpenLDAP相关的配置信息才能在指定的OpenLDAP上创建数据库，所以要先完成4.2.7节kdc.conf的配置，然后再执行本节的建库操作，最后重启Kerberos KDC让新库配置生效，这个逻辑关系和应用程序迁移数据类似，一般都是：先修改数据库配置文件，然后创建数据库，最后重启应用让配置生效。</p>
+<h5 id="4-2-9-重启Kerberos-KDC"><a href="#4-2-9-重启Kerberos-KDC" class="headerlink" title="4.2.9 重启Kerberos KDC"></a>4.2.9 重启Kerberos KDC</h5><p>※ 提示：本节操作在 [ Kerberos KDC ] 上执行</p>
+<p>全部配置工作完成后，需要重启Kerberos让配置生效：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">systemctl restart krb5kdc kadmin</span><br><span class="line">systemctl status krb5kdc kadmin</span><br></pre></td></tr></table></figure>
+
+<h5 id="4-2-10-导入原有备份数据"><a href="#4-2-10-导入原有备份数据" class="headerlink" title="4.2.10 导入原有备份数据"></a>4.2.10 导入原有备份数据</h5><p>※ 提示：本节操作在 [ Kerberos KDC ] 上执行</p>
+<p>呼应“4.2.4 备份Kerberos数据库”一节，完成数据库迁移后，现在需要将此前备份的Kerberos数据恢复到新的OpenLDAP数据库上了，命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kdb5_util load -update kdc-db.dump</span><br></pre></td></tr></table></figure>
+
+<p>命令完成后，再次查看一下OpenLDAP的 <code>cn=kerberos,dc=example,dc=com</code> 子树，此前大数据集群的若干服务和主机的principal记录应该都已经恢复到OpenLDAP上了：</p>
+<p><img src="/../../images/security/openldap-kerberos-1-backend-database/4.jpeg" alt="在这里插入图片描述"></p>
+<center>图3: 迁移完成后OpenLDAP上的Kerberos数据</center>
+
+<h5 id="4-2-11-使用-addprinc-x-dn-创建账号"><a href="#4-2-11-使用-addprinc-x-dn-创建账号" class="headerlink" title="4.2.11 使用 addprinc -x dn=... 创建账号"></a>4.2.11 使用 <code>addprinc -x dn=...</code> 创建账号</h5><p>完成上述操作后，整合OpenLDAP作为Kerberos后台数据库的配置工作就全部结束了，现在就可以将一个用户的Kerberos账号与OpenLDAP账号统一存储为一条记录（LDAP Entry）)了。以此前提到的用于测试的OpenLDAP账号 <code>uid=user1,ou=users,dc=example,dc=com</code> 和Kerberos账号 <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 为例，假定它们属于同一用户user1，管理员可以通过以下方式为user1创建这两个账号：</p>
+<p>※ 提示：以下操作在 [ OpenLDAP ] 上执行</p>
+<p>登录OpenLDAP服务器，通过以下命令创建OpenLDAP账号 <code>uid=user1,ou=users,dc=example,dc=com</code> ：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF | ldapadd -D &quot;cn=admin,dc=example,dc=com&quot; -w Admin1234!</span></span><br><span class="line"><span class="string">dn: uid=user1,ou=users,dc=example,dc=com</span></span><br><span class="line"><span class="string">objectClass: posixAccount</span></span><br><span class="line"><span class="string">objectClass: top</span></span><br><span class="line"><span class="string">objectClass: inetOrgPerson</span></span><br><span class="line"><span class="string">uid: user1</span></span><br><span class="line"><span class="string">displayName: user1</span></span><br><span class="line"><span class="string">sn: user1</span></span><br><span class="line"><span class="string">homeDirectory: /home/user1</span></span><br><span class="line"><span class="string">cn: user1</span></span><br><span class="line"><span class="string">uidNumber: $((1000+$RANDOM%9000))</span></span><br><span class="line"><span class="string">gidNumber: 100</span></span><br><span class="line"><span class="string">userPassword: Admin1234!</span></span><br><span class="line"><span class="string">EOF</span></span><br></pre></td></tr></table></figure>
+
+<p>※ 提示：以下操作在 [ Kerberos KDC ] 上执行</p>
+<p>然后登录KDC，通过以下命令创建Kerberos账号 <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> （提示输入密码时请使用统一默认密码： <code>Admin1234!</code> ）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kadmin.local -q <span class="string">&quot;addprinc -x dn=uid=user1,ou=users,dc=example,dc=com user1@CN-NORTH-1.COMPUTE.INTERNAL&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>命令执行后，登录OpenLDAP查看一下 <code>user1</code> 的用户数据：</p>
+<p><img src="/../../images/security/openldap-kerberos-1-backend-database/5.jpeg" alt="在这里插入图片描述"></p>
+<center>图4: user1的用户数据</center>
+
+<p>从显示的账号信息可以清楚地看到：Kerberos账号的相关属性（如krbPrincipalName等）全部添加到了 <code>uid=user1,ou=users,dc=example,dc=com</code> 这条记录（entry）)上，也就是说：LDAP账号和Kerberos账号的信息共同存储在一条记录上。</p>
+<p>要特别注意上述addprinc命令中的 <code>-x dn=uid=user1,ou=users,dc=example,dc=com</code> 部分，参数 <code>-x</code> 的作用是显式控制Principal在LDAP上的存放位置，正是通过这个参数，我们才能将 <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 这个Principal创建到 <code>uid=user1,ou=users,dc=example,dc=com</code> 这个DN上，也就是将两个系统账号建到一条记录上。</p>
+<p>至此，本系列文章的第一阶段目标：“实现OpenLDAP与Kerberos用户数据统一存储”已全部完成，但是，这离我们最终的集成目标还差得很远，因为，虽然在数据库层面上我们让一个用户的Kerberos账号和OpenLDAP账号存储为了一条记录（一个LDAP Entry）)，但是在Kerberos和OpenLDAP两个系统中，它们依然是两个独立的账号，彼此没有任何关系，也不可能互相识别出对方。一个更让人沮丧的事实是：整合OpenLDAP作为Kerberos后台数据库并不是一个“必选项”，即使跳过本文4.2节中的绝大多数操作，也不会影响后续的集成工作。统一存储的主要收益是给统一维护用户数据创造了便利，之于Kerberos和OpenLDAP的集成，并没有多少实质性的影响，真正的深度集成要到本系列的最后一篇文章才能展开。</p>
+<h3 id="附录：常见错误"><a href="#附录：常见错误" class="headerlink" title="附录：常见错误"></a>附录：常见错误</h3><p>在使用 <code>addprinc -x ...</code> 创建principal时报错：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">add_principal: DN is out of the realm subtree while creating &quot;xxx&quot;</span><br></pre></td></tr></table></figure>
+
+<p>原因：-x参数配置的DN不在创建realm时指定的subtree下面，也就是不在“kdb5_ldap_util … create … -subtrees xxxx”命令中指定的subtrees下面.</p>
+<p>解决方法：调整DN到指定的subtrees下面，或调整subtrees的配置。提示：subtrees支持以冒号分隔的多个subtrees列表。</p>
+<hr>
+<p>关于作者：</p>
+<p>耿立超，架构师，多年系统开发与架构经验，对大数据、云计算、企业级应用、SaaS、分布式存储和领域驱动设计有丰富的实践经验，著有 《大 数据平台 架构与原型实现：数据中台建设实战》（ <a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">https://item.jd.com/12677623.html</a> ）一书，个人技术博客： <a href="/">https://laurence.enlightgram.com</a> </p>
+<hr>
+<p>关联阅读：</p>
+<p>集成OpenLDAP与Kerberos实现统一认证(一)：整合后台数据库<br><a href="/security/openldap-kerberos-1-backend-database/">https://laurence.enlightgram.com/security/openldap-kerberos-1-backend-database/</a> </p>
+<p>集成OpenLDAP与Kerberos实现统一认证(二)：基于SSSD同步LDAP账号<br><a href="/security/openldap-kerberos-2-sssd/">https://laurence.enlightgram.com/security/openldap-kerberos-2-sssd/</a> </p>
+<p>集成OpenLDAP与Kerberos实现统一认证(三)：基于SASL&#x2F;GSSAPI深度集成<br><a href="/security/openldap-kerberos-3-sasl-gssapi/">https://laurence.enlightgram.com/security/openldap-kerberos-3-sasl-gssapi/</a> </p>
+<hr>
+<p>参考资料</p>
+<p>OpenLDAP官方文档<br><a target="_blank" rel="noopener" href="https://www.openldap.org/doc/admin24/">https://www.openldap.org/doc/admin24/</a> </p>
+<p>Kerberos官方文档（OpenLDAP部分）<br><a target="_blank" rel="noopener" href="http://web.mit.edu/kerberos/krb5-latest/doc/admin/database.html#operations-on-the-ldap-database">http://web.mit.edu/kerberos/krb5-latest/doc/admin/database.html#operations-on-the-ldap-database</a> </p>
+<p>Kerberos使用OpenLDAP作为backend<br><a target="_blank" rel="noopener" href="https://mp.weixin.qq.com/s/6Hk6qwCDCoXQ2e8km5jeXw">https://mp.weixin.qq.com/s/6Hk6qwCDCoXQ2e8km5jeXw</a> </p>
+<p>使用 LDAP + Kerberos 实现集中用户认证及授权系统<br><a target="_blank" rel="noopener" href="https://blog.csdn.net/cheng_fangang/article/details/40143261">https://blog.csdn.net/cheng_fangang&#x2F;article&#x2F;details&#x2F;40143261</a> </p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>集成 OpenLDAP 与 Kerberos 实现统一认证 (1)：整合后台数据库</p><p><a href="https://laurence.enlightgram.com/security/openldap-kerberos-1-backend-database/">https://laurence.enlightgram.com/security/openldap-kerberos-1-backend-database/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2022-06-07</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a><a class="link-muted mr-2" rel="tag" href="/tags/%E8%AE%A4%E8%AF%81/">认证</a><a class="link-muted mr-2" rel="tag" href="/tags/Kerberos/">Kerberos</a><a class="link-muted mr-2" rel="tag" href="/tags/OpenLDAP/">OpenLDAP</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/security/openldap-kerberos-2-sssd/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">集成 OpenLDAP 与 Kerberos 实现统一认证 (2)：基于 SSSD 同步 LDAP 账号</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/linux/sed-regex-config-files/"><span class="level-item">sed正则表达式的使用以及使用sed修改配置文件的典型案例</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-写作背景"><span class="level-left"><span class="level-item">1. 写作背景</span></span></a></li><li><a class="level is-mobile" href="#2-既定目标"><span class="level-left"><span class="level-item">2. 既定目标</span></span></a></li><li><a class="level is-mobile" href="#3-环境说明"><span class="level-left"><span class="level-item">3. 环境说明</span></span></a></li><li><a class="level is-mobile" href="#4-安装操作"><span class="level-left"><span class="level-item">4. 安装操作</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#4-1-安装OpenLDAP"><span class="level-left"><span class="level-item">4.1 安装OpenLDAP</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#4-1-1-安装软件包"><span class="level-left"><span class="level-item">4.1.1 安装软件包</span></span></a></li><li><a class="level is-mobile" href="#4-1-2-启动服务"><span class="level-left"><span class="level-item">4.1.2 启动服务</span></span></a></li><li><a class="level is-mobile" href="#4-1-3-初始化"><span class="level-left"><span class="level-item">4.1.3 初始化</span></span></a></li><li><a class="level is-mobile" href="#4-1-4-禁止匿名访问"><span class="level-left"><span class="level-item">4.1.4 禁止匿名访问</span></span></a></li><li><a class="level is-mobile" href="#4-1-5-创建O和OU"><span class="level-left"><span class="level-item">4.1.5 创建O和OU</span></span></a></li></ul></li><li><a class="level is-mobile" href="#4-2-迁移Kerberos数据库"><span class="level-left"><span class="level-item">4.2 迁移Kerberos数据库</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#4-2-1-导入Kerberos-Schema"><span class="level-left"><span class="level-item">4.2.1 导入Kerberos Schema</span></span></a></li><li><a class="level is-mobile" href="#4-2-2-创建Kerberos在OpenLDAP上的服务账号"><span class="level-left"><span class="level-item">4.2.2 创建Kerberos在OpenLDAP上的服务账号</span></span></a></li><li><a class="level is-mobile" href="#4-2-3-添加索引"><span class="level-left"><span class="level-item">4.2.3 添加索引</span></span></a></li><li><a class="level is-mobile" href="#4-2-4-备份现有Kerberos数据"><span class="level-left"><span class="level-item">4.2.4 备份现有Kerberos数据</span></span></a></li><li><a class="level is-mobile" href="#4-2-5-安装-krb5-server-ldap"><span class="level-left"><span class="level-item">4.2.5 安装 krb5-server-ldap</span></span></a></li><li><a class="level is-mobile" href="#4-2-6-创建密码文件"><span class="level-left"><span class="level-item">4.2.6 创建密码文件</span></span></a></li><li><a class="level is-mobile" href="#4-2-7-修改KDC配置"><span class="level-left"><span class="level-item">4.2.7 修改KDC配置</span></span></a></li><li><a class="level is-mobile" href="#4-2-8-创建数据库"><span class="level-left"><span class="level-item">4.2.8 创建数据库</span></span></a></li><li><a class="level is-mobile" href="#4-2-9-重启Kerberos-KDC"><span class="level-left"><span class="level-item">4.2.9 重启Kerberos KDC</span></span></a></li><li><a class="level is-mobile" href="#4-2-10-导入原有备份数据"><span class="level-left"><span class="level-item">4.2.10 导入原有备份数据</span></span></a></li><li><a class="level is-mobile" href="#4-2-11-使用-addprinc-x-dn-创建账号"><span class="level-left"><span class="level-item">4.2.11 使用 addprinc -x dn=... 创建账号</span></span></a></li></ul></li></ul></li><li><a class="level is-mobile" href="#附录：常见错误"><span class="level-left"><span class="level-item">附录：常见错误</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

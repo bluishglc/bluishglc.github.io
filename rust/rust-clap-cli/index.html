@@ -1,0 +1,825 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>使用 Clap 编写 Rust 命令行 CLI 程序（覆盖所有参数解析类型） - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="一个像样的应用程序，从命令行开始！本文介绍 Rust 使用最广泛的命令行参数解析工具：Clap，它通过 Derive 特性尽可能简化了结构体和宏的使用，同时还提供了更底层的 Builder API。 命令行有哪些元素？ 一个复杂的命令行会有很多种形式的参数、选项和子命令，为了更好地介绍后面的具体实现，我们先明确一下相关的术语和概念。以下面这个 git 命令为例： 它可以拆解为： 1.1 Comma"><meta property="og:type" content="article"><meta property="og:title" content="使用 Clap 编写 Rust 命令行 CLI 程序（覆盖所有参数解析类型）"><meta property="og:url" content="https://laurence.enlightgram.com/rust/rust-clap-cli/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="一个像样的应用程序，从命令行开始！本文介绍 Rust 使用最广泛的命令行参数解析工具：Clap，它通过 Derive 特性尽可能简化了结构体和宏的使用，同时还提供了更底层的 Builder API。 命令行有哪些元素？ 一个复杂的命令行会有很多种形式的参数、选项和子命令，为了更好地介绍后面的具体实现，我们先明确一下相关的术语和概念。以下面这个 git 命令为例： 它可以拆解为： 1.1 Comma"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/rust/rust-clap-cli/1.png"><meta property="article:published_time" content="2026-07-11T05:18:20.000Z"><meta property="article:modified_time" content="2026-11-06T03:20:27.578Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="命令行"><meta property="article:tag" content="Rust"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/rust/rust-clap-cli/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/rust/rust-clap-cli/"},"headline":"使用 Clap 编写 Rust 命令行 CLI 程序（覆盖所有参数解析类型）","image":["https://laurence.enlightgram.com/images/rust/rust-clap-cli/1.png"],"datePublished":"2026-07-11T05:18:20.000Z","dateModified":"2026-11-06T03:20:27.578Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"一个像样的应用程序，从命令行开始！本文介绍 Rust 使用最广泛的命令行参数解析工具：Clap，它通过 Derive 特性尽可能简化了结构体和宏的使用，同时还提供了更底层的 Builder API。 命令行有哪些元素？ 一个复杂的命令行会有很多种形式的参数、选项和子命令，为了更好地介绍后面的具体实现，我们先明确一下相关的术语和概念。以下面这个 git 命令为例： 它可以拆解为： 1.1 Comma"}</script><link rel="canonical" href="https://laurence.enlightgram.com/rust/rust-clap-cli/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">使用 Clap 编写 Rust 命令行 CLI 程序（覆盖所有参数解析类型）</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Rust/">Rust</a></span><span class="level-item">发表于：<time dateTime="2026-07-11T05:18:20.000Z" title="2026-07-10 22:18:20">2026-07-10</time></span><span class="level-item">阅读用时：24 分钟 (约 3590 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/rust/rust-clap-cli/1.png" alt="使用 Clap 编写 Rust 命令行 CLI 程序（覆盖所有参数解析类型）" fetchpriority="high"></figure><div class="content"><p>一个像样的应用程序，从命令行开始！本文介绍 Rust 使用最广泛的命令行参数解析工具：Clap，它通过 Derive 特性尽可能简化了结构体和宏的使用，同时还提供了更底层的 Builder API。</p>
+<h2 id="1-命令行有哪些元素？"><a href="#1-命令行有哪些元素？" class="headerlink" title="1. 命令行有哪些元素？"></a>1. 命令行有哪些元素？</h2><p>一个复杂的命令行会有很多种形式的参数、选项和子命令，为了更好地介绍后面的具体实现，我们先明确一下相关的术语和概念。以下面这个 git 命令为例：</p>
+<figure class="highlight cmd"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">git commit -m &quot;fix bug&quot; --amend file1.txt file2.txt</span><br></pre></td></tr></table></figure>
+
+<p>它可以拆解为：</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">git          -&gt; command</span><br><span class="line">commit       -&gt; subcommand</span><br><span class="line"></span><br><span class="line">-m           -&gt; option</span><br><span class="line">&quot;fix bug&quot;    -&gt; option 的实参（或值）</span><br><span class="line"></span><br><span class="line">--amend      -&gt; option（布尔开关）</span><br><span class="line"></span><br><span class="line">file1.txt    -&gt; argument</span><br><span class="line">file2.txt    -&gt; argument</span><br></pre></td></tr></table></figure>
+
+<h3 id="1-1-Command（命令）"><a href="#1-1-Command（命令）" class="headerlink" title="1.1 Command（命令）"></a>1.1 Command（命令）</h3><p>Command（命令）就是编译后的二进制程序名，对于上面的示例就是 <code>git</code> 。</p>
+<h3 id="1-2-Subcommand（子命令）"><a href="#1-2-Subcommand（子命令）" class="headerlink" title="1.2 Subcommand（子命令）"></a>1.2 Subcommand（子命令）</h3><p>如果一个命令行工具的功能非常多，通常会拆分成多个 Subcommand（子命令），它们一般紧跟在主命令之后，在上面的例子中， <code>commit</code> 就是一个子命令。</p>
+<h3 id="1-3-Argument（位置参数）"><a href="#1-3-Argument（位置参数）" class="headerlink" title="1.3 Argument（位置参数）"></a>1.3 Argument（位置参数）</h3><p>对于一些极其简单的命令来说，Argument（位置参数）是最简单，解析起来也最容易的参数形式，它没有参数名，在解析时，完全根据它出现的位置来确定它是哪一个参数。在上面的例子中， <code>file1.txt</code> 和 <code>file2.txt</code> 就是位置参数。最常见的位置参数是 <code>cp</code> 命令的两个参数，第一个自动解析为“源文件”，第二个自动解析为“目标文件”。</p>
+<h3 id="1-4-Option（选项）"><a href="#1-4-Option（选项）" class="headerlink" title="1.4 Option（选项）"></a>1.4 Option（选项）</h3><p>Option（选项）通常是指 <code>--help</code> 或 <code>-h</code> 这种用一个或两个减号做前缀的项，它既可以单独存在，也可以在后面再搭配上一个值，形成 <code>--key value</code> 的形式。在上面的例子中， <code>-m &quot;fix bug&quot;</code> 就是一个典型的 Option（选项）</p>
+<h3 id="1-5-Flag（开关）"><a href="#1-5-Flag（开关）" class="headerlink" title="1.5 Flag（开关）"></a>1.5 Flag（开关）</h3><p>Flag（开关）实际上是 Option 的一种特殊情况，即一种布尔类型的 Option。当它出现在命令行中时，它所代表的参数值自动取 <code>true</code> ；如果没有出现，则取默认值 <code>false</code> 。在上面的例子中， <code>--amend</code> 就是一个典型的 Flag（开关）。</p>
+<h2 id="2-创建一个示例项目"><a href="#2-创建一个示例项目" class="headerlink" title="2. 创建一个示例项目"></a>2. 创建一个示例项目</h2><p>首先，我们来初始化一个展示 Clap 的示例项目，打开命令行，执行：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cargo init cli-examples</span><br></pre></td></tr></table></figure>
+
+<p>然后进入到 <code>cli-examples</code> 目录，使用如下命令给项目添加 clap 依赖：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cargo add clap -F derive</span><br></pre></td></tr></table></figure>
+
+<p>其中 <code>-F derive</code> 是指要启用 clap 的 <code>derive</code> 特性。Rust 的 crate 可以把某些功能做成可选模块，称为 feature。这里的 <code>derive</code> 就是一个 feature。只有开启这个特性，才能在代码中使用 <code>#[derive(Parser)]</code> 等属性。</p>
+<h2 id="3-Argument（位置参数）示例"><a href="#3-Argument（位置参数）示例" class="headerlink" title="3. Argument（位置参数）示例"></a>3. Argument（位置参数）示例</h2><h3 id="3-1-简单示例"><a href="#3-1-简单示例" class="headerlink" title="3.1 简单示例"></a>3.1 简单示例</h3><p>使用 IDE 打开我们的 <code>cli-examples</code> 项目，添加一个 <code>src/bin/example_1.rs</code> 文件，内容如下：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"># src/bin/example_1.rs</span><br><span class="line"><span class="keyword">use</span> clap::&#123;Parser, Subcommand&#125;;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Parser)]</span></span><br><span class="line"><span class="meta">#[command(author, version, about, long_about = None)]</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Args</span> &#123;</span><br><span class="line">    name: <span class="type">String</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">args</span> = Args::<span class="title function_ invoke__">parse</span>();</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">&quot;args.name = &#123;&#125;&quot;</span>, args.name);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上述代码给我们的命令行添加了一个参数，并将参数值赋给了 <code>Args</code> 结构体的 <code>name</code> 字段。所以，如果我们在执行 exe 文件的命令行中写入了一个参数值，例如 <code>my-app</code> ，它会赋值给 <code>name</code> ，并会在第 12 行打印出来。例如：如果我们编译并执行：</p>
+<figure class="highlight cmd"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\target\debug\example_1.exe my-app</span><br></pre></td></tr></table></figure>
+
+<p>则会输出：</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">args.name = my-app</span><br></pre></td></tr></table></figure>
+
+<p>上述代码调用了 <code>clap::Parser</code> 派生宏，也就是自动为 <code>Args</code> 实现了 <code>Parser</code> 特质，代码中的调用的 <code>Args::parse()</code> 就是 <code>Args</code> 实现了 <code>Parser</code> 特质的体现。而 <code>#[command(author, version, about, long_about = None)]</code> 也是会被 <code>derive(Parser)</code> 识别的属性。Clap 会读取 <code>#[command(...)]</code> 中配置的各种元数据，然后赋值给 <code>Command</code> 结构体（官方文档： <a target="_blank" rel="noopener" href="https://docs.rs/clap/latest/clap/struct.Command.html">https://docs.rs/clap/latest/clap/struct.Command.html</a> ）。所以 <code>#[command(...)]</code> 里面并不是可以随意填写的，必须是一些规定的元数据信息。这个问题其实换成直接使用 Builder 风格去创建 Command 的实例会更直观一些，就像这样：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> clap::&#123;Arg, Command&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">let</span> <span class="variable">cmd</span> = Command::<span class="title function_ invoke__">new</span>(<span class="string">&quot;hello&quot;</span>)</span><br><span class="line">    .<span class="title function_ invoke__">version</span>(<span class="string">&quot;1.2.3&quot;</span>)</span><br><span class="line">    .<span class="title function_ invoke__">about</span>(<span class="string">&quot;A greeting program&quot;</span>)</span><br><span class="line">    .<span class="title function_ invoke__">arg</span>(Arg::<span class="title function_ invoke__">new</span>(<span class="string">&quot;name&quot;</span>));</span><br></pre></td></tr></table></figure>
+
+<p>至于说，具体有哪些配置的公共元数据，可以参考官方文档： <a target="_blank" rel="noopener" href="https://docs.rs/clap/latest/clap/_derive/index.html#command-attributes">https://docs.rs/clap/latest/clap/_derive&#x2F;index.html#command-attributes</a> 。这些配置项可以使用 <code>key = value</code> 的形式进行配置，就像前面代码中的 <code>long_about = None</code> 那样。但你也看到，像 <code>author</code> 、 <code>version</code> 、 <code>about</code> 这些配置项都没有显式地赋值，那它们的值是怎么来的呢？答案是 Clap 自动从 <code>Cargo.toml</code> 中读取的应用自身的元数据信息，例如：</p>
+<ul>
+<li><p><code>#[command(author)]</code> 读取的是 <code>Cargo.toml</code> 中的 <code>authors</code> 信息</p>
+</li>
+<li><p><code>#[command(version)]</code> 读取的是 <code>Cargo.toml</code> 中的 <code>version</code> 信息</p>
+</li>
+<li><p><code>#[command(about)]</code> 读取的是 <code>Cargo.toml</code> 中的 <code>description</code> 信息</p>
+</li>
+</ul>
+<p>注意，不要因为可以使用 <code>.\target\debug\example_1.exe --version</code> 来查看版本信息就把 <code>#[command(version)]</code> 中出现的 <code>version</code> 当成了命令行中的 <code>--version</code> ，也就是当成了一个 Option，这只是一个巧合而已，命令行不会有 <code>--about</code> 或 <code>--author</code> 这样的参数，并且也不是 command 中配置的任何信息项都能显示出来。 <code>about</code> 的信息会在出现在 <code>--help</code> 输出的第一行内容，而 <code>authors</code> 信息是不显示的。</p>
+<h3 id="3-2-为参数设置默认值"><a href="#3-2-为参数设置默认值" class="headerlink" title="3.2 为参数设置默认值"></a>3.2 为参数设置默认值</h3><p>如果一个参数在没有设置值的情况下，可以接受一个默认值，则可以在配置中指明。以 <code>name</code> 为例，假设它的默认值是 <code>default-app</code> ，那么，我们就需要在 <code>name</code> 字段上显式地使用 <code>#[arg(...)]</code> 属性标注，为其指定默认值：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// src/bin/example_2.rs</span></span><br><span class="line"><span class="keyword">use</span> clap::&#123;Parser, Subcommand&#125;;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Parser)]</span></span><br><span class="line"><span class="meta">#[command(author, version, about, long_about = None)]</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Args</span> &#123;</span><br><span class="line">    <span class="comment">/// 显式配置位置参数，为其添加默认值</span></span><br><span class="line">    <span class="meta">#[arg(default_value = <span class="string">&quot;default-app&quot;</span>)]</span></span><br><span class="line">    name: <span class="type">String</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">args</span> = Args::<span class="title function_ invoke__">parse</span>();</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">&quot;args.name = &#123;&#125;&quot;</span>, args.name);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>此时，如果我们重新编译并执行：</p>
+<figure class="highlight cmd"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\target\debug\example_2.exe</span><br></pre></td></tr></table></figure>
+
+<p>则会输出：</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">args.name = default-app</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-3-允许参数为空"><a href="#3-3-允许参数为空" class="headerlink" title="3.3 允许参数为空"></a>3.3 允许参数为空</h3><p>在 3.1 节的示例中，命令后必须跟一个 <code>my-app</code> 这样的位置参数，它是不允许为空的，而 3.2 节是给其赋予了一个默认值，防止它为空。如果一个参数没有默认值，也可以为空，那就要使用 <code>Option&lt;T&gt;</code> 类型来包裹：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// src/bin/example_3.rs</span></span><br><span class="line"><span class="keyword">use</span> clap::&#123;Parser, Subcommand&#125;;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Parser)]</span></span><br><span class="line"><span class="meta">#[command(author, version, about, long_about = None)]</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Args</span> &#123;</span><br><span class="line">    <span class="comment">/// 使用 Option，参数可以为空（即不指定该参数）</span></span><br><span class="line">    name: <span class="type">Option</span>&lt;<span class="type">String</span>&gt;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">args</span> = Args::<span class="title function_ invoke__">parse</span>();</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">&quot;args.name = &#123;:?&#125;&quot;</span>, args.name);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>此时，如果我们重新编译并执行：</p>
+<figure class="highlight cmd"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\target\debug\example_3.exe</span><br></pre></td></tr></table></figure>
+
+<p>则会输出：</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">args.name = None</span><br></pre></td></tr></table></figure>
+
+<h2 id="4-Option（选项）示例"><a href="#4-Option（选项）示例" class="headerlink" title="4. Option（选项）示例"></a>4. Option（选项）示例</h2><p>在 Clap 中，Argument（位置参数）和 Option（选项）之间仅一步之遥，那就是在原有的 <code>Args</code> 结构体的 <code>name</code> 字段的 <code>#[arg(...)]</code> 属性标注上添加 <code>short</code> 或 <code>long</code> ，这样， <code>name</code> 就从原来“不具名”的位置参数变成了“具名”的 Option。也就是把原来的 <code>arg1 arg2 ...</code> 升级为了 <code>--key1 value1 --key2 value2</code> 的形式。其中，</p>
+<ul>
+<li><p><code>long</code> 是指定使用长命名形式，也就是 <code>--key value</code> 的形式；</p>
+</li>
+<li><p><code>short</code> 是指定使用短命名形式，也就是 <code>-k value</code> 的形式，如果短命名和其他参数冲突，需要另行指定参数的短名称，则应使用 <code>#[arg(short = &#39;x&#39;)]</code> 进行标注，其中 <code>x</code> 就是要显式指定的短名称。下面的示例将原来出现在命令行末尾的位置参数改为了 Option 形式，并同时支持 <code>--name xxx</code> 和 <code>-n xxx</code> 两种形式：</p>
+</li>
+</ul>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// src/bin/example_4.rs</span></span><br><span class="line"><span class="keyword">use</span> clap::&#123;Parser, Subcommand&#125;;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Parser)]</span></span><br><span class="line"><span class="meta">#[command(author, version, about, long_about = None)]</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Args</span> &#123;</span><br><span class="line">    <span class="comment">/// 显式地将 name 声明为 Option</span></span><br><span class="line">    <span class="meta">#[arg(short, long, default_value = <span class="string">&quot;default-app&quot;</span>)]</span></span><br><span class="line">    name: <span class="type">String</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">args</span> = Args::<span class="title function_ invoke__">parse</span>();</span><br><span class="line"></span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">&quot;args.name = &#123;&#125;&quot;</span>, args.name);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>重新编译并执行：</p>
+<figure class="highlight cmd"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">.\target\debug\example_4.exe --name my-app</span><br><span class="line">.\target\debug\example_4.exe -n my-app</span><br></pre></td></tr></table></figure>
+
+<p>会输出：</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">args.name = my-app</span><br></pre></td></tr></table></figure>
+
+<h2 id="5-Flag（开关）示例"><a href="#5-Flag（开关）示例" class="headerlink" title="5. Flag（开关）示例"></a>5. Flag（开关）示例</h2><p>正如前面我们介绍的那样，Flag（开关）仅仅是 Option（选项）的一种特殊情形，在 clap 中，这一点体现得尤为明显，因为， <strong>对于一个 Flag 来说，它的声明方式几乎和 Option（选项）是一样的，你只需要将它声明为 bool 类型即可</strong> ，也不需要设置默认值，因为 clap 规定的行为是：如果显式地设置了 Flag，则对应参数值是 <code>true</code> ，如果没有设置，默认值就是 <code>false</code> ，这符合常见的使用习惯。下面的示例是在上一个示例的基础上，添加了一个 Flag 参数 <code>verbose</code> ：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// src/bin/example_5.rs</span></span><br><span class="line"><span class="keyword">use</span> clap::&#123;Parser, Subcommand&#125;;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Parser)]</span></span><br><span class="line"><span class="meta">#[command(author, version, about, long_about = None)]</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Args</span> &#123;</span><br><span class="line">    <span class="meta">#[arg(short, long, default_value = <span class="string">&quot;default-app&quot;</span>)]</span></span><br><span class="line">    name: <span class="type">String</span>,</span><br><span class="line">    <span class="comment">/// bool 类型的 Option 会被自动处理为 Flag</span></span><br><span class="line">    <span class="meta">#[arg(short, long)]</span></span><br><span class="line">    verbose: <span class="type">bool</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">args</span> = Args::<span class="title function_ invoke__">parse</span>();</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">&quot;args.name = &#123;&#125;&quot;</span>, args.name);</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">&quot;args.verbose = &#123;&#125;&quot;</span>, args.verbose);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>重新编译并执行：</p>
+<figure class="highlight cmd"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\target\debug\example_5.exe --name my-app --verbose</span><br></pre></td></tr></table></figure>
+
+<p>会输出：</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">args.name = my-app</span><br><span class="line">args.verbose = true</span><br></pre></td></tr></table></figure>
+
+<p>如果去除 <code>--verbose</code> 参数：</p>
+<figure class="highlight cmd"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\target\debug\example_5.exe --name my-app</span><br></pre></td></tr></table></figure>
+
+<p>会输出：</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">args.name = my-app</span><br><span class="line">args.verbose = false</span><br></pre></td></tr></table></figure>
+
+<h2 id="6-选项终止符（–）示例"><a href="#6-选项终止符（–）示例" class="headerlink" title="6. 选项终止符（–）示例"></a>6. 选项终止符（–）示例</h2><p>在一些比较特殊的情况下，我们需要让命令行的解析工作在某一个位置终止，也就是不再把这个位置之后的所有内容当作命令行本身的参数去解析，而是把它们收集起来，作为另一个被调用的命令的参数，这种情况叫：参数转发，比较常见的例子是 <code>kubectl</code> ，当我们需要通过这个命令向一个 pod 推送命令行，就需要使用到选项终止符 <code>--</code> ，以便告知 <code>kubectl</code> ，在 <code>--</code> 之后内容不是给它的参数，而是传到 pod 里去执行命令，所以 <code>--</code> 之后内容不要解析了，单纯地“转发”给 pod 就可以了：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kubectl <span class="built_in">exec</span> centos7 -- yum -y install telnet</span><br></pre></td></tr></table></figure>
+
+<p>此外， <code>cargo run</code> 命令本身就是使用选项终止符 <code>--</code> 的典型例子，以我们运行第一个示例项目为例，它的原始命令是：</p>
+<figure class="highlight cmd"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\target\debug\example_1.exe my-app</span><br></pre></td></tr></table></figure>
+
+<p>但我们完全可以通过 cargo run 命令一键完成从编译到运行的全过程：</p>
+<figure class="highlight cmd"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cargo run --bin example_1 -- my-app</span><br></pre></td></tr></table></figure>
+
+<p>在上面这条命令中， <code>--</code> 之后的所有内容都会转发给编译好的 <code>example_1.exe</code> ，作为它的参数。那在 Clap 中要如何实现上述效果呢？看下面的示例：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// src/bin/example_6.rs</span></span><br><span class="line"><span class="keyword">use</span> clap::&#123;Parser, Subcommand&#125;;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Parser)]</span></span><br><span class="line"><span class="meta">#[command(author, version, about, long_about = None)]</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Args</span> &#123;</span><br><span class="line">    <span class="meta">#[arg(trailing_var_arg = true)]</span></span><br><span class="line">    others: <span class="type">Vec</span>&lt;<span class="type">String</span>&gt;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">args</span> = Args::<span class="title function_ invoke__">parse</span>();</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">&quot;args.name = &#123;:?&#125;&quot;</span>, args.others);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>重新编译并执行：</p>
+<figure class="highlight cmd"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\target\debug\example_6.exe -- a b c</span><br></pre></td></tr></table></figure>
+
+<p>会输出：</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">args.others = [&quot;a&quot;, &quot;b&quot;, &quot;c&quot;]</span><br></pre></td></tr></table></figure>
+
+<p>这里的关键有两点：</p>
+<ul>
+<li><p>用于收集转发参数的需要声明为 <code>Vec&lt;String&gt;</code></p>
+</li>
+<li><p>显式地将字段 <code>others</code> 的属性标注为 <code>#[arg(trailing_var_arg = true)]</code></p>
+</li>
+</ul>
+<h2 id="7-Subcommand（子命令）示例"><a href="#7-Subcommand（子命令）示例" class="headerlink" title="7. Subcommand（子命令）示例"></a>7. Subcommand（子命令）示例</h2><p>对于一些大型的命令行工具，单一命令无法涵盖其全部功能，此时一般会把它的功能拆分到多个子命令（Subcommands）中去实现。最典型的例子就是 Git，像 <code>git branch &lt;branchName&gt;</code> 、 <code>git tag -a &lt;tagname&gt; -m &quot;version x&quot;</code> 这些命令中的 <code>branch</code> 、 <code>tag</code> 就是典型的子命令。下面的代码提供了四个子命令： <code>init</code> 、 <code>build</code> 、 <code>run</code> 、 <code>clean</code> ，它们每一个都是 <code>Command</code> 枚举的一个变体（成员），每一个变体都可以嵌套自己的 arguments 和 options，只要使用 <code>#[arg(...)]</code> 属性标注出来即可，这和直接在顶层参数结构体 <code>Args</code> 中定义参数是一样的。 <code>Commands</code> 这个枚举需要使用 <code>#[derive(Subcommand)]</code> 进行标注，同时，需要作为字段出现在 <code>Args</code> 结构体中，并使用 <code>#[command(subcommand)]</code> 属性标注：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// src/bin/example_7.rs</span></span><br><span class="line"><span class="keyword">use</span> clap::&#123;Parser, Subcommand&#125;;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Parser, Debug)]</span></span><br><span class="line"><span class="meta">#[command(author, version, about, long_about = None)]</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Args</span> &#123;</span><br><span class="line">    <span class="meta">#[command(subcommand)]</span></span><br><span class="line">    command: Command</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Subcommand, Debug)]</span></span><br><span class="line"><span class="keyword">enum</span> <span class="title class_">Command</span> &#123;</span><br><span class="line">    Init &#123;</span><br><span class="line">        name: <span class="type">String</span>,</span><br><span class="line">        <span class="meta">#[arg(short, long)]</span></span><br><span class="line">        template: <span class="type">Option</span>&lt;<span class="type">String</span>&gt;,</span><br><span class="line">    &#125;,</span><br><span class="line">    Build &#123;</span><br><span class="line">        <span class="meta">#[arg(short, long)]</span></span><br><span class="line">        release: <span class="type">bool</span>,</span><br><span class="line">        <span class="meta">#[arg(short, long, default_value = <span class="string">&quot;native&quot;</span>)]</span></span><br><span class="line">        target: <span class="type">String</span>,</span><br><span class="line">    &#125;,</span><br><span class="line">    Run &#123;</span><br><span class="line">        <span class="meta">#[arg(trailing_var_arg = true)]</span></span><br><span class="line">        args: <span class="type">Vec</span>&lt;<span class="type">String</span>&gt;,</span><br><span class="line">    &#125;,</span><br><span class="line">    Clean</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">args</span> = Args::<span class="title function_ invoke__">parse</span>();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Match on the subcommand</span></span><br><span class="line">    <span class="keyword">match</span> args.command &#123;</span><br><span class="line">        Command::Init &#123; name, template &#125; =&gt; &#123;</span><br><span class="line">            <span class="built_in">println!</span>(<span class="string">&quot;Initializing project: &#123;&#125;&quot;</span>, name);</span><br><span class="line">            <span class="keyword">if</span> <span class="keyword">let</span> <span class="variable">Some</span>(tmpl) = template &#123;</span><br><span class="line">                <span class="built_in">println!</span>(<span class="string">&quot;Using template: &#123;&#125;&quot;</span>, tmpl);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        Command::Build &#123; release, target &#125; =&gt; &#123;</span><br><span class="line">            <span class="keyword">let</span> <span class="variable">mode</span> = <span class="keyword">if</span> release &#123; <span class="string">&quot;release&quot;</span> &#125; <span class="keyword">else</span> &#123; <span class="string">&quot;debug&quot;</span> &#125;;</span><br><span class="line">            <span class="built_in">println!</span>(<span class="string">&quot;Building in &#123;&#125; mode for &#123;&#125;&quot;</span>, mode, target);</span><br><span class="line">        &#125;</span><br><span class="line">        Command::Run &#123; args &#125; =&gt; &#123;</span><br><span class="line">            <span class="built_in">println!</span>(<span class="string">&quot;Running with args: &#123;:?&#125;&quot;</span>, args);</span><br><span class="line">        &#125;</span><br><span class="line">        Command::Clean =&gt; &#123;</span><br><span class="line">            <span class="built_in">println!</span>(<span class="string">&quot;Cleaning build artifacts&quot;</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>重新编译并执行命令时，可以分别设置 <code>init</code> 、 <code>build</code> 、 <code>run</code> 、 <code>clean</code> 子命令：</p>
+<figure class="highlight cmd"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">.\target\debug\example_7.exe init my-project --template rust</span><br><span class="line"></span><br><span class="line">.\target\debug\example_7.exe build --release --target x86_64-unknown-linux-gnu</span><br><span class="line"></span><br><span class="line">.\target\debug\example_7.exe run -- --port <span class="number">8080</span> --config app.toml</span><br><span class="line"></span><br><span class="line">.\target\debug\example_7.exe clean</span><br></pre></td></tr></table></figure>
+
+<h2 id="8-嵌套-Subcommand（子命令）示例"><a href="#8-嵌套-Subcommand（子命令）示例" class="headerlink" title="8. 嵌套 Subcommand（子命令）示例"></a>8. 嵌套 Subcommand（子命令）示例</h2><p>从普通的 Subcommand（子命令）演进为嵌套的 Subcommand（子命令）并不困难。原来包含各种子命令的枚举变体内部就是各种参数，如果我们把参数替换成另一个描述子命令的枚举，就实现了嵌套。看一个例子，下面这个示例明显在“模仿”云平台的 CLI 工具，例如 AWS CLI。因为云平台的产品众多，每一个产品又对应非常多的操作命令，所以一般云平台的 CLI 工具会按产品或服务拆分成一级子命令，例如 <code>aws ec2 ...</code> 、 <code>aws s3 ...</code> ，然后在每一种产品或服务下，再嵌套二级子命令，例如 <code>aws ec2 create-vpc ...</code> 、 <code>aws ec2 delete-vpc ...</code> 、 <code>aws s3 mb ...</code> 、 <code>aws s3 rb ...</code> 等等。我们这个例子是这样模拟的：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// src/bin/example_8.rs</span></span><br><span class="line"><span class="keyword">use</span> clap::&#123;Parser, Subcommand&#125;;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Parser)]</span></span><br><span class="line"><span class="meta">#[command(name = <span class="string">&quot;cloud&quot;</span>)]</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Cli</span> &#123;</span><br><span class="line">    <span class="meta">#[command(subcommand)]</span></span><br><span class="line">    command: Commands,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Subcommand)]</span></span><br><span class="line"><span class="keyword">enum</span> <span class="title class_">Commands</span> &#123;</span><br><span class="line">    Compute &#123;</span><br><span class="line">        <span class="comment">/// compute 是子命令枚举的变体，代表一个子命令。</span></span><br><span class="line">        <span class="comment">/// 如果它内部声明的是 #[arg(...)]，那就是在给子命令定义参数。</span></span><br><span class="line">        <span class="comment">/// 但如果又嵌套了一个子命令枚举，那就是典型的子命令嵌套了！</span></span><br><span class="line">        <span class="meta">#[command(subcommand)]</span></span><br><span class="line">        command: ComputeCommands,</span><br><span class="line">    &#125;,</span><br><span class="line">    Storage &#123;</span><br><span class="line">        <span class="meta">#[command(subcommand)]</span></span><br><span class="line">        command: StorageCommands,</span><br><span class="line">    &#125;,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Subcommand)]</span></span><br><span class="line"><span class="keyword">enum</span> <span class="title class_">ComputeCommands</span> &#123;</span><br><span class="line">    List &#123;</span><br><span class="line">        <span class="meta">#[arg(short, long)]</span></span><br><span class="line">        region: <span class="type">Option</span>&lt;<span class="type">String</span>&gt;,</span><br><span class="line">    &#125;,</span><br><span class="line">    Create &#123;</span><br><span class="line">        name: <span class="type">String</span>,</span><br><span class="line">        <span class="meta">#[arg(short, long, default_value = <span class="string">&quot;small&quot;</span>)]</span></span><br><span class="line">        instance_type: <span class="type">String</span>,</span><br><span class="line">    &#125;,</span><br><span class="line">    Delete &#123;</span><br><span class="line">        id: <span class="type">String</span>,</span><br><span class="line">        <span class="meta">#[arg(short, long)]</span></span><br><span class="line">        force: <span class="type">bool</span>,</span><br><span class="line">    &#125;,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Subcommand)]</span></span><br><span class="line"><span class="keyword">enum</span> <span class="title class_">StorageCommands</span> &#123;</span><br><span class="line">    List,</span><br><span class="line">    Create &#123;</span><br><span class="line">        name: <span class="type">String</span>,</span><br><span class="line">    &#125;,</span><br><span class="line">    Upload &#123;</span><br><span class="line">        source: <span class="type">String</span>,</span><br><span class="line">        bucket: <span class="type">String</span>,</span><br><span class="line">        <span class="meta">#[arg(short, long)]</span></span><br><span class="line">        path: <span class="type">Option</span>&lt;<span class="type">String</span>&gt;,</span><br><span class="line">    &#125;,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">cli</span> = Cli::<span class="title function_ invoke__">parse</span>();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">match</span> cli.command &#123;</span><br><span class="line">        Commands::Compute &#123; command &#125; =&gt; <span class="keyword">match</span> command &#123;</span><br><span class="line">            ComputeCommands::List &#123; region &#125; =&gt; &#123;</span><br><span class="line">                <span class="built_in">println!</span>(<span class="string">&quot;Listing instances&quot;</span>);</span><br><span class="line">                <span class="keyword">if</span> <span class="keyword">let</span> <span class="variable">Some</span>(r) = region &#123;</span><br><span class="line">                    <span class="built_in">println!</span>(<span class="string">&quot;Filtered by region: &#123;&#125;&quot;</span>, r);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            ComputeCommands::Create &#123; name, instance_type &#125; =&gt; &#123;</span><br><span class="line">                <span class="built_in">println!</span>(<span class="string">&quot;Creating instance &#x27;&#123;&#125;&#x27; of type &#x27;&#123;&#125;&#x27;&quot;</span>, name, instance_type);</span><br><span class="line">            &#125;</span><br><span class="line">            ComputeCommands::Delete &#123; id, force &#125; =&gt; &#123;</span><br><span class="line">                <span class="keyword">if</span> force &#123;</span><br><span class="line">                    <span class="built_in">println!</span>(<span class="string">&quot;Force deleting instance &#123;&#125;&quot;</span>, id);</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    <span class="built_in">println!</span>(<span class="string">&quot;Deleting instance &#123;&#125; (with confirmation)&quot;</span>, id);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;,</span><br><span class="line">        Commands::Storage &#123; command &#125; =&gt; <span class="keyword">match</span> command &#123;</span><br><span class="line">            StorageCommands::List =&gt; <span class="built_in">println!</span>(<span class="string">&quot;Listing buckets&quot;</span>),</span><br><span class="line">            StorageCommands::Create &#123; name &#125; =&gt; <span class="built_in">println!</span>(<span class="string">&quot;Creating bucket: &#123;&#125;&quot;</span>, name),</span><br><span class="line">            StorageCommands::Upload &#123; source, bucket, path &#125; =&gt; &#123;</span><br><span class="line">                <span class="keyword">let</span> <span class="variable">dest</span> = path.<span class="title function_ invoke__">unwrap_or_else</span>(|| source.<span class="title function_ invoke__">clone</span>());</span><br><span class="line">                <span class="built_in">println!</span>(<span class="string">&quot;Uploading &#123;&#125; to &#123;&#125;:&#123;&#125;&quot;</span>, source, bucket, dest);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;,</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>重新编译，可执行如下一些命令</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">.\target\debug\example_8.exe compute list --region us-east-1</span><br><span class="line">.\target\debug\example_8.exe compute create my-server --instance-type large</span><br><span class="line">.\target\debug\example_8.exe storage upload ./data.csv my-bucket --path /backups/data.csv</span><br></pre></td></tr></table></figure>
+
+<p>其中 <code>compute</code> 和 <code>storage</code> 是一级子命令， <code>list</code> 、 <code>create</code> 是 <code>compute</code> 下面的二级子命令， <code>upload</code> 是 <code>storage</code> 下面的二级子命令。</p>
+<hr>
+<p><img src="/../../images/rust/rust-clap-cli/2.jpeg"></p>
+<p>参考资料</p>
+<p><a target="_blank" rel="noopener" href="https://oneuptime.com/blog/post/2026-02-03-rust-clap-cli-applications/view">https://oneuptime.com/blog/post/2026-02-03-rust-clap-cli-applications/view</a></p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>使用 Clap 编写 Rust 命令行 CLI 程序（覆盖所有参数解析类型）</p><p><a href="https://laurence.enlightgram.com/rust/rust-clap-cli/">https://laurence.enlightgram.com/rust/rust-clap-cli/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-07-10</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E5%91%BD%E4%BB%A4%E8%A1%8C/">命令行</a><a class="link-muted mr-2" rel="tag" href="/tags/Rust/">Rust</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/others/playwright-github-actions-1/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">使用 Playwright + GitHub Actions 完成一些页面自动化任务的初步探索(上)</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/rust/rust-polymorphism-2-trait-object/"><span class="level-item">Rust “多态”的来龙去脉(下)：dyn Trait ( Trait Object ) 到底是什么东西？</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-命令行有哪些元素？"><span class="level-left"><span class="level-item">1. 命令行有哪些元素？</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#1-1-Command（命令）"><span class="level-left"><span class="level-item">1.1 Command（命令）</span></span></a></li><li><a class="level is-mobile" href="#1-2-Subcommand（子命令）"><span class="level-left"><span class="level-item">1.2 Subcommand（子命令）</span></span></a></li><li><a class="level is-mobile" href="#1-3-Argument（位置参数）"><span class="level-left"><span class="level-item">1.3 Argument（位置参数）</span></span></a></li><li><a class="level is-mobile" href="#1-4-Option（选项）"><span class="level-left"><span class="level-item">1.4 Option（选项）</span></span></a></li><li><a class="level is-mobile" href="#1-5-Flag（开关）"><span class="level-left"><span class="level-item">1.5 Flag（开关）</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-创建一个示例项目"><span class="level-left"><span class="level-item">2. 创建一个示例项目</span></span></a></li><li><a class="level is-mobile" href="#3-Argument（位置参数）示例"><span class="level-left"><span class="level-item">3. Argument（位置参数）示例</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#3-1-简单示例"><span class="level-left"><span class="level-item">3.1 简单示例</span></span></a></li><li><a class="level is-mobile" href="#3-2-为参数设置默认值"><span class="level-left"><span class="level-item">3.2 为参数设置默认值</span></span></a></li><li><a class="level is-mobile" href="#3-3-允许参数为空"><span class="level-left"><span class="level-item">3.3 允许参数为空</span></span></a></li></ul></li><li><a class="level is-mobile" href="#4-Option（选项）示例"><span class="level-left"><span class="level-item">4. Option（选项）示例</span></span></a></li><li><a class="level is-mobile" href="#5-Flag（开关）示例"><span class="level-left"><span class="level-item">5. Flag（开关）示例</span></span></a></li><li><a class="level is-mobile" href="#6-选项终止符（–）示例"><span class="level-left"><span class="level-item">6. 选项终止符（–）示例</span></span></a></li><li><a class="level is-mobile" href="#7-Subcommand（子命令）示例"><span class="level-left"><span class="level-item">7. Subcommand（子命令）示例</span></span></a></li><li><a class="level is-mobile" href="#8-嵌套-Subcommand（子命令）示例"><span class="level-left"><span class="level-item">8. 嵌套 Subcommand（子命令）示例</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

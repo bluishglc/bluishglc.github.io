@@ -1,0 +1,955 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>C++ 智能指针：示例、原理、适用场景全方位解读 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="智能指针被设计出来就是为了解决原生指针的问题的，所以，要理解智能指针的作用，还是得“从问题入手”，看一下原生指针都有哪些“痛点”。理解本文内容需要对虚拟内存的堆和栈对清晰的认识，也需要清楚地知道 C++ 是如何使用堆和栈的，关于这部分内容，请参考 《编程底层概念回顾：虚拟内存、栈、栈帧、堆》 和 《C++ 对象和嵌套对象的创建与销毁》 两篇文章。 原生指针的“痛” 原生指针也叫裸指针，是 C++"><meta property="og:type" content="article"><meta property="og:title" content="C++ 智能指针：示例、原理、适用场景全方位解读"><meta property="og:url" content="https://laurence.enlightgram.com/cpp/cpp-smart-pointers/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="智能指针被设计出来就是为了解决原生指针的问题的，所以，要理解智能指针的作用，还是得“从问题入手”，看一下原生指针都有哪些“痛点”。理解本文内容需要对虚拟内存的堆和栈对清晰的认识，也需要清楚地知道 C++ 是如何使用堆和栈的，关于这部分内容，请参考 《编程底层概念回顾：虚拟内存、栈、栈帧、堆》 和 《C++ 对象和嵌套对象的创建与销毁》 两篇文章。 原生指针的“痛” 原生指针也叫裸指针，是 C++"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/cpp/cpp-smart-pointers/1.jpeg"><meta property="article:published_time" content="2026-03-16T16:18:18.000Z"><meta property="article:modified_time" content="2026-11-11T02:50:16.299Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="C++"><meta property="article:tag" content="共享指针"><meta property="article:tag" content="智能指针"><meta property="article:tag" content="弱指针"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/cpp/cpp-smart-pointers/1.jpeg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/cpp/cpp-smart-pointers/"},"headline":"C++ 智能指针：示例、原理、适用场景全方位解读","image":["https://laurence.enlightgram.com/images/cpp/cpp-smart-pointers/1.jpeg"],"datePublished":"2026-03-16T16:18:18.000Z","dateModified":"2026-11-11T02:50:16.299Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"智能指针被设计出来就是为了解决原生指针的问题的，所以，要理解智能指针的作用，还是得“从问题入手”，看一下原生指针都有哪些“痛点”。理解本文内容需要对虚拟内存的堆和栈对清晰的认识，也需要清楚地知道 C++ 是如何使用堆和栈的，关于这部分内容，请参考 《编程底层概念回顾：虚拟内存、栈、栈帧、堆》 和 《C++ 对象和嵌套对象的创建与销毁》 两篇文章。 原生指针的“痛” 原生指针也叫裸指针，是 C++"}</script><link rel="canonical" href="https://laurence.enlightgram.com/cpp/cpp-smart-pointers/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">C++ 智能指针：示例、原理、适用场景全方位解读</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/cpp/">C++</a></span><span class="level-item">发表于：<time dateTime="2026-03-16T16:18:18.000Z" title="2026-03-16 09:18:18">2026-03-16</time></span><span class="level-item">阅读用时：1 小时 (约 10260 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/cpp/cpp-smart-pointers/1.jpeg" alt="C++ 智能指针：示例、原理、适用场景全方位解读" fetchpriority="high"></figure><div class="content"><p>智能指针被设计出来就是为了解决原生指针的问题的，所以，要理解智能指针的作用，还是得“从问题入手”，看一下原生指针都有哪些“痛点”。理解本文内容需要对虚拟内存的堆和栈对清晰的认识，也需要清楚地知道 C++ 是如何使用堆和栈的，关于这部分内容，请参考 <a href="/cpp/virtual-memory-stack-frame-heap/">《编程底层概念回顾：虚拟内存、栈、栈帧、堆》</a> 和 <a href="/cpp/cpp-nested-object-lifecycle/">《C++ 对象和嵌套对象的创建与销毁》</a> 两篇文章。</p>
+<h2 id="1-原生指针的“痛”"><a href="#1-原生指针的“痛”" class="headerlink" title="1. 原生指针的“痛”"></a>1. 原生指针的“痛”</h2><p>原生指针也叫裸指针，是 C++ 里知名的“双刃剑”，它的“底层性”和“灵活性”既是优势，也是劣势，在智能指针出现之前，使用指针的过程中会出现很多典型问题，我们逐一梳理一下：</p>
+<ul>
+<li><p><strong>内存泄漏</strong> </p>
+<p>由裸指针引起的内存泄漏问题真得有很多，究其因在于：C++ 没有像 Java 那样的垃圾回收机制，完全靠程序员掌控堆空间的回收，而人是容易犯错的，可能是忘记了手写 delete 操作，也可能是程序执行的控制逻辑跳过了 delete 操作，而在 C++ 这一测，没有任何机制可以有效检测或约束这些情况的发生，于是就会让“内存泄漏”变成了一个常被讨论的热点话题。我们来看一些内存泄漏的典型示例：</p>
+<ul>
+<li><p><strong>忘记释放内存</strong> </p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">foo</span><span class="params">()</span> </span>&#123;</span><br><span class="line"><span class="type">int</span>* p = <span class="keyword">new</span> <span class="built_in">int</span>(<span class="number">10</span>);</span><br><span class="line"><span class="comment">// 忘记 delete p;</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>抛出异常，跳过了内存释放操作</strong> </p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">foo</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">int</span>* p = <span class="keyword">new</span> <span class="built_in">int</span>(<span class="number">10</span>);</span><br><span class="line">    <span class="built_in">risky</span>();  <span class="comment">// 这里抛异常</span></span><br><span class="line">    <span class="keyword">delete</span> p;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>指针重定向，原对象永久丢失</strong> </p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span>* p = <span class="keyword">new</span> <span class="built_in">int</span>(<span class="number">10</span>);</span><br><span class="line">p = <span class="keyword">new</span> <span class="built_in">int</span>(<span class="number">20</span>);  <span class="comment">// 原来的 10 失去唯一指针，永远无发再找回</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>容器里存裸指针但未循环清理</strong> </p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">std::vector&lt;<span class="type">int</span>*&gt; vec;</span><br><span class="line"></span><br><span class="line">vec.<span class="built_in">push_back</span>(<span class="keyword">new</span> <span class="built_in">int</span>(<span class="number">1</span>));</span><br><span class="line">vec.<span class="built_in">push_back</span>(<span class="keyword">new</span> <span class="built_in">int</span>(<span class="number">2</span>));</span><br><span class="line"></span><br><span class="line"><span class="comment">// 程序结束时没有追一 delete 各个元素</span></span><br><span class="line"><span class="comment">// vector 析构时只销毁指针本身，不会自动迭代内部元素逐一 delete。</span></span><br></pre></td></tr></table></figure></li>
+</ul>
+<p>以上只是几种比较常见的内存泄漏，在实际开发中，会有很多更复杂的情况，导致内存泄漏很难排查。</p>
+</li>
+<li><p><strong>指针悬空</strong> </p>
+<p>当两个指针指向同一个对象时，如果通过其中一个指针释放了资源，而忘记对第二个指针将指针置空，这样，第二个指针就指向了一个已经释放掉的对象上，这会导致它的值变成了“未定义”的，具体值无法预测。（注：悬空指针就是野指针的一种，野指针是指未初始化或指向了一个已经失效的地址的指针）</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span>* p1 = <span class="keyword">new</span> <span class="built_in">int</span>(<span class="number">10</span>);</span><br><span class="line"><span class="type">int</span>* p2 = p1;</span><br><span class="line"></span><br><span class="line"><span class="keyword">delete</span> p1;</span><br><span class="line"> p1 = <span class="literal">nullptr</span>;</span><br><span class="line"></span><br><span class="line">std::cout &lt;&lt; *p2 &lt;&lt; std::endl;</span><br><span class="line"><span class="keyword">return</span> <span class="number">0</span>;</span><br></pre></td></tr></table></figure>
+
+<p>指针悬空后同样不会报错，还会给出无法预测的值，所以也是一个“坑”。</p>
+</li>
+<li><p><strong>指针未初始化</strong> </p>
+<p>指针为初始化也是野指针的一种，通常是新手才会犯的错误，请记住：定义一个指针时一定要顺手初始化它，如果当时不知道让它指向哪里，就先设为空指针 nullptr，如果不初始化，根据我们在&lt;&gt; 和 &lt;&gt; 两篇文章中介绍的内容可知：定义后，C++ 一定会在栈上为其开辟存储空间，但你不给它设初值，那它的值就是上一个栈帧遗留的“垃圾值”：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span>* p; </span><br><span class="line"><span class="comment">// 危险：访问野指针，结果不可预测（大概率崩溃）</span></span><br><span class="line">cout &lt;&lt; *p &lt;&lt; endl; </span><br></pre></td></tr></table></figure>
+
+<p>程序崩溃的原因也不难理解：如果 P 的值，也就是地址是一个无法确定的值，那么，它落在合法的“虚拟内存”分配的“栈”内存段上的概率是极低的，当程序试图读取一个非法内存地址上的数据时会被操作系统强制终止。</p>
+</li>
+<li><p><strong>指针指向了超出作用域的栈内存</strong> </p>
+<p>这和指针悬空的情况有一些类似，造成指针指向了“已失效”地址的原因是：指针指向了一个由函数返回的其内部的局部变量，函数返回后，这个局部变量随着栈帧弹出，栈顶指针的移动就已自动失效了。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> std;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span>* <span class="title">getNum</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">int</span> a = <span class="number">10</span>; <span class="comment">// a在栈上，函数结束后销毁</span></span><br><span class="line">    <span class="keyword">return</span> &amp;a;  <span class="comment">// 返回a的地址</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">int</span>* p = <span class="built_in">getNum</span>(); <span class="comment">// 函数返回以后，函数内的局部变量 a 就已被清理，p指向了一个已销毁的变量的地址</span></span><br><span class="line">    cout &lt;&lt; *p &lt;&lt; endl; <span class="comment">// 访问野指针，结果不可控</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>野指针</strong> </p>
+<p>上述“悬空指针”、“未初始化的指针”和“指向了超出作用域栈内存的指针”都是“野指针”，这里列出只为明确概念。野指针的特点就是指向了一个未初始化或一个已经失效的地址。</p>
+</li>
+<li><p><strong>双重释放</strong> </p>
+<p>将一个已经释放掉的指针再次释放也是有可能会发生的，在复杂的程序代码里这并不稀奇：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span>* p = <span class="keyword">new</span> <span class="built_in">int</span>(<span class="number">10</span>);</span><br><span class="line"><span class="keyword">delete</span> p;</span><br><span class="line"><span class="keyword">delete</span> p;  <span class="comment">// 未定义行为，结果不可预测（大概率崩溃）</span></span><br></pre></td></tr></table></figure></li>
+</ul>
+<h2 id="2-智能指针"><a href="#2-智能指针" class="headerlink" title="2. 智能指针"></a>2. 智能指针</h2><p>我们几乎列举了指针所有可能出现的“糟糕情况”，我们不会说指针是一种糟糕的设计，很多辩护者会说这是“人的疏忽”，并不是指针的错，但是，这些典型问题确实反映出了指针的一个“根源性问题”，就是： <strong>指针只是一个地址值，它没有其指向对象的“所有权”</strong> ，这导致了指针和它所指对象在作用域和生命周期上会出现“各种不一致”，上述的各种问题基本都也可以归结到这一点上，要么是指针已经失效了，对象还在，要么就是对象已经销毁了，指针还在。这个根源性问题恰恰是我们改善裸指针的“方向”：如果我们能 <strong>设计一种机制或提供一些工具类，把指针和它所指对象的生命周期进行绑定，就可以规避裸指针的很多问题，这就是“智能指针”的设计思路</strong> 。</p>
+<p>从实现方式上看：智能指针像是一个原生指针的“容器”，它把一个原生指针“包裹”起来，然后提供一种机制（控制块）记录指向同一对象的智能指针实例数量，确保在最后一个智能指针实例销毁时同步销毁目标对象（即生命周期绑定），就实现了设计目标，另外，智能指针还实现了很多指针相关的运算符，尽量去模拟指针的使用习惯，让这个“原本是对象”东西使用起来很像一个“指针”。</p>
+<p>一个忠告：使用智能指针最好是先用起来，在实际场景里结合业务背景、设计意图来决定你需要的是哪一种智能指针，不要一头扎到智能指针表达的“语义”里试图推导出它的适用场景，过多“编程哲学”上的思考只会让自己陷入到思维旋涡中，越想越糊涂，因为智能指针它是纯语言范畴内的一种机制，如果一个智能指针没有一个“业务实体”作支撑，你就思考它所谓的“所有权”时会觉得非常空洞。一但你跳出来，找一个熟知的典型场景（比如构建树型结构）反向体会为什么在这里有的是这一种指针而不是另一种，你的思路会清晰起来。</p>
+<p>C++ 标准库中提供了三种智能指针，分别是：共享指针 <code>shared_ptr</code> 、独享指针 <code>unique_ptr</code> 、弱指针 <code>weak_ptr</code> ，此外，C++ 98 中引入过 <code>auto_ptr</code> ，提供和现在的 unique_ptr 一样的功能，由于当时的 C++ 缺少一些现有的语言特性，使得它不容易理解和使用，现在已经不推荐使用了。下面我们就详细了解一下每一种智能指针。</p>
+<h2 id="3-共享指针：shared-ptr"><a href="#3-共享指针：shared-ptr" class="headerlink" title="3. 共享指针：shared_ptr"></a>3. 共享指针：shared_ptr</h2><p>共享指针：shared_ptr 是一种可以随意创建或复制任意多个实例，但都指向同一个目标对象，且在最后一个实例的生命周期完结时，自动调用目标对象的析构函数并释放内存的一种指针。从应用角度上看，共享指针应该是使用范围最广的（尽管编程规范要求我们优先尝试使用独占指针，无法满足需求时再考虑共享指针），因为绝大数的场景下，我们需要的是这样一种“指针”：</p>
+<ul>
+<li><p>随意复制（指针自身）</p>
+</li>
+<li><p>多处同时持有</p>
+</li>
+<li><p>不需要显式 delete</p>
+</li>
+</ul>
+<p>仅从使用场景上看，这已经几乎等同于 Java 中的普通引用类型了。注意，这里是忍不住要这么说的，这是从 Java 转到 C++ 遇到 shared_ptr 时的“第一反应”，但是，一个忠告： <strong>不要试图将智能指针和Java引用类型作映射，否则你会陷入思考旋涡中</strong> ，因为它们的问题域、设计理念完全不同，实现方式更是南辕北辙，如果你想试图在两者之间进行映射，你会发现思考越深入，你就越糊涂。</p>
+<h3 id="3-1-简单示例"><a href="#3-1-简单示例" class="headerlink" title="3.1 简单示例"></a>3.1 简单示例</h3><p>我们先看一个简单的示例：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 注意：p1 是“直接初始化”的，不是 new 出来的，所以 p1 是在栈上的！</span></span><br><span class="line">    <span class="function">shared_ptr&lt;<span class="type">int</span>&gt; <span class="title">p1</span><span class="params">(<span class="keyword">new</span> <span class="type">int</span>(<span class="number">10</span>))</span></span>;</span><br><span class="line">    <span class="comment">// （智能）指针复制了一份，注意：shared_ptr 有定义复制操作符！</span></span><br><span class="line">    shared_ptr&lt;<span class="type">int</span>&gt; p2 = p1;</span><br><span class="line"></span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;p1 use_count : &quot;</span> &lt;&lt; p1.<span class="built_in">use_count</span>() &lt;&lt; endl; <span class="comment">// 输出：p1 use_count : 2</span></span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;p2 use_count : &quot;</span> &lt;&lt; p2.<span class="built_in">use_count</span>() &lt;&lt; endl; <span class="comment">// 输出：p2 use_count : 2</span></span><br><span class="line"></span><br><span class="line">    p2 = <span class="built_in">shared_ptr</span>&lt;<span class="type">int</span>&gt;(<span class="keyword">new</span> <span class="built_in">int</span>(<span class="number">6</span>)); <span class="comment">// s2引用计数为1</span></span><br><span class="line"></span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;p1 use_count : &quot;</span> &lt;&lt; p1.<span class="built_in">use_count</span>() &lt;&lt; endl; <span class="comment">// 输出：p1 use_count : 1</span></span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;p2 use_count : &quot;</span> &lt;&lt; p2.<span class="built_in">use_count</span>() &lt;&lt;endl;  <span class="comment">// 输出：p2 use_count : 1</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>最初， <code>p1</code> 指向堆上分配的这个 <code>5</code> ， <code>p2 = p1</code> 是复制一个新的智能指针（实例），此时有了两个指针“对象”或“实例”，但它们内部的裸指针是同时指向 <code>5</code> 的（顺便说一句：复制时裸指针也会复制一份）。</p>
+<p>这里要特别留意 <code>p1</code> 的初始化方式，虽然推荐的初始化方式是使用 <code>make_shared()</code> ，但这里的写法也要注意：它用的是“直接初始化”语法，是把 p1 创建在栈上的！ <strong>智能指针的对象（实例）一定要创建在栈上，否则就又会引入关于智能指针对象的裸指针，同时，智能指针也需要利用“创建在栈上的对象在栈退出时会被自动调用析构函数销毁”这一机制省去了显式的 delete 操作！这就是为什么要使用 <code>hared_ptr&lt;int&gt; p1(...)</code> 这种“直接初始化”语法创建智能指针的原因</strong> 。</p>
+<h3 id="3-2-实现原理"><a href="#3-2-实现原理" class="headerlink" title="3.2 实现原理"></a>3.2 实现原理</h3><p>我们借着上面的例子把 shared_ptr 的实现原理也介绍一下：shared_ptr 之所以能在对象不再被引用是自动析构目标对象并释放资源的关键是：它会纪录目标对象的“引用计数”，这是 shared_ptr 的“核心”，当复制了一新智能指针时，引用计数 +1（代码第4行），当一个智能指针指向了别的对象（代码第9行）或离开了作用域而被“销毁”时，引用计数 -1， <strong>这里最关键的地方在于：其他智能指针实例&#x2F;对象是怎么知道别的智能指针不再指向原对象了？对应到上面的示例就是：p1 是怎么知道 p2 不再指向 5 的呢？因为 p1 输出的 use_count 也自动 -1 了，这看上去很神奇，背后的实现是：引用计数是存放在 shared_ptr 对象内的一个叫“控制块”的结构体中，只有在初次初始化一个智能指针时才会创建这个控制块（和目标对象一样，都在堆上），然后内部持有一个指向控制块的指针，之后复制的指针实例都不会再创建控制块，进持有控制块的指针，所以，指向同一对象的智能指针共享同一个引用计数变量！如此才能实现共享计数</strong> ！</p>
+<p><img src="/../../images/cpp/cpp-smart-pointers/2.png"></p>
+<center>图1. shared_ptr 内部实现结构</center>
+
+<p>关于控制块的创建，如果是使用 <code>make_shared()</code> 方法创建的 <code>shared_ptr</code> 实例，则控制块是在这个方法中 new 出来并将控制快的内存地址赋给 <code>shared_ptr</code> 控制块指针，如果是使用 <code>shared_ptr</code> 的 构造函数 创建的 <code>shared_ptr</code> 实例，则控制块是在它的构造函数中 new 出来并设给它的控制块指针的。</p>
+<h3 id="3-3-揣摩用意"><a href="#3-3-揣摩用意" class="headerlink" title="3.3 揣摩用意"></a>3.3 揣摩用意</h3><p>一开始使用智能指针时最大的困难不是指针本身的用法，而是不知道应该在什么场景下使用什么指针，就像文章开头我们给出的忠告，最好是从熟知的典型案例揣摩为什么在这里要用这种指针，下面我们就给出一个 shared_ptr 的经典应用案例：UI 组件系统，讨论一下在这个场景中为什么选择的是 shared_ptr？在桌面应用里，UI 组件是按树形结构组织起来的，这是一个常识，如下是一个示意图：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">// 对象树</span><br><span class="line">Window</span><br><span class="line"> ├── Toolbar</span><br><span class="line"> │     ├── ButtonA</span><br><span class="line"> │     └── ButtonB</span><br><span class="line"> └── ContentView</span><br></pre></td></tr></table></figure>
+
+<p>在 UI 系统里，父组件“拥有”子组件并掌控子组件的生命周期是很自然一件事，显然，我们要考虑在每一个组件中使用智能指针来持有它的子组件，问题就是：在 shared_ptr 和 unique_ptr 我们应该选谁？如果没有其他背景信息的话，仅基于目前的状况，答案是：unique_ptr（后面会介绍），因为如果我们预设节点不用保存 parent 的话，那么，每一个子组件只需要一个智能指针实例存放在父组件的 children 成员变量中就足够了，指针是独占的，只需要实例化一个足够了，所以应该使用 unique_ptr。但是，是在 UI 系统中，组件往往需要同时被其他系统使用，例如：时间系统、布局系统：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">// 布局树</span><br><span class="line">VBoxLayout</span><br><span class="line">    ├── ButtonA</span><br><span class="line">    └── ButtonB</span><br></pre></td></tr></table></figure>
+
+<p>这些系统不但要获得组件的指针，也是组件的“共同持有者”，组件不可以在未获得这些系统同意的情况下销毁。这就决定了：UI 树中的组件必须使用 shared_ptr。这是 UI 组件系统需要使用 shared_ptr 指代组件的关键原因。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Widget</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="comment">// 使用 shared_ptr 是因为事件、布局等其他系统也需要使用组件且需要控制组件的声明周期</span></span><br><span class="line">    std::vector&lt;std::shared_ptr&lt;Widget&gt;&gt; children;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>这里也顺带说一下为什么没用一棵普通的数据结构的“树”来展示 shared_ptr？原因和上面的情况是一样的：单纯的“树”没有“要被其他外部数据结构访问”的典型场景，在这种背景缺失的情况下，普通的树结构中，children 应该是 <code>std::vector&lt;std::unique_ptr&lt;Node&gt; &gt; children</code> ，因为每一个 child 都应该被其 parent 独立拥有！</p>
+<h3 id="3-4-适用场景"><a href="#3-4-适用场景" class="headerlink" title="3.4 适用场景"></a>3.4 适用场景</h3><p>我个人觉得很难用一句话精准总结出 shared_ptr 的适用场景，对于其他类型的智能指针同样如此，因为你会发现在如下三种方案：“unique_ptr + 引用传递”、“shared_ptr + 拷贝传递”、 “shared_ptr + 引用传递” 相互替换都不会报错，它们在语义上的差别极其微妙，关于这三种组合我们会在文章最后介绍。这里只简单地介绍一下 shared_ptr 适用场景。</p>
+<p>当多个组件都需要访问同一份数据时，例如：Cache 对象 &#x2F; Config 对象 &#x2F; Session 对象，这些对象应该使用 shared_ptr，为什么？多个组件都需要访问数据，但谁也不是（不适合是）这份共享数据的“唯一所有者”，大家只是 User，也可以认为是“共同所有者”，当大家都不再使用时，让它自动销毁，所以使用 shared_ptr 是比较合适的。</p>
+<h2 id="4-独占指针-unique-ptr"><a href="#4-独占指针-unique-ptr" class="headerlink" title="4. 独占指针: unique_ptr"></a>4. 独占指针: unique_ptr</h2><p>然后我们再来看与 shared_ptr 向对应的 unique_ptr。顾名思义，这是一种“独占目标对象”的指针，同一时刻只允许有一个指针实例，但是，unique_ptr 不一定会永久绑定在一个对象上，它可以把对象“移交”给另一个 unique_ptr。</p>
+<h3 id="4-1-简单示例"><a href="#4-1-简单示例" class="headerlink" title="4.1 简单示例"></a>4.1 简单示例</h3><p>看一个示例：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;memory&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">File</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="built_in">File</span>(<span class="type">const</span> std::string &amp;name) &#123;</span><br><span class="line">        std::cout &lt;&lt; <span class="string">&quot;Open file: &quot;</span> &lt;&lt; name &lt;&lt; std::endl;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    ~<span class="built_in">File</span>() &#123;</span><br><span class="line">        std::cout &lt;&lt; <span class="string">&quot;Close file&quot;</span> &lt;&lt; std::endl;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">write</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        std::cout &lt;&lt; <span class="string">&quot;Writing...&quot;</span> &lt;&lt; std::endl;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">processFile</span><span class="params">(std::unique_ptr&lt;File&gt; file)</span> </span>&#123;</span><br><span class="line">    file-&gt;<span class="built_in">write</span>();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 创建文件对象和它的独占指针 f</span></span><br><span class="line">    std::unique_ptr&lt;File&gt; f = std::<span class="built_in">make_unique</span>&lt;File&gt;(<span class="string">&quot;data.txt&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// std::unique_ptr&lt;File&gt; f2 = f;  // ❌ 编译错误：unique_ptr 不允许拷贝</span></span><br><span class="line"></span><br><span class="line">    <span class="built_in">processFile</span>(std::<span class="built_in">move</span>(f)); <span class="comment">// 转移所有权</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!f) <span class="comment">// f 不是processFile执行后不指向 file 的，是在move 时就不指向了</span></span><br><span class="line">        std::cout &lt;&lt; <span class="string">&quot;f no longer owns the file\n&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>程序输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Open file: data.txt</span><br><span class="line">Writing...</span><br><span class="line">Close file</span><br><span class="line">f no longer owns the file</span><br></pre></td></tr></table></figure>
+
+<p>上面的例子展示了 unique_ptr 如下特性：</p>
+<ol>
+<li><p>unique_ptr 不允许复制（重写了赋值运算符）</p>
+</li>
+<li><p>如果想要传递 unique_ptr 包裹的指针，即：把对应所有权移交出去，可以使用 move()</p>
+</li>
+<li><p>f 在 move 后就已经不再持有 file 了</p>
+</li>
+<li><p>File 对象是在从 processFile() 返回时销毁的，移交所有权后，active 的 unique_ptr 实例是 processFile() 的参数，在函数返回时，会被C++自动析构并释放，故，回到主函数后，</p>
+</li>
+</ol>
+<h3 id="4-2-实现原理"><a href="#4-2-实现原理" class="headerlink" title="4.2 实现原理"></a>4.2 实现原理</h3><p>unique_ptr 的实现要比 shared_ptr 简单的多，它不需要控制块和维持引用计数，简单地说，它是：一个封装了裸指针的类 + 禁止拷贝 + 允许移动 + 析构时释放资源。我们就不再深挖了。</p>
+<h3 id="4-3-揣摩用意"><a href="#4-3-揣摩用意" class="headerlink" title="4.3 揣摩用意"></a>4.3 揣摩用意</h3><p>在 3.3 节我们已经提到过 unique_ptr 了，对于树结构来说，如果没有特别的附加背景需求，在不设 parent 字段的情况下，每一个节点的子节点就应该使用 unique_ptr 来定义。这算是一个使用 unique_ptr 的示例了。其实这是 <strong>一个很有代表性的“决策过程”，在现实的编程工作中，我们可能没有办法在一开始就准确判断出一个对象会不会被其他的类所“拥有”（这里不是指简单的使用关系），所以应该默认总是使用 unique_ptr，直到发现有明确需要共享所有权时再改用 shared_ptr</strong> 。我们再看一个经典案例：unique_ptr 在工厂模式中的应用。以下是一个 C++ 实现的工厂模式：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Product</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">doSomething</span><span class="params">()</span> </span>= <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">virtual</span> ~<span class="built_in">Product</span>() = <span class="keyword">default</span>;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">ConcreteProduct</span> : <span class="keyword">public</span> Product &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">doSomething</span><span class="params">()</span> <span class="keyword">override</span> </span>&#123;</span><br><span class="line">        std::cout &lt;&lt; <span class="string">&quot;ConcreteProduct doing something\n&quot;</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function">std::unique_ptr&lt;Product&gt; <span class="title">createProduct</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> std::<span class="built_in">make_unique</span>&lt;ConcreteProduct&gt;();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    std::unique_ptr&lt;Product&gt; product = <span class="built_in">createProduct</span>();  <span class="comment">// 返回一个 unique_ptr</span></span><br><span class="line">    product-&gt;doSomething();</span><br><span class="line">    <span class="comment">// 在这里，product 在作用域结束时自动销毁</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这个例子这所以经典是因为：工厂方法的设计意图和 unique_ptr 表达的“语义”是很贴合的，同时还顺代展示了 unique_ptr 的一个重要特性：虽然 unique_ptr 不可复制，但可以作为函数返回值，将资源所有权移交给调用者。但是很多初学者容易误解这个示例，他们会错误地理解为： <strong>工厂使用 unique_ptr 指代产品是工厂对产品有“所有权”，这是完全是错误的，因为 unique_ptr 是工厂方法的返回值，不是工厂类“成员变量”，这里 unique_ptr 作为函数返回值要表达的语义是：这个对象我交给你了，以后就是你“负责”了，不管你是把它再分享出去还是很快销毁它都是你说了算了</strong> 。</p>
+<p>在智能指针的应用场景里，没有绝对的 pattern，一切还是取决于你的设计意图。如果我们非常确定工厂生产出来的产品就是要被多方共享，那返回的产品就应该是 shared_ptr。还是那句话： <strong>不要过分纠结于该不该，对不对，先用 unique_ptr，遇到问题再改为 shared_ptr</strong> 。</p>
+<h3 id="4-4-适用场景"><a href="#4-4-适用场景" class="headerlink" title="4.4 适用场景"></a>4.4 适用场景</h3><p>如是一个对象被设计出来，你非常明确地知道它属于且只属于一个对象，那就使用 unique_ptr，如果你不是非常确定，那就 <strong>默认使用 unique_ptr，只有明确需要共享所有权时再用 shared_ptr</strong> 。</p>
+<h2 id="5-弱指针：weak-ptr"><a href="#5-弱指针：weak-ptr" class="headerlink" title="5 弱指针：weak_ptr"></a>5 弱指针：weak_ptr</h2><p>weak_ptr 是一种不拥有对象所有权的智能指针，它只观察但不干预对象的生命周期。weak_ptr 一般是配合 shared_ptr 一起工作，主要解决多个 shared_ptr 之间因为循环引用而无法释放的问题。</p>
+<h3 id="5-1-简单示例"><a href="#5-1-简单示例" class="headerlink" title="5.1 简单示例"></a>5.1 简单示例</h3><p>同样的，我们先看一个简单示例:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">auto</span> p1 = <span class="built_in">make_shared</span>&lt;<span class="type">int</span>&gt;(<span class="number">10</span>); <span class="comment">// 创建一个 shared_ptr</span></span><br><span class="line">    <span class="function">weak_ptr&lt;<span class="type">int</span>&gt; <span class="title">p2</span><span class="params">(p1)</span></span>; <span class="comment">// 从一个 shared_ptr 创建出一个 weak_ptr</span></span><br><span class="line">    <span class="comment">// weak_ptr 的数量不会影响 shared_ptr 的引用计数</span></span><br><span class="line">    <span class="comment">// 这意味者：weak_ptr 不拥有目标对象，不会干预对象的生命周期</span></span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;p1 use_cout is: &quot;</span> &lt;&lt; p1.<span class="built_in">use_count</span>() &lt;&lt; endl; <span class="comment">// 输出结果：s1 use_cout is: 1</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>几乎所有 weak_ptr 都是从 shared_ptr 创建出来的，因为 weak_ptr 需要依赖 shared_ptr 的控制块（control block）才能存在</strong> 。上面的示例展示了：从一个 shared_ptr 创建出一个 weak_ptr 后，shared_ptr 的引用计数没变。</p>
+<p>正是因为 weak_ptr 弱引用的特性，决定了使用 weak_ptr 时会有很大概率出现指针失效问题，即：所指对象已销毁，但 weak_ptr 还在使用，为此，在某些时候，需要显式地使用 <code>expired()</code> 方法检查 weak_ptr 是否已“过期”，也就是所指对象是否已销毁：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">auto</span> p1 = <span class="built_in">make_shared</span>&lt;<span class="type">int</span>&gt;(<span class="number">10</span>);</span><br><span class="line">    <span class="function">weak_ptr&lt;<span class="type">int</span>&gt; <span class="title">p2</span><span class="params">(p1)</span></span>;</span><br><span class="line"></span><br><span class="line">    p2.<span class="built_in">expired</span>()</span><br><span class="line">        ? cout &lt;&lt; <span class="string">&quot;Before p1 reset: p2 is expired!&quot;</span> &lt;&lt; endl</span><br><span class="line">        : cout &lt;&lt; <span class="string">&quot;Before p1 reset: p2 is NOT expired yet!&quot;</span> &lt;&lt; endl;</span><br><span class="line"></span><br><span class="line">    p1.<span class="built_in">reset</span>();</span><br><span class="line"></span><br><span class="line">    p2.<span class="built_in">expired</span>()</span><br><span class="line">        ? cout &lt;&lt; <span class="string">&quot;After p1 reset: p2 is expired!&quot;</span> &lt;&lt; endl</span><br><span class="line">        : cout &lt;&lt; <span class="string">&quot;After p1 reset: p2 is NOT expired yet!&quot;</span> &lt;&lt; endl;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>程序输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Before p1 reset: p2 is NOT expired yet!</span><br><span class="line">After p1 reset: p2 is expired!</span><br></pre></td></tr></table></figure>
+
+<p>但上面并不是 weak_ptr 的推荐用法，正确使用 weak_ptr 方法是： <strong>先通过 lock() 方法获取有效的 shared_ptr，再通过这个 shared_ptr 操作对象，这能避免访问过程中对象被意外销毁</strong> 。下面是一个示例：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// w_ptr 是一个 weak_ptr，先lock()获取shared_ptr，再检查是否为空</span></span><br><span class="line"><span class="keyword">if</span> (<span class="keyword">auto</span> ptr = w_ptr.<span class="built_in">lock</span>()) &#123;  <span class="comment">// lock()返回shared_ptr，为空则表示目标对象已销毁</span></span><br><span class="line">    <span class="comment">// do somthing...</span></span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;A对象已销毁&quot;</span> &lt;&lt; endl;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="6-“循环依赖”问题"><a href="#6-“循环依赖”问题" class="headerlink" title="6. “循环依赖”问题"></a>6. “循环依赖”问题</h2><p>weak_ptr 被设计出来的唯一用途就是：解除 shared_ptr 的循环依赖问题，也可以说是为解决 shared_ptr 的一个逻辑上的“Bug”而打的“补丁”。它的设计用意、适用场景都几种体现在这一点上。</p>
+<h3 id="6-1-问题分析"><a href="#6-1-问题分析" class="headerlink" title="6.1 问题分析"></a>6.1 问题分析</h3><p>考虑一下下面的场景：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;memory&gt;</span>  <span class="comment">// 包含shared_ptr/weak_ptr头文件</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> std;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 前向声明：A需要知道B的存在，B需要知道A的存在</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">B</span>;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">A</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">A</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="type">int</span> v;</span><br><span class="line">    shared_ptr&lt;B&gt; b;  <span class="comment">// A持有B的shared_ptr</span></span><br><span class="line">    <span class="built_in">A</span>(<span class="type">int</span> val) : <span class="built_in">v</span>(val) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;A 构造函数：堆上创建A对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">A</span>() &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;A 析构函数：堆上销毁A对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">B</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="type">int</span> v;</span><br><span class="line">    shared_ptr&lt;A&gt; a;  <span class="comment">// B持有A的shared_ptr</span></span><br><span class="line">    <span class="built_in">B</span>(<span class="type">int</span> val) : <span class="built_in">v</span>(val) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;B 构造函数：堆上创建B对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">B</span>() &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;B 析构函数：堆上销毁B对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 栈上创建两个shared_ptr智能指针对象，指向堆上的A、B实例</span></span><br><span class="line">    shared_ptr&lt;A&gt; ptrA = <span class="built_in">make_shared</span>&lt;A&gt;(<span class="number">10</span>);</span><br><span class="line">    shared_ptr&lt;B&gt; ptrB = <span class="built_in">make_shared</span>&lt;B&gt;(<span class="number">20</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 建立循环引用：A的b指向B，B的a指向A</span></span><br><span class="line">    ptrA-&gt;b = ptrB;</span><br><span class="line">    ptrB-&gt;a = ptrA;</span><br><span class="line"></span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;main函数结束前：ptrA引用计数 = &quot;</span> &lt;&lt; ptrA.<span class="built_in">use_count</span>() &lt;&lt; endl;</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;main函数结束前：ptrB引用计数 = &quot;</span> &lt;&lt; ptrB.<span class="built_in">use_count</span>() &lt;&lt; endl;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们来细致的分析一下为什么上面的代码会出现“循环依赖”，这个分析过程并不浅显易懂，在拆解详细步骤前，一定要保持头脑情形，有一个大的逻辑框架不可以混淆： <strong>程序将要创建的 <code>A(10)</code> 和 <code>shared_ptr&lt;A&gt; ptrA</code> 是两个“对象”， <code>A(10)</code> 创建在堆上， <code>ptrA</code> 则是创建在栈上的！ <code>A(10)</code> 是一个普通对象，与智能指针的任何机制无关，也感知不到智能指针的存在，是 <code>shared_ptr&lt;A&gt; ptrA</code> 这个“智能指针对象（实例）”负责维护一个指向 <code>A(10)</code> 的指针，并创建控制块，再维持一个指向控制块的指针</strong> 。下面是 main 方法的执行细节：</p>
+<p><strong>步骤 (1)：执行 <code>shared_ptr&lt;A&gt; ptrA</code> （第36行）</strong> </p>
+<p>先声明变量 ptrA （不是初始化），在栈上为 ptrA 这个 shared_ptr 对象本身分配内存，大小是 2 个指针：一个指向 A 对象的裸指针，一个指向控制块的裸指针，此时 ptrA 是 “空的”，它内部两个指针均为 nullptr，无任何堆内存关联</p>
+<p><strong>步骤 (2)：执行 <code>shared_ptr&lt;B&gt; ptrB</code> （第37行）</strong> </p>
+<p>继续声明变量 ptrB，动作同上。注意：ptrB 的声明（在栈上分配内存空间）是先于 <code>make_shared&lt;A&gt;(10)</code> 的，因为： <strong>C++ 语言规则要求：变量的内存分配（声明）必须先于对它的任何赋值 &#x2F; 初始化操作</strong> </p>
+<p><strong>步骤 (3)：执行 <code>...(10)</code> （第36行）</strong> </p>
+<p>准备 <code>make_shared&lt;A&gt;(10) </code> 的入参 <code>10</code> ，在栈上创建一个临时的 int 变量，值为 10，该临时变量会被传递给 make_shared 内部调用的 A 构造函数，构造完成后立即销毁（无副作用）。入参的临时存储是栈上行为，属于 make_shared 调用的前置准备。</p>
+<p><strong>步骤 (4)：执行 <code>make_shared&lt;A&gt;(10)</code> （第36行）</strong> </p>
+<p>make_shared 是一个模板函数，内部完成 “堆内存分配 + 对象构造 + 临时智能指针创建”，有6个子步骤：</p>
+<ol>
+<li><p><strong>计算总内存大小</strong> </p>
+<ul>
+<li>计算需要分配的堆内存总大小 &#x3D; sizeOf( A对象 + 控制块)</li>
+</ul>
+</li>
+<li><p><strong>分配连续堆内存</strong> </p>
+<ul>
+<li><p>内存位置：堆上；</p>
+</li>
+<li><p>调用 <code>operator new</code> 分配一块连续的堆内存（大小&#x3D;子步骤1的总大小），返回这块内存的起始裸指针。</p>
+</li>
+</ul>
+</li>
+<li><p><strong>构造 A 对象</strong> </p>
+<ul>
+<li><p>内存位置：堆上（连续内存的前半段）；</p>
+</li>
+<li><p>调用 <strong>new</strong> （ <code>new (堆内存起始地址) A(10)</code> ）：</p>
+<ul>
+<li><p>将“步骤 3”的临时参数 <code>10</code> 传给 <code>A</code> 的构造函数；</p>
+</li>
+<li><p>初始化 A 对象的成员： <code>v=10</code> ， <code>shared_ptr&lt;B&gt; b</code> 为空（默认构造）；</p>
+</li>
+<li><p>输出 “A 构造函数”（如果构造函数有打印逻辑）。</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>初始化控制块</strong> </p>
+<ul>
+<li><p>内存位置：堆上（连续内存的后半段）；</p>
+</li>
+<li><p>在 A 对象内存的后续地址，构造控制块：</p>
+<ul>
+<li><p>引用计数 <code>ref_count</code> 初始化为 <code>1</code> ；</p>
+</li>
+<li><p>弱引用计数 <code>weak_ref_count</code> 初始化为 <code>0</code> ；</p>
+</li>
+<li><p>绑定 A 对象的析构器（用于后续释放 A 对象）。</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>创建临时 <code>shared_ptr&lt;A&gt;</code></strong> </p>
+<ul>
+<li><p>内存位置：栈上（make_shared 函数栈帧内）；</p>
+</li>
+<li><p>在 make_shared 函数的栈帧内，创建一个临时的 <code>shared_ptr&lt;A&gt;</code> 对象：</p>
+<ul>
+<li><p>临时对象的“指向A对象的指针” &#x3D; 堆上A对象的起始地址；</p>
+</li>
+<li><p>临时对象的“指向控制块的指针” &#x3D; 堆上控制块的起始地址。</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>返回临时对象</strong> </p>
+<ul>
+<li>make_shared 函数执行完毕，将临时的 <code>shared_ptr&lt;A&gt;</code> 对象返回给外层（用于赋值给 ptrA）。</li>
+</ul>
+</li>
+</ol>
+<p>备注：在上述操作中，若共享指针是使用构造函数创建的（ <code>shared_ptr&lt;A&gt; ptrA(new A(10))</code> )，则控制块的内存分配和初始化工作是在它的构造函数中完成的。</p>
+<p><strong>步骤 (5)：执行 <code>... = ...</code> （第36行）</strong> </p>
+<p>将 make_shared 返回的临时 <code>shared_ptr&lt;A&gt;</code> 对象赋值给 ptrA（栈上指针拷贝）：</p>
+<ul>
+<li><p>make_shared 返回的临时 <code>shared_ptr&lt;A&gt;</code> 对象，将其内部的两个指针（指向 A 对象、指向控制块）拷贝到步骤 1 创建的 <code>ptrA</code> 栈内存中；</p>
+</li>
+<li><p>拷贝完成后，make_shared 内部的临时 <code>shared_ptr&lt;A&gt;</code> 对象析构（但引用计数会先 + 1 再 - 1，最终仍为 1）；</p>
+</li>
+</ul>
+<p><strong>步骤 (6)：执行 <code>shared_ptr&lt;B&gt; ptrB = make_shared&lt;B&gt;(20)</code> （第37行）</strong> </p>
+<p>重复 步骤 (3) 和 步骤 (4)，得到 ptrB。</p>
+<p><strong>※ 当前堆栈分析 ※</strong> </p>
+<p>在进入循环依赖前，我们看一下堆和栈上的情况以及引用关系（其中实线箭头是智能指针对目标对象的指向关系，虚线箭头是智能指针对控制块的指向关系）：</p>
+<p> <img src="/../../images/cpp/cpp-smart-pointers/3.png"></p>
+<p><strong>步骤 (7)：执行 <code>ptrA-&gt;b = ptrB</code> （第40行）</strong> </p>
+<p>将 <code>ptrB</code> 赋给 <code>A(10)</code> 对象的成员变量 <code>b</code> ， <strong>注意：这里是很容易搞混的地方： <code>b</code> 是 <code>A</code> 对象的成员变量，不是 <code>ptrA</code> 的</strong> ，是 <code>shared_ptr</code> 重写了成员访问运算符 <code>-&gt;</code> 把访问行为“重定向”到它所指的对象上。第二个要注意的地方是这个赋值操作，它使用的不是编译器自动生成的赋值运算符，而是 shared_ptr 自己实现的赋值运算符，它除了会复制 shared_ptr 内部两个分别指向目标对象和控制块的成员指针，还有 <strong>一个关键性动作：要将 A 控制块中的引用计数 <code>+1</code></strong> 。</p>
+<p><strong>步骤 (8)：执行 <code>ptrB-&gt;a = ptrA</code> （第41行）</strong> </p>
+<p>动作内容同上。至此，循环依赖已形成。</p>
+<p><strong>※ 当前堆栈分析 ※</strong> </p>
+<p>我们来看一下现在的堆栈状况：</p>
+<p> <img src="/../../images/cpp/cpp-smart-pointers/4.png"></p>
+<p><strong>步骤 (9)：离开 main 函数（第47行）</strong> </p>
+<p>在 main 函数返回前，会自动销毁栈上的局部变量，也就是 <code>ptrA</code> 和 <code>ptrB</code> ，由于它们是分配在栈上的“对象”，C++ 会保证在销毁时自动调用它们的析构函数， <strong><code>shared_ptr</code> 的析构函数有两项关键操作：</strong> </p>
+<ul>
+<li><p><strong>先将引用计数 -1，确保一个智能指针的实例被销毁前，引用计数得到相应的更新。</strong></p>
+</li>
+<li><p><strong>再检查 -1 后的引用计数是否已归 <code>0</code> ，如果是，表明当前的智能指针实例是最后一个指向目标对象的实例了，这时会调用其目标对象（这里是 <code>A(10)</code> ) 的析构函数，然后再 delete 掉目标对象，完成目标对象的销毁操作。但这没有在 <code>ptrB</code> 的析构函数中发生，因为当 <code>B(20)</code> 对象的引用计数 -1 后从 <code>2</code> 变成了 <code>1</code> ，还有 <code>A(10)</code> 对象中的智能指针 <code>b</code> 在指向着 <code>B(20)</code> 对象</strong></p>
+</li>
+</ul>
+<p>同样的事情也会发生在 <code>ptrA</code> 析构时发生，当 A(10) 对象的引用计数 -1 后从 <code>2</code> 变成了 <code>1</code> ，还有 B(20) 对象中的智能指针 <code>a</code> 在指向着 <code>A(10)</code> 对象**。</p>
+<p><strong>※ 当前堆栈分析 ※</strong> </p>
+<p>在 main 函数返回前，销毁了栈上的 <code>ptrA</code> 和 <code>ptrB</code> 后，当前的堆栈情况如下：</p>
+<p> <img src="/../../images/cpp/cpp-smart-pointers/5.png" alt="在这里插入图片描述"></p>
+<p>这是**“循环依赖”发生后的必然结果：内存泄漏**了：A 对象、A 控制块、B 对象、B 控制块都伴随着栈上 <code>ptrA</code> 和 <code>ptrB</code> 的销毁，而再也没有“活”的指针指向它们了，它们在堆上成了“黑户”。循环引用下，A&#x2F;B 互相持有对方的 shared_ptr，导致引用计数无法降到 0，堆对象析构函数得不到执行，引发内存泄漏。</p>
+<p>最后，我们再用简化的语言描述一下循环依赖发生的过程：</p>
+<ul>
+<li><p><code>ptrA</code> 销毁 🠚 试图销毁 <code>A(10)</code> 🠚 <code>A(10)</code> 被 <code>B(20)</code> 里面的另一个智能指针指向着 🠚 <strong>不能销毁</strong> <code>A(10)</code></p>
+</li>
+<li><p><code>ptrB</code> 销毁 🠚 试图销毁 <code>B(20)</code> 🠚 <code>B(20)</code> 被 <code>A(10)</code> 里面的另一个智能指针指向着 🠚 <strong>不能销毁</strong> <code>B(20)</code></p>
+</li>
+<li><p><code>ptrA</code> 和 <code>ptrB</code> 没能销毁它们各自指向的对象，但它们自己因离开了作用域被自动销毁，再无指向 <code>A(10)</code> 和 <code>B(20)</code> 指针，它们永远地错过了最后一次销毁的机会。</p>
+</li>
+</ul>
+<p>上述表述所说的 <strong>不能销毁目标对象是在智能指针运作机制下的“不能”，就是因为“引用计数无法归 0”而导致的“不能”！不是什么物理上的限制，而是在智能指针设计的“逻辑框架”下发生的“逻辑死锁”</strong> 。</p>
+<h3 id="6-2-打破循环"><a href="#6-2-打破循环" class="headerlink" title="6.2 打破循环"></a>6.2 打破循环</h3><p>如刚刚所说，我们的问题是“在智能指针的运作机制下”暴露的，也还得是“在智能指针的运作机制下”去解决，既然循环依赖的根本原因是“引用计数无法归 0”，那我们要想的应对措施应该是：在建立 A&#x2F;B 两个对象通过智能指针相互指向对方的过程中“弱化”其中一方的“所有权”，避免其中一方的引用计数加 +1，这样就不会发生“逻辑死锁”了。这就是弱指针 weak_ptr 的“特性”，我们还是通过例子来解释。我们把前面的循环依赖示例用弱指针改写一下，看看循环依赖是怎么被“打破”的：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;memory&gt;</span>  </span></span><br><span class="line"></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> std;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 前向声明：A需要知道B的存在，B需要知道A的存在</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">B</span>;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">A</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">A</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="type">int</span> v;</span><br><span class="line">    shared_ptr&lt;B&gt; b;  <span class="comment">// A仍持有B的强引用（也可反过来改，选其一即可）</span></span><br><span class="line">    <span class="built_in">A</span>(<span class="type">int</span> val) : <span class="built_in">v</span>(val) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;A 构造函数：堆上创建A对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">A</span>() &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;A 析构函数：堆上销毁A对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">B</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="type">int</span> v;</span><br><span class="line">    weak_ptr&lt;A&gt; a;  <span class="comment">// 关键修改：将shared_ptr&lt;A&gt;改为weak_ptr&lt;A&gt;</span></span><br><span class="line">    <span class="built_in">B</span>(<span class="type">int</span> val) : <span class="built_in">v</span>(val) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;B 构造函数：堆上创建B对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">B</span>() &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;B 析构函数：堆上销毁B对象，v = &quot;</span> &lt;&lt; v &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 栈上创建两个shared_ptr智能指针对象，指向堆上的A、B实例</span></span><br><span class="line">    shared_ptr&lt;A&gt; ptrA = <span class="built_in">make_shared</span>&lt;A&gt;(<span class="number">10</span>);</span><br><span class="line">    shared_ptr&lt;B&gt; ptrB = <span class="built_in">make_shared</span>&lt;B&gt;(<span class="number">20</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 建立引用：A的b指向B（强引用），B的a指向A（弱引用）</span></span><br><span class="line">    ptrA-&gt;b = ptrB;</span><br><span class="line">    ptrB-&gt;a = ptrA;</span><br><span class="line"></span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;main函数结束前：ptrA强引用计数 = &quot;</span> &lt;&lt; ptrA.<span class="built_in">use_count</span>() &lt;&lt; endl;</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;main函数结束前：ptrB强引用计数 = &quot;</span> &lt;&lt; ptrB.<span class="built_in">use_count</span>() &lt;&lt; endl;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>第一阶段：建立双向指向关系</strong> </p>
+<p>在 main 函数执行完 41 行 <code>ptrB-&gt;a = ptrA</code> 时，前面发生的事情与 &lt;6.1 问题分析&gt; 描述的 步骤 (1) - (6) 基本上是一样的，除了使用 weak_ptr 带来一些差异，基本流程没有大的差别，下面是完成了 A&#x2F;B 对象通过智能指针相互引用对方后，在栈和堆上状况：</p>
+<p> <img src="/../../images/cpp/cpp-smart-pointers/6.png"></p>
+<p>由于我们在 B 对象中使用了弱指针 <code>weak_ptr&lt;A&gt; a</code> 来指向 A 对象，这使用 A 控制块与 &lt;6.1 问题分析&gt; 发生循环依赖时的状态有明显的“差别”：A 对象当前的强引用是 <code>1</code> ，是栈上的 ptrA 在指向它，而 A 对象当前的弱引用也是 <code>1</code> ，是 B 对象中的 <code>a</code> 在指向它。</p>
+<p><strong>第二阶段：销毁其中一个智能指针</strong> </p>
+<p>然后我们看 main 函数执行完准备返回时的操作，此时需要按变量声明次序的逆序逐一销毁栈上的变量，所以是 <code>ptrB</code> 首先销毁，在它销毁时 C++ 会自动调用它的析构函数，在执行它的析构函数时会 B 控制块的强引用计数 -1，从 2 变成了 1（图中紫色部分）， <strong>此时，由于强引用计数尚未归 0，所以 B 对象还不会被销毁</strong> 。</p>
+<p> <img src="/../../images/cpp/cpp-smart-pointers/7.png"></p>
+<p><strong>第三阶段：销毁第二个智能指针</strong> </p>
+<p>销毁完 <code>ptrB</code> 就轮到 <code>ptrA</code> 了，同样地， C++ 会自动调用 <code>ptrA</code> 的析构函数，它的析构函数时会把 A 控制块的强引用计数从 1 减为 0，此时，A 对象的强引用计数已归 0（图中①），它的析构函数会进一步执行 delete 操作，销毁 A 对象，在 delete A 对象时，先执行 A 对象的析构函数，这又会让 C++ 进一步执行其对象成员（嵌套对象） <code>shared_ptr&lt;B&gt; b</code> 的析构函数（ <em>这里补充一个基础知识：一个堆上的对象如果含有一个对象成员（对象嵌套，非指针），当该对象被析构时，C++ 会保证一并执行对象成员（嵌套对象）的析构函数</em> ），执行 <code>b</code> 的析构函数就会将 B 控制块的“强引用计数”从上一阶段的 <code>1</code> 减为了 <code>0</code> ，此时，B 对象的强引用计数也已归 0（图中②），而这就又触发了 B 对象的 delete 操作，在 delete B 对象时，先执行 B 对象的析构函数，这又会让 C++ 进一步执行其对象成员（嵌套对象） <code>weak_ptr&lt;A&gt; a</code> 的析构函数，从而将 A 控制块中的弱引用计数从 1 减为了 0，此时，A 对象的弱引用计数已归 0（图中③），然后， <code>weak_ptr&lt;A&gt; a</code> 的析构完成，返回 🠚 对象 B 析构完成，释放内存，销毁完成（B 控制块也同步销毁），返回（图中 ④） 🠚 <code>shared_ptr&lt;B&gt; b</code> 析构完成 🠚 对象 A 析构完成，释放内存，销毁完成（A 控制块也同步销毁），返回（图中 ⑤）</p>
+<p> <img src="/../../images/cpp/cpp-smart-pointers/8.png"></p>
+<p>在这里插入图片描述<br>总得来说，个人觉得循环依赖问题反应了 C++ 智能指针的“天生缺陷”，weak_ptr 解决方案是一种很生硬的“补丁”，并不优雅，且难用。</p>
+<h2 id="7-智能指针：传值-or-引用？"><a href="#7-智能指针：传值-or-引用？" class="headerlink" title="7. 智能指针：传值 or 引用？"></a>7. 智能指针：传值 or 引用？</h2><p>最后，我们讨论一下智能指针和引用组合使用方法。对于初学者，在前面揣摩各种智能指针的“用义”时已经有一些困难了，因为你需要对智能指针的“所有权”和“掌管对象生成周期”有一些感知和体会，如果在这一层“语义”上再叠加一层“引用”的语义，会让情形变得更加微妙。我们逐一来看一下：</p>
+<h3 id="7-1-shared-ptr-值传递"><a href="#7-1-shared-ptr-值传递" class="headerlink" title="7.1 shared_ptr + 值传递"></a>7.1 shared_ptr + 值传递</h3><p>这是我们前面所有示例都使用的方式： <strong>因为 shared_ptr 重写了赋值运算符，所以，在涉及 shared_ptr 对象赋值和作为参数传递时，都是“复制”一个新的 shared_ptr 实例</strong> 。通常这并没有什么问题，可以认为是 shared_ptr 的“默认”传递方式。但我们要清楚：每当传递或复制一个 shared_ptr 就多一个“共享持有者”，如果接收这个智能指针实例的地方不应成为目标对象的“共有者”，则应该考虑以其他形式把智能指针传递过去。</p>
+<h3 id="7-2-shared-ptr-引用传递"><a href="#7-2-shared-ptr-引用传递" class="headerlink" title="7.2 shared_ptr + 引用传递"></a>7.2 shared_ptr + 引用传递</h3><p>shared_ptr + 引用传递也能表达一种“语义”：只“打算”以“借用的”姿态访问指针的对象，不会影响对象的声明周期。如果传递 shared_ptr 的引用，其实函数是有能力新建指针实例并改变指针对象的声明周期的，但是这样反而与接口使用引用形式所要表达的“语义”是向违背的，所以不建议这样做。</p>
+<p>使用 “shared_ptr + 引用传递”可能会有一定的潜在“风险”，主要是在使用过程中，指针的对象可能在“别处”被释放了，特别是在多线程环境中这种情况发生的概率是比较高的。但我们在一些项目里确实看到这种使用形式，而且还比较普遍，可能是出于对性能的考虑，使用者想极力避免不必要的开销，且程序设计上也能保证在使用这种形式传入的指针时，对象一定不会在别处被释放掉。</p>
+<p>在开源项目 VNote 中，有一个 Node 类，是笔记目录结构上一个“节点”的抽象，可能是一个文本文件，也可能是一个目录，它内部携带着一个文件（或目录）的所有数据和元数据，在 VNote 项目中，广泛使用 <code>const QSharedPointer&lt;Node&gt; &amp;p_node</code> 这种形式的参数在普通方法和类的构造函数中传播一个 Node，为什么会这样写？因为在这个项目中，它的 UI 层有多种控件需要使用这个 Node，它的左侧面板是一个树形控件，展示整个目录树，是完全依靠 Node 构建出来的，它的右侧编辑窗口，每一个 Tab 页面都对应一个文本文件，也是读取 Node 信息才打开的文件，此外，在它的 UI 层之下，还有文档层，也是要读取 Node 信息，你可以想象：在一个编辑器软件中，各处都会使用到文件的信息，因此 Node 就是一个被广泛使用而且生命周期无法确定的对象，所以，项目使用了 Qt 版的 shared_ptr —— QSharedPointer，但这个项目的很多地方使用的是共享指针的引用传递，应该是想表达：仅“使用”这个指针读取 Node 中的数据，并不是要“拥有”或对它的“生命周期”做出改变。</p>
+<h3 id="7-3-unique-ptr-引用传递"><a href="#7-3-unique-ptr-引用传递" class="headerlink" title="7.3 unique_ptr + 引用传递"></a>7.3 unique_ptr + 引用传递</h3><p>由于 unique_ptr 不可复制，所以 unique_ptr + 引用传递 算是唯一一种“在别处”使用 unique_ptr 指针的方式了，它的语义和 “shared_ptr + 引用传递” 是类似的，也是只借用对象，但不拥有对象。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>C++ 智能指针：示例、原理、适用场景全方位解读</p><p><a href="https://laurence.enlightgram.com/cpp/cpp-smart-pointers/">https://laurence.enlightgram.com/cpp/cpp-smart-pointers/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-03-16</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/cpp/">C++</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%85%B1%E4%BA%AB%E6%8C%87%E9%92%88/">共享指针</a><a class="link-muted mr-2" rel="tag" href="/tags/%E6%99%BA%E8%83%BD%E6%8C%87%E9%92%88/">智能指针</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%BC%B1%E6%8C%87%E9%92%88/">弱指针</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/cpp/cpp-overload-resolution/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">C++ 重载解析规则</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/qt/qt-webenginewidgets-not-found/"><span class="level-item">CMake 报错 Failed to find required Qt component WebEngineWidgets</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-原生指针的“痛”"><span class="level-left"><span class="level-item">1. 原生指针的“痛”</span></span></a></li><li><a class="level is-mobile" href="#2-智能指针"><span class="level-left"><span class="level-item">2. 智能指针</span></span></a></li><li><a class="level is-mobile" href="#3-共享指针：shared-ptr"><span class="level-left"><span class="level-item">3. 共享指针：shared_ptr</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#3-1-简单示例"><span class="level-left"><span class="level-item">3.1 简单示例</span></span></a></li><li><a class="level is-mobile" href="#3-2-实现原理"><span class="level-left"><span class="level-item">3.2 实现原理</span></span></a></li><li><a class="level is-mobile" href="#3-3-揣摩用意"><span class="level-left"><span class="level-item">3.3 揣摩用意</span></span></a></li><li><a class="level is-mobile" href="#3-4-适用场景"><span class="level-left"><span class="level-item">3.4 适用场景</span></span></a></li></ul></li><li><a class="level is-mobile" href="#4-独占指针-unique-ptr"><span class="level-left"><span class="level-item">4. 独占指针: unique_ptr</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#4-1-简单示例"><span class="level-left"><span class="level-item">4.1 简单示例</span></span></a></li><li><a class="level is-mobile" href="#4-2-实现原理"><span class="level-left"><span class="level-item">4.2 实现原理</span></span></a></li><li><a class="level is-mobile" href="#4-3-揣摩用意"><span class="level-left"><span class="level-item">4.3 揣摩用意</span></span></a></li><li><a class="level is-mobile" href="#4-4-适用场景"><span class="level-left"><span class="level-item">4.4 适用场景</span></span></a></li></ul></li><li><a class="level is-mobile" href="#5-弱指针：weak-ptr"><span class="level-left"><span class="level-item">5 弱指针：weak_ptr</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#5-1-简单示例"><span class="level-left"><span class="level-item">5.1 简单示例</span></span></a></li></ul></li><li><a class="level is-mobile" href="#6-“循环依赖”问题"><span class="level-left"><span class="level-item">6. “循环依赖”问题</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#6-1-问题分析"><span class="level-left"><span class="level-item">6.1 问题分析</span></span></a></li><li><a class="level is-mobile" href="#6-2-打破循环"><span class="level-left"><span class="level-item">6.2 打破循环</span></span></a></li></ul></li><li><a class="level is-mobile" href="#7-智能指针：传值-or-引用？"><span class="level-left"><span class="level-item">7. 智能指针：传值 or 引用？</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#7-1-shared-ptr-值传递"><span class="level-left"><span class="level-item">7.1 shared_ptr + 值传递</span></span></a></li><li><a class="level is-mobile" href="#7-2-shared-ptr-引用传递"><span class="level-left"><span class="level-item">7.2 shared_ptr + 引用传递</span></span></a></li><li><a class="level is-mobile" href="#7-3-unique-ptr-引用传递"><span class="level-left"><span class="level-item">7.3 unique_ptr + 引用传递</span></span></a></li></ul></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

@@ -111,7 +111,9 @@ $(document).ready(() => {
             let nextState;
             const padding = ($mainColumn.outerWidth() - $mainColumn.width()) / 2;
             const maxLeft = $(window).width() - getButtonWidth() - rightMargin;
-            const maxBottom = $footer.offset().top + (getButtonHeight() / 2) + bottomMargin;
+            // The footer may not be shown (layout/layout.jsx): the button then docks at the end of the page
+            const footerTop = $footer.length ? $footer.offset().top : $(document).height();
+            const maxBottom = footerTop + (getButtonHeight() / 2) + bottomMargin;
             if (getScrollTop() === 0 || getScrollBottom() < getRightSidebarBottom() + padding + getButtonHeight()) {
                 nextState = state['desktop-hidden'];
             } else if (getScrollBottom() < maxBottom) {

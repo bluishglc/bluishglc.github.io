@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>HBase 计划外启动 Major Compaction 的原因 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="严格地说，这一描述是不准确的，本文讨论的问题是一个比较容易遇到的问题，启动的并非是真正意义上的 Major Compaction，因为严格意义上的 Major Compaction 指的是将 Region 内所有HFile 合并 为一个大文件，而不是一部分，这里描述的问题是：依然合并的是部分文件，但是由于合并文件的总体积较大（超过了2.5 GB)，转而动用了执行 Major Compaction"><meta property="og:type" content="article"><meta property="og:title" content="HBase 计划外启动 Major Compaction 的原因"><meta property="og:url" content="https://laurence.enlightgram.com/hbase/hbase-unplanned-major-compaction/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="严格地说，这一描述是不准确的，本文讨论的问题是一个比较容易遇到的问题，启动的并非是真正意义上的 Major Compaction，因为严格意义上的 Major Compaction 指的是将 Region 内所有HFile 合并 为一个大文件，而不是一部分，这里描述的问题是：依然合并的是部分文件，但是由于合并文件的总体积较大（超过了2.5 GB)，转而动用了执行 Major Compaction"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/hbase/hbase-unplanned-major-compaction/2.png"><meta property="article:published_time" content="2023-10-09T20:51:23.000Z"><meta property="article:modified_time" content="2026-11-06T07:53:37.236Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="HBase"><meta property="article:tag" content="Compaction"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/hbase/hbase-unplanned-major-compaction/2.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/hbase/hbase-unplanned-major-compaction/"},"headline":"HBase 计划外启动 Major Compaction 的原因","image":["https://laurence.enlightgram.com/images/hbase/hbase-unplanned-major-compaction/2.png"],"datePublished":"2023-10-09T20:51:23.000Z","dateModified":"2026-11-06T07:53:37.236Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"严格地说，这一描述是不准确的，本文讨论的问题是一个比较容易遇到的问题，启动的并非是真正意义上的 Major Compaction，因为严格意义上的 Major Compaction 指的是将 Region 内所有HFile 合并 为一个大文件，而不是一部分，这里描述的问题是：依然合并的是部分文件，但是由于合并文件的总体积较大（超过了2.5 GB)，转而动用了执行 Major Compaction"}</script><link rel="canonical" href="https://laurence.enlightgram.com/hbase/hbase-unplanned-major-compaction/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">HBase 计划外启动 Major Compaction 的原因</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item article-label">付费</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/HBase/">HBase</a></span><span class="level-item">发表于：<time dateTime="2023-10-09T20:51:23.000Z" title="2023-10-09 13:51:23">2023-10-09</time></span><span class="level-item">阅读用时：5 分钟 (约 801 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><div class="hbe hbe-container" id="hexo-blog-encrypt"
+     data-hbe-format="4"
+     data-wpm="密码错误, 请重新输入."
+     data-whm="密码错误, 请重新输入."
+     data-salt="2a0f1d271f29f5f21955d71210e2eac4616df3da8f32b84b0c5e3c62f6ecc820"
+     data-nonce="8147e3cbff47e6cba3a9c31f"
+     data-kdf-iterations="250000"
+     data-auto-save="true">
+  <script id="hbeData" type="hbeData">
+    095753ae506af7c850ddc06878548551b045f31ccc457240e0abc0906d736d2b41c3a360e04d390aac17e35489537fe03155d58f6a1bc56ca9d716b0280fec2cc9492ee3d9bd6c2bfbf7c016641d8919d3f74f6844d7eaf71207e38d45fc1e212098b95756ad2c53ef0e2e6d414559db6fa75a47abb80a8492e18e0d9d4abf718fd9518c17ca971512666796c95c75f235a461099d00041c13664272d38751a8abf8a203863932adf14fe79f2d417cb07c715dab096c0e7062af57fa287b451f40f6eb1bc9927f0f78787e795c17542038b5023545105aae3d2013f3a84a33192745c87f4b4efa102bbcb901858446f41626d922a261e7979bc7011b97b24dd258eb1387b3fc60d6be754a4d980d3fd05344bb8a8465da20c137d5446bd79d75e7744a5aec7585e56fb87b8744c31609539b4312608854422fbf1f7505cb699a9073b5dbe9df11b765b2bde3efb2ce5773bed74940404790beb55119b7f50f3a2a8c46bad034e46806aaf1b9c44baec20be40baae35ad6b8fd281e6d1444d2cacdf65ed2136ede818e87bc45437d8fff0a37c728845260d837c789fc8611e0796d3b11bf6fb029dc78d94e70773863960ad95d38a03f48a979259d5f94caa4f483d4efb396fca70d1d400e0bc5c52ea7feb9c5151e5a0de283a25db4521b5580255d0b9d531e82069dca7965ff7df58dfdbf94243058bc8a1fbbed0ae0915f6eb1ae61c5525ccff39bb883872d2d69f5e7afb644625061a53b812d02a346e7f65bd112f7e4aacd81e0b2fec4286e4023e04e4964fb5eb559f7731df5473a86fa6f9c11da307e4ff17edf8cc521122a54a559f228799bda4acd3858bb9e48678865341e6b5842c042eabee0b3ea1b5034549fe5b5c87c71d42b1f499b9794123415f9510df4479ec8766cc6003c5441727e0efe2ffe07cc28dc2d34d1d4c41e9610fbeb772ed07a0258ed01488b2e739f373c13233f148879e5955b9f131d84480950c022c47953a4afe0bdbb984608fcecded36ab2b5283c60d383111a8638bad63e3c1aa64a165d0b14a5e1485b5b51fa910f40fc97121c4e06649abe7e699bbd154da2baa49ad54477ceba7950876382fcb7ef547b752f0fdb647db9acb11bf47804fea236e0c81cef1c03e443e3b4a87e112c2ac35cf4afdf76049ef8b4b139e69c63940adc966c6356ec5434a3add77b37b9256531146a3ae5cb0a4f9ec0ace45ba89ef608813480592b11e1689a92b26afa59806e7c0710bacdfc94ad79ed110ad0dfa32748cfe0bf4467cb506e9921c9ea1903826da6dddcd1b508c8fa810e26e059a993dba7f32a4bb69db1faf32694e6362554af8f5cf7bab3b8d06896135f97220f6fef959a10737b62021249b3c7120c20020e27ce7b88909ff5cfa9908a109e297f86f5a46b86c7ae38f4d038141c4181e3b4de203767ce713f3e66393b0df388f28797e2600f19c4974d52b7dad93f37e2088431eb4b3161321ef2c35b6152073c506ae34c046a8056eac8b4eddea37b7201d40aeaec6bd645d3f0f2e30d840e978e32916797cf20b12af8763cb7246214d042890e50d25adf13c16abc86424d6c6c8486f61be9f59f54214614de67ec9b7286ef8d530b6894c23cb5860e433c2b491ae8d1acc594af5a153b93556ce5cc9c37fe64d46f4fbf8b7d22fa1e057fcce3354a46057f9dfc0f8ebdc475b6faf83c7706066756328a3b9c60ae1fa6d8a9e53c9819056259d905706f773ec2bf300bf091b961b44e2ce317efc4e731d1d4ba0b34888042fcc687d4417dc1f0193a4f0bf1b38466ce0cc6b4bdb70dd6d9da60876f83d37af397811ee63902645e64da1e9362d45b210bc2d6e7afd4e429cdaf3deba6a220eb963ab016e25ccc470ee7f87bda2c026b59dce8f0640d4b0e487db2d2e35e8a5661a6f7fe1ba4cdaca0360dd1f9eb00e4a7a4816ecf78f8fc764f615f0cbbcc5aaa2fecfd1c03f87dec32fafaa225a17cc514b1106c8df60f0f2eee0dbd79128f2fad2d3183a6bf611babd4ba1d91e89a211e8e6d07c195b9f67f3ff8fb25e3f01a358592cfbf19f2636af161a2d359651501e62124eebd5a4b84242a8ba70f833dcea6009340b53b4fe2581f768b152984d6f49e18f0aa0ff50667b56056aabaa0e0b3d297aec124df34f8fad8433279b75833955bfbee1a8666592036cfc8c469a9812dd12b15c768ef4d93663365f553ac55444321c734ee6eed80ecaa301b6e34f6e428b9092ad2061e8653f78840f12f6a4c9e74d4f49b026c475d76357e2fecf3d392b5dc1572bd2897b103ddd959068af6071b570a8dd949c0ecb5eb1b5f7910b5e3a2f0344ff6c744dbed59fe67b2e63a18ae833b878d62678f74c32366a49bb64b7c260abcc0aa1f1ef53800f48bf56468ab09ad80ec6d2409c2b4f652adc111b40c8e29065ed9415857f406d731905581195457c2802812cbcc6dd8198cbf4e05c74c2d3d59435d243c2c05f87274522e2da1594edc3f750a6317328580d20d2c5b88a02ba243c5062dce9b845f62813cfd7dd4a7b6dd17bff31afc2d9f6d696f95eb4a1dc2b9c30c513de2ba7a8d7fdfd12a900fe8aecb2e0463c94a3d6fcf0839270004f0dd3634d44febee3eee06fdeddf503900f91476f4b8ad2a2d4c7ce1fec574b66e8659e006193cc0534d0e268235dc2bfd0d2ff3c8c516a046948ec98a4a4d8f9d90705b6af004a0ea5bab2ad2ae786d857454ef5ab3a7451084e0a1e42c299e20e63d55e2ae1b2076cc8252dfaab77a311cc60f47570a7f8759c8f1a703187a294d9b5227cc599cf25bb0eac6d2b263b36a79c42c6d9dfaab8d153255c434d32013d66a593e655156ae9a58bf8c8526c2eda49ef376f840d309440fac84e9cf46cdb8eb6089f8723951560e928fcf1f2748f8bd8059d3fa22ef11417755f1253208370a1fa527d7954b8980bfc12351f66bc5f29b9bbad19d0f9b26db355d9e6df5ce58c8a5fcfc5b425f8b3177bb64b87a5a89f12fe1f290e69e2a04c3fbe7619afce3b936244075df84e8c06de8b54a403535b8102d27f9ac46eeea493ae25aa5146e5b1eed0209242e649e740b76c389ac18d13ead1e62d2b4935b9da9b12cace761463280afd0f33d8e0a7156eb99246c35c910c071a29f5f17839f2ea39b86f34683afe80ada60886ee4635d32540c4349c747e03825121701082d75f91e439e288b70d40d2d22aa29f3e693d32c107b46704a7a9978bcd7ee9f0271325e24be57b270b276896b43da973db8b04344cc8c45f53032879000811501babfb48c113c2bd8ebc2f8b834639499840e965b2c2e7c5fbe3bd6fe0169c41f50fda9fdf19dd9869b70632d64cb5140b0f92e89e7d7c133e258a913b55de55331b59e2a940d4adb46e46130818252d7220c520214f2453aef715e4825c16080702c1508bd87311610af8935e723ce148bafaa96023799790ee30661f8b6ff0170ce47484ebd7aff09769449eecbda732abb9a17430bde7b7d7532f4585d61ea2d1d0a21aa76909740e8128702f87d50977244da8c9a42a5048dc0eac8097acb28a709ffb22091b4d4e57791412f5777b5dd081465764ed26abb509fc0fd2f22933b7a3557a7eb1734a5b7dc35e93504a58fc6a0d4a2facc7f5e9a67b1f4549073ab90199443f01406bdbaace72f1897b550e9a77c992efd9de516e38d339c8e343d2e3f725af340a29435ab188fe506ff0db51ff67526a11093feee5c3bacd8c44a725eda614223de8ce7bd6a5714022e6725fc3d99c674f8b9c1327fdbe72b9c98fe457c9953d0272d1c3d05c969e5c032dd812dfe6cb8c3ed88d2dadc3d5f1d4cbe75deca807062084f5fe4bd0bb14d4b4ea95534a5bef7aa82c92f7e43ad3deece14a9bd400b4905c585c29084c7f150f72ee37f96d90b3a9f4f7ab7a5b1d88b50c03229c62cdca6d931a3c66bded5202d55388dedd2380f0f8a60de8a25bf7f61fbff0c73891fa2a3092b237b1949fa1afcf8174c51371b125543c7085b9719298df4ebe8894bca53478dfd1554ee5e44f94d8a7967576afe11ff7a2315509f8a936fbd96f270a44d050d11c7aa1ad294ab1e05feaee4d3aa3cef005ea57f7491a02a0139b423507f6fac90b1bfb5ff35d55e1ec2047da4f2ac7fe7f5011e954e2d6ff9ec7b4eb1671006b1a71a757cdc78ccd6eba2c032c9f579e2a07ee7afbbeec29068ce6c152dff421772cc50dd291252256aeaad1a52968aa22ba7d1606bf48cca9d66ff2958e181efc7af6c79fa7546d5006e97e07cdda685b3b3f0d7af3ef87f0f238dcef2e43d15d076b2b915b891dba9301456d307012dfa37faa52c5d5e200c1a142800a1838b385ad087e069572adbd49b50d0c67e3cf999e2d5b5833c6fcb30e3d303f74607d09e74e8a2e811bfa2f354022fc0f2e9f2cb7bd8d638afba7ff432e563a652ada9a6187db7f2ef6478e462cd5276be672af01dde5d76ccca9819e45392b723f68bc76f0177a5474cae56c0df9ae8210a7dc6791abc16fb3fe0e21e66a9ffc269e24f9a45c4dd5e5f60c6022b94d58105df2685c92fb0e24b2fd1349c97906893f0ed032a8c8f22d5719b4620c12b39a88bb7753344600444f7317d8788ef23d8e369a5543ea2db869abebb2ea747e4f85f47285185822b35c3d847a7b5b92ad915bf210ac2b29d3ad06e3404231405fffb8ccfb95cf3a654f6a6942ac29f2005c4f677b161d7bde14e4506f885020e63fcb0735a00d7406d6b583bdd8c8e23335165e475bafab1764e04573714bb9bdff4a9c6482f8e3a6d68da86c3918215b37b078f33e39edf056fb88a875a665ef498261034c4f5e988a5c0a74604fd46de71c4270d640ba67fef2ec516e9fc861771c04d20792f376c86c690ef7fc45dd7ef72836087aacad2f9443bf5bc4ecc618a332fb11b4c3a3233acfb79ef3c2d5536c68c24adcd60dcc83decacc8f476347f0a28f639747c13369d2b7116460c19c29ffa33760d8761f4461266fb47fb2a6cdc70e057f1f9efbbe892a9b7d78fdaaf458ca2b833cd2b59f73cfe58d8216994e7bb73068f64db8c85e50800b0b80c24374fbcf8999bb1e15d512256f98798b91b245406754dfd5f13f839812f93e5b13cb517b23ae864c9c2095f71e95c4642d39566e926ffd9af9cff816fba52893876f4a4e438c8464df2292640dacb7ab73e37c74e766a65278c744c08f4f88dd46c5415fc0d5e5254fc37e479b34a765f0dac0795102e0dd395a3867c7ee41aebc103b909d46dad9d7b4c9fe337f55192515e3a4455b01465eef9f86b6213244161edfd0b4068297f3157331b8f078c47ed0cd367ec7fc530852f6b235a21fd410e7805eab7e89e01083700bb0f82fae2a2df0b81c423b5c889f5574f885f45f84958750c96df8542385c766054beb606fbfc065c6fa341bf860351d1b80c4eaaf2ca68c1b3ab533d445ab6159121d3dd234d2217c0008709b9c770152ff2b152ac92df2b5236557191e18275d9822e1ae5f5dc14fc48faf4bcdcca2bc0e2bff099cb63f9b840cbb6ef7eca5195e076173bbccbff0d296a3bb0afe50f1e0827068c4742e936357d60b09b0b30e398fe432d89b9229dffa09b419dea008e80715b3834e877d599654653ad0d92634beb9a6c6464f989fe77803eb3b39e13ad8a52d6c8ffcc1752c35a2d967947d113ef178f6ce0deaef44c35f8400f844eea9bd24cde0b0c0924ec42210d7d1d8ed22533d1a6e37c52426ed95bd40787de9cfb6514179a9fb80a79f6c798e9a4a14e851160f076469f62e98478830327fa1cb523417c9aeb0501932bd154f6154dffc5d11f95e2ee4ac928c8d16a30b3cc333c5045ec076df1a01a25a2daab65c7ad909f7546ea8dd4eb163e2ab4a647d651ec61158bc141cfebc0a17320c6142f0d0a95dd7a4229654e56273d8e3f0d20213ffe0ad8c0f7f23027298ce8ce482296442da9b0f90227966c692b2685ad18ee08bb9eb8a359514d74bc28452fa718efeb257ef66db8e0b6b42749b84090c2b3a07b8e568fcf39709bd62b9c99a5bf723cd4897de32fabc2aeac3e96c298919f97d08373c47ad29ba904cd5ac1be4ed6734baa2bbc61f78b9056f277b5669c4dd93352d6da1e0b0edc58c5ea9f1fa59ac98ff0c1dd1eefe43cf46ce0ab99215708734f8756063bdf8f3ea4e05746ab3198803d3c07ba71d4210558596c09802151306b99af40e7f5453c6869681ff503faea19b4c5ffbfd8e75a39e95f06e1979727ad091d010fc0ddbd77e588d91cfbb4df58c71c419d6edfe957b881c521288d42cec4d2a0b95bd64f00abc5d5c4a1deff0f9f800c93fd404450c0f349b7f28d3abdd65e519ea1ef3ea65fcb339451d7adaed2d92fcbbd5805c17a0805c19e1a603a4f0190a1944d84244375e6e3f1a0626fbb631761c9635afd579eb81a123cb42e7a2c558d578cfdc0de4196abf01eb490e2eacb71651fbfbaf00bc4195f18152183d76588fa7af8583476345684c801eaac1fc1f5dfcb838862b0b2762a89c8c6a264772deb01f9e82ce844961a6ffb92af783226da2ab2ed4c1c60a8ad7a03052fcb1293751aea42da1df6df376e147a77e6f06d23ecaca512b218a090d98cb15e495ddb50a0ffa553093d4060de865bcba3444009b6b6daac051a680a87d5d2ed1dbe32eb86fd992c824194b26db2512d16b48ac90f8a8195196d788e5b7c2fb535f8f62b7e8ce688f027eedaa73a85b5d336a3877795ca779ba09c7f23e76afc53c8552047ac092a71d332bb28f3781c494f7a2729a7a6424bc56c3effc3ffa1198746f3653d1d0460684df339a688d94c0830683e9eee0141050161b4e3e0394ef6e43db4eeb9e522aaa27884f7b47467ded0595bececf4a196d26dea4344968aa2a3367ccdf7ad5c91b4d40aea3f63f73ac0053a9bbdfeca7b82c6cb9550cb7859129f427fffdc1e12127b3b21dcd27dac54ce5e48a721c7d22e74b1981dec705724713856a3bea1abc0390edc75f9c7dabd312a995ab21e76f03d4aa8493e28faa283d193dbdc89184e375466d58c57c4521da7b435c62f6baedb74ae8f2b1daa35627f0364b601f7901032054bf0e0aea2e729ae07e4ab2e714fb89432b9dfafd64c5b1a01b581270ace028408740d902c6dd7708d92b16491f6a6c787a721e4cbdcb6a6648b183e70a329ae8a5666988e074af3b9ed06fc7fd8883f96820c4a5c4e6985a3e04a3114ac6981764d0d942625151cd72c613ea2b2bca59cbb7801130ab884f9d76a478e8bee44ae2c7c6c464d6efb237fa80d4df4e130e971d778bc870edcef0231df97bee8803664a2edc5390053f15ab7c93bcc923ceb946ac85db253c0b7cb4d5812f41ce12364a2e5d66e1507236226d2b5dd031794bdc4ee4fbf8384033549a403d0f37f15ed3cab0b3fcef731eab9b02a59b04063919a4b31df5ddca3d50bc93514146b745bcbf88476636c29fe07c2238ea413f88593a9b13ef8bad85f88285c61b25e1cc250d046c459d5fa59a0121f4277f94215c083f01ef3d3dfd39f47786714b4bacc05c5491cc66701b9a16cc1f0f0712bd1b9b28fdb2b598c254d46a5d4112ef5a9884c5fb74b3e41362d259d43aa3127e077d58b2ffcfefbcabe6abf112dfb9c336cd999cf18a07e05549110030c047bba2aa9457e85370433448fdd9b389374088a231732f215a740302a27fc70bb8910e63d02fe6a0ef0c5e9281a7d234b9a14871f022b35a5a57a689e775d45ae46efb96447599107104dd87e40f3e1e59af4df76b6b54f084f7b7deb54fd86bc9f007eff1b71b5cc7f6468c8aff30e64ea8dc66cc6f729f19cf5560ed11202e193431084dbdd17c2a216b6ef9abaaf297483b539d79360254b2496418bff0ef2103a653ecc7e51cc873416245c018cc721945e2f04d83381d82bd5af9281499f76f48bbaeed19054a294beb4763123b4143d9686e9d6d2eb7da25cef0f14d237764dee0809fa596e331c3c61c9480ee1b3e385690d94977cb5dd8d6fc9a56c0d1707f094b020d3f4b8917ff5b46ff2074ac4e76ea431c94109b608cf6210f77ce2bc8253454a61d04d87b5a2005672a06283d729e8d424c7e2412ab26895a0e80a3de5b65a12fff27e9ae73acce2887ba9609497d6801ab38cbf5a8824a4c091abc463d406e6c56713ba36f19908673577b0448af5df826bf3ad47dd8b3f024d19d731f0f6173f8b93fd5089b95803ff3a5440068988d76e76ddf82d7eb8695315d48ebae51665315a111ab0ce78d5f15b9d12275c2564d5a0ee80a5b6b33f476fe6585759c6dbca3d133d4ce8e5b3f0b4cee96bfb9634ff714d45b861c395d7596f545671a7b7d94b41005e10f43d45b92a36679650bb04ab8eed87e1dfab892a499ea04e63534c5fcc00cf5b3fcc0b34b541e47865244dc1f1a81d104b7de803b07827c53694391720517e9338d9995ee52dd19a373062b30dfe3a8fa021b3d69b17f31628576ce5dddbb614857aa902142671f8c2b41fabdb4aaa34c3d226a1b9aeb7c29e66d68462e9c3397c9ffb790f29224abf0bf755c83fb7d1f0d13a3c1b42b14f8f529b5e0c4d8d873a50deb95d8b2176a54ba24005da81abfeb11d52a63384f4898ddc880ff1e9a5ee8dc3400a6fb9b6d8b4aa54a45bb66751325dbffcf059d93b91105bfbb5d1be5d815a0a9deb4f123068b2d5d186ac4a8a3b910390af5b72f3692fbabbf38618b79647cf643e227de8445bcaac96f9628616249f81af5d81de5d77065cb229cec6433a4b7778edad7c956709dc8a3cb61111a084418197c24e12a4849e9bc0e360ad3486c5c59440269c0213d4d988d5edf176bc60bd5a2e1a53b490d16e831353ebe2c15f0f4c84e49fd67561257a83622826dd0ebbf324a98b9d68ed1d419e9a2bcb323bbea973f5329fe1f4e8a47c55219ff31b23b21c7430f6d0548f93bc641f01b11899266e28bc1795af013a914b2bcdc3b61096dc1a28f05ad7d92bb5b745e0afa267d6b4f432a52a403d32b32cd2ff6fd7e7a10d1703f6ca2ccd725ac20f6efe1caba513829325606ee60323f694f6504e32c4928eae87ee235c06558222d264e87df2599ee6c9aced9f3c6c997937e66180dda54abf84802d9ba399281f0df7cdbc608a0d78bee8f7637e3b6cdee5729dcbddfcf6a15912343c51d8f474258c42c2279aee56c7a8cdc413fd3d6889fc79906d9c31d4dc181453216c1b661c848e119d3865b3c46a248d4e22eb0e95af39ee2e17e687bfc5521703f748f04db4c5f4663e59cf1b4bc408a29b952f1aa613c6bf3a259a2d7d49ed21972a766702ccbe10755ccb994dee938a6c8547698391560929f38b48614ec24ad812e24ed073b8aca1e33e3e3b821d942e4a63f52afa1404012838ad2ec2cd532fcf44ce18fc80f284b6470a3b443064a26dfcd2e258c5ac44316130b4d622f37a47933400eead367e7c162897d7402a1489ab592e0e00f369ea614eab4081524ae0153e3c99f4cb6079d8201ca3522eb9c89a9add0c428773becfebf06ff21dd51bfa6d2e5ccf904e47d7e6d365b9f962ee87220858c8dced38500754e04558
+  </script>
+  <div class="hbe-preview"><p><img src="/../../images/hbase/hbase-unplanned-major-compaction/2.png" alt="在这里插入图片描述"></p>
+<p>严格地说，这一描述是不准确的，本文讨论的问题是一个比较容易遇到的问题，启动的并非是真正意义上的 Major Compaction，因为严格意义上的 Major Compaction 指的是将 Region 内所有HFile 合并 为一个大文件，而不是一部分，这里描述的问题是：依然合并的是部分文件，但是由于合并文件的总体积较大（超过了2.5 GB)，转而动用了执行 Major Compaction 的线程池去做 Compact，同时在日志中，还会显示 “completed major compaction …” 字样的信息。</p>
+<p>HBase 的 Compaction 有两个线程池，一个是为 Minor Compaction 准备的， 一个是为 Major Compaction 准备的， <code>hbase.regionserver.thread.compaction.throttle</code> 是决定 Compaction 请求放入哪个 线程池 的阈值，当待合并文件的总大小小于这个阈值时，就是一个 Minor Compaction，当待合并文件的总大小大于这个阈值时，就是一个 Major Compaction。这个阈值的默认值是：2.5 GB （2684354560 Bytes）， 这是基于以下方式计算得到的：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">2 × hbase.hstore.compaction.max（StoreFile文件数量，默认10个） × hbase.hregion.memstore.flush.size （StoreFile文件大小，默认128MB）= 2.5 GB</span><br></pre></td></tr></table></figure>
+</div><div class="hbe-preview-end"><span>试读结束</span></div><div class="hbe hbe-content">
+    <form id="hbeForm" class="hbe hbe-form">
+      <div class="hbe hbe-input hbe-input-default">
+      <div class="hbe-qrcode-field"><img class="hbe-qrcode not-gallery-item" src="&#x2F;images&#x2F;profile&#x2F;wechat-qrcode.jpg" alt="QR code"><input class="hbe hbe-input-field hbe-input-field-default" type="password" id="hbePass" placeholder="在此输入文章密码..."></div>
+      <label class="hbe hbe-input-label hbe-input-label-default" for="hbePass">
+        <span class="hbe hbe-input-label-content hbe-input-label-content-default">本文为付费阅读内容，扫描下方二维码，关注作者微信公众号：“十万公里通票”，搜索文章《2023年度付费文章》，付费后可在文章中获得解锁密码。</span>
+      </label>
+    </div>
+      <button class="hbe hbe-button button is-small is-size-7" type="submit">解锁全文</button>
+      <div class="hbe hbe-error" role="alert" aria-live="polite"></div>
+    </form>
+  </div>
+</div>
+<script data-pjax>(function(){var f=document.getElementById("hbePass");if(f){var focus=f.focus;f.focus=function(){focus.call(f,{preventScroll:true});};}}());</script><script data-pjax>(function(){if(window.__hbeToc){return;}window.__hbeToc=true;window.addEventListener("hexo-blog-decrypt",function(){if(!document.querySelector("#toc .menu")){return;}document.querySelectorAll("#toc .menu").forEach(function(m){var c=m.cloneNode(true);c.querySelectorAll("a[data-href]").forEach(function(a){a.setAttribute("href",a.getAttribute("data-href"));a.removeAttribute("data-href");});m.replaceWith(c);});var s=document.createElement("script");s.src="/js/toc.js";document.body.appendChild(s);});}());</script><script data-pjax src="/lib/hbe.a3b9f59caa.js"></script><link href="/css/hbe.style.css" rel="stylesheet" type="text/css"><span hidden data-yearly-password="2023"></span><script data-pjax src="&#x2F;js&#x2F;yearly_password.js"></script></div><div class="article-licensing box"><div class="licensing-title"><p>HBase 计划外启动 Major Compaction 的原因</p><p><a href="https://laurence.enlightgram.com/hbase/hbase-unplanned-major-compaction/">https://laurence.enlightgram.com/hbase/hbase-unplanned-major-compaction/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2023-10-09</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/HBase/">HBase</a><a class="link-muted mr-2" rel="tag" href="/tags/Compaction/">Compaction</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/aws/aws-ad-connector-network/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">AWS AD Connector 的网络配置</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/aws/delta-lake-on-emr-serverless/"><span class="level-item">在 EMR Serverless 上使用 Delta Lake</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><!--!--></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

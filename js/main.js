@@ -209,6 +209,24 @@
         $('#toc-mask').remove();
     }
 
+    // PJAX turns the scroll restoration of the browser off, and leaves the history entries it did not make
+    // alone: those of the anchors, from toc.js or a link, have no state. Scroll to their anchor on back and
+    // forward. main.js runs again after every PJAX navigation: replace the handler, do not add one.
+    $(window).off('popstate.icarus-anchor').on('popstate.icarus-anchor', event => {
+        if (event.originalEvent.state || !location.hash) {
+            return;
+        }
+        let target = null;
+        try {
+            target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+        } catch (e) {
+            // A malformed hash: stay where the page is
+        }
+        if (target) {
+            target.scrollIntoView();
+        }
+    });
+
     // The scrollable box, between a toc entry and the toc itself, that clips the entry: the mobile
     // overlay, or a widget given a max-height. Without one there is nothing to scroll.
     function getTocScroller(entry, toc) {
@@ -278,6 +296,75 @@
         tocs.forEach(toc => {
             window.IcarusTocObserver.observe(toc, { subtree: true, attributes: true, attributeFilter: ['class'] });
             schedule(toc, true);
+        });
+    }
+
+    // A sticky sidebar taller than the window shows the rest of it only at the end of the page. With the toc
+    // in it, the sidebar scrolls with the page until the toc is where the sidebar starts, then sticks as
+    // before; the toc fits in the window, and scrolls by itself (scrollTocToActive). main.js runs again after
+    // every PJAX navigation: replace the observer and the handler of the previous page.
+    if (window.IcarusStickyToc) {
+        window.IcarusStickyToc.disconnect();
+        window.IcarusStickyToc = null;
+    }
+    function stickToToc() {
+        document.querySelectorAll('body > .section > .container > .columns > .is-sticky').forEach(column => {
+            const toc = column.querySelector('#toc');
+            // The list scrolls, not the menu: the title and the line under it go through the padding of
+            // the card (include/style/widget.styl), which a scrolling box would clip
+            const list = toc && toc.querySelector('.menu > .menu-list');
+            if (!list) {
+                return;
+            }
+            column.style.top = '';
+            if (getComputedStyle(column).position !== 'sticky') {
+                // The mobile toc is an overlay, sized by include/style/widget.styl
+                list.style.maxHeight = '';
+                list.style.overflowY = '';
+                return;
+            }
+            // Offsets in the column (its offsetParent, as it is sticky), not client rects: the cards rise
+            // into place as the page loads (source/js/animation.js), which moves their rects, not their offsets
+            const previous = toc.previousElementSibling;
+            // Where the toc sticks in the window, and how far from its bottom
+            let stickAt, gap;
+            if (previous) {
+                // As far below the sticky navbar as from the card above it, which then hides behind the
+                // navbar: from where the first card was, a strip of the card above would show
+                gap = toc.offsetTop - (previous.offsetTop + previous.offsetHeight);
+                const navbar = document.querySelector('.navbar-main');
+                const navbarHeight = navbar && getComputedStyle(navbar).position === 'sticky' ? navbar.offsetHeight : 0;
+                stickAt = navbarHeight + gap;
+                column.style.top = (stickAt - toc.offsetTop) + 'px';
+            } else {
+                // The first card: the column sticks as before
+                gap = toc.offsetTop;
+                stickAt = (parseFloat(getComputedStyle(column).top) || 0) + gap;
+            }
+            const height = Math.floor(window.innerHeight - stickAt - gap - (toc.offsetHeight - list.offsetHeight));
+            const maxHeight = Math.max(height, 120) + 'px';
+            if (list.style.maxHeight !== maxHeight) {
+                list.style.maxHeight = maxHeight;
+                list.style.overflowY = 'auto';
+            }
+        });
+    }
+    let stickFrame = null;
+    function scheduleStickToToc() {
+        if (stickFrame === null) {
+            stickFrame = requestAnimationFrame(() => {
+                stickFrame = null;
+                stickToToc();
+            });
+        }
+    }
+    stickToToc();
+    $(window).off('resize.icarus-sticky-toc').on('resize.icarus-sticky-toc', scheduleStickToToc);
+    if (typeof ResizeObserver === 'function') {
+        // The cards above the toc change height as their images and fonts load
+        window.IcarusStickyToc = new ResizeObserver(scheduleStickToToc);
+        document.querySelectorAll('body > .section > .container > .columns > .is-sticky').forEach(column => {
+            window.IcarusStickyToc.observe(column);
         });
     }
 

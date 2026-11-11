@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>硬盘分区备忘（主分区，扩展分区和逻辑分区）以及Linux硬盘分区工具parted 介绍 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="我们知道硬盘的第一个扇区也就是第0扇区是用来存放主引导记录(MBR)的，因此也称MBR扇区。一个扇区是512字节，因此MBR的大小也是512字节，其具体数据结构是：446个字节的引导代码、64个字节的分区表及2个字节的签名值&quot;55AA&quot;。由于MBR的分区表只有64个字节，这决定了它只能存储4个分区记录。这就是为什么一块硬盘最多只能有4个“主分区&quot;的原因。记住，“主分区”就是指记录在主引导记录MBR"><meta property="og:type" content="article"><meta property="og:title" content="硬盘分区备忘（主分区，扩展分区和逻辑分区）以及Linux硬盘分区工具parted 介绍"><meta property="og:url" content="https://laurence.enlightgram.com/linux/disk-partitions-and-parted/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="我们知道硬盘的第一个扇区也就是第0扇区是用来存放主引导记录(MBR)的，因此也称MBR扇区。一个扇区是512字节，因此MBR的大小也是512字节，其具体数据结构是：446个字节的引导代码、64个字节的分区表及2个字节的签名值&quot;55AA&quot;。由于MBR的分区表只有64个字节，这决定了它只能存储4个分区记录。这就是为什么一块硬盘最多只能有4个“主分区&quot;的原因。记住，“主分区”就是指记录在主引导记录MBR"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/linux/disk-partitions-and-parted/1.jpg"><meta property="article:published_time" content="2013-06-27T23:36:43.000Z"><meta property="article:modified_time" content="2026-11-06T02:21:32.904Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Linux"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/linux/disk-partitions-and-parted/1.jpg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/linux/disk-partitions-and-parted/"},"headline":"硬盘分区备忘（主分区，扩展分区和逻辑分区）以及Linux硬盘分区工具parted 介绍","image":["https://laurence.enlightgram.com/images/linux/disk-partitions-and-parted/1.jpg"],"datePublished":"2013-06-27T23:36:43.000Z","dateModified":"2026-11-06T02:21:32.904Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"我们知道硬盘的第一个扇区也就是第0扇区是用来存放主引导记录(MBR)的，因此也称MBR扇区。一个扇区是512字节，因此MBR的大小也是512字节，其具体数据结构是：446个字节的引导代码、64个字节的分区表及2个字节的签名值\"55AA\"。由于MBR的分区表只有64个字节，这决定了它只能存储4个分区记录。这就是为什么一块硬盘最多只能有4个“主分区\"的原因。记住，“主分区”就是指记录在主引导记录MBR"}</script><link rel="canonical" href="https://laurence.enlightgram.com/linux/disk-partitions-and-parted/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">硬盘分区备忘（主分区，扩展分区和逻辑分区）以及Linux硬盘分区工具parted 介绍</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Linux/">Linux</a></span><span class="level-item">发表于：<time dateTime="2013-06-27T23:36:43.000Z" title="2013-06-27 16:36:43">2013-06-27</time></span><span class="level-item">阅读用时：20 分钟 (约 2993 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>我们知道硬盘的第一个扇区也就是第0扇区是用来存放主引导记录(MBR)的，因此也称MBR扇区。一个扇区是512字节，因此MBR的大小也是512字节，其具体数据结构是：446个字节的引导代码、64个字节的分区表及2个字节的签名值”55AA”。由于MBR的分区表只有64个字节，这决定了它只能存储4个分区记录。这就是为什么一块硬盘最多只能有4个“主分区”的原因。记住，“主分区”就是指记录在主引导记录MBR分区表中的分区，除此之外主分区并无特别之处，但是过去的一些老操作系统往往不能安装在主分区之外的分区上，所以，主分区也贴上“专门用来安装操作系统”的标签。</p>
+<p>我们已经知道了MBR中的分表区只能存放4个分区（即4个主分区），那系统是如何划分出4个以上的分区的呢？一种直白而简单的思路就是把其中一个主分区再进行细分，衍生出一个二级分区表。对的，这个被用来二次分区的主分区就是“扩展分区”，它下面的二级分区就是“逻辑分区”。</p>
+<p>关于如何在 Linux 下如何使用parted工具时行分区,这里转载一篇文章, 讲解的非常清晰. <strong>原文出处:<a target="_blank" rel="noopener" href="http://dngood.blog.51cto.com/446195/647702/">http://dngood.blog.51cto.com/446195/647702/</a></strong> </p>
+<p><strong>一 关键词</strong> </p>
+<p><strong>MBR和2TB的限制</strong><br>在使用fdisk建立分区时，我们最大只能建立2TB大小的分区，如果你的磁盘(阵列)大于2TB，只能通过划分多个分区的方法才能充分利用磁盘容量，这对于使用小于2TB分区的朋友没啥影响，但对于使用大于2TB分区(比如5TB的分区)的朋友就会遇到问题了，要突破这个限制；我们先来了解下MBR(Master Boot Record)和GPT(GUID Partition Table).</p>
+<p><a target="_blank" rel="noopener" href="http://zh.wikipedia.org/wiki/%E4%B8%BB%E5%BC%95%E5%AF%BC%E8%AE%B0%E5%BD%95"> <strong>MBR</strong> </a><br>主引导记录（Master Boot Record，缩写：MBR），又叫做主引导扇区，是计算机开机后访问硬盘时所必须要读取的首个扇区，它在硬盘上的三维地址为（柱面，磁头，扇区）＝（0，0，1）。</p>
+<p>MBR是由分区程序（如Fdisk，Parted）所产生的，它不依赖任何操作系统，而且硬盘引导程序也是可以改变的，从而能够实现多系统引导。</p>
+<p>从主引导记录的结构可以知道，它仅仅包含一个64个字节的硬盘分区表。由于每个分区信息需要16个字节，所以对于采用MBR型分区结构的硬盘(其磁盘卷标类型为MS-DOS)，最多只能识别4个主要分区。所以对于一个采用此种分区结构的硬盘来说，想要得到4个以上的主要分区是不可能的。这里就需要引出扩展分区了。扩展分区也是主分区（Primary partition）的一种，但它与主分区的不同在于理论上可以划分为无数个逻辑分区，每一个逻辑分区都有一个和MBR结构类似的扩展引导记录(EBR)。<br>在MBR分区表中最多4个主分区或者3个主分区＋1个扩展分区，也就是说扩展分区只能有一个，然后可以再细分为多个逻辑分区。<br>在Linux系统中，硬盘分区命名为sda1－sda4或者hda1－hda4（其中a表示硬盘编号可能是a、b、c等等）。在MBR硬盘中，分区号1－4是主分区（或者扩展分区），逻辑分区号只能从5开始。<br>在MBR分区表中，一个分区最大的容量为2T，且每个分区的起始柱面必须在这个disk的前2T内。你有一个3T的硬盘，根据要求你至少要把它划分为2个分区，且最后一个分区的起始扇区要位于硬盘的前2T空间内。如果硬盘太大则必须改用GPT。</p>
+<p><a target="_blank" rel="noopener" href="http://zh.wikipedia.org/wiki/%E5%85%A8%E5%B1%80%E5%94%AF%E4%B8%80%E6%A8%99%E8%AD%98%E5%88%86%E5%8D%80%E8%A1%A8"> <strong>GPT</strong> </a><br>全局唯一标识分区表（GUID Partition Table，缩写：GPT）是一个实体硬盘的分区结构。它是EFI(可扩展固件接口标准)的一部分，用来替代BIOS中的主引导记录分区表。但因为MBR分区表不支持容量大于2.2TB（2.2 × 1012字节）的分区，所以也有一些BIOS系统为了支持大容量硬盘而用GPT分区表取代MBR分区表。</p>
+<p>在MBR硬盘中，分区信息直接存储于主引导记录(MBR)中（主引导记录中还存储着系统的引导程序）。但在GPT硬盘中，分区表的位置信息储存在GPT头中。但出于兼容性考虑，硬盘的第一个扇区仍然用作MBR，之后才是GPT头。</p>
+<p>与支持最大卷为2 TB（Terabytes）并且每个磁盘最多有4个主分区（或3个主分区，1个扩展分区和无限制的逻辑驱动器）的MBR磁盘分区的样式相比，GPT磁盘分区样式支持最大卷为18 EB（Exabytes）并且每磁盘的分区数没有上限，只受到操作系统限制（由于分区表本身需要占用一定空间，最初规划硬盘分区时，留给分区表的空间决定了最多可以有多少个分区，IA-64版Windows限制最多有128个分区，这也是EFI标准规定的分区表的最小尺寸）。与MBR分区的磁盘不同，至关重要的平台操作数据位于分区，而不是位于非分区或隐藏扇区。另外，GPT分区磁盘有备份分区表来提高分区数据结构的完整性。</p>
+<p><a target="_blank" rel="noopener" href="http://zh.wikipedia.org/wiki/%E5%8F%AF%E6%89%A9%E5%B1%95%E5%9B%BA%E4%BB%B6%E6%8E%A5%E5%8F%A3"> <strong>EFI</strong> </a><br>可扩展固件接口（英文名Extensible Firmware Interface 或EFI）是一种个人电脑系统规格，用来定义操作系统与系统韧体之间的软件界面，为替代BIOS的升级方案。可扩展固件接口负责加电自检（POST）、连系操作系统以及提供连接操作系统与硬件的接口。<br>EFI最初由英特尔开发，现时由UEFI论坛来推广与发展。</p>
+<p><strong>UEFI</strong><br>是由EFI1.10为基础发展起来的，它的所有者已不再是Intel，而是一个称作Unified EFI Form的国际组织，贡献者有Intel，Microsoft，AMI，等几个大厂，属于open source，目前版本为2.1。</p>
+<p><strong>二 使用fdisk创建分区（小于2TB）</strong> </p>
+<p>如果我们要创建的分区不会超过2TB，我们可以使用传统分区工具fdisk，让我们以某机器为例，展示一下它的用法：</p>
+<ol>
+<li>使用 <strong>fdisk -l</strong> 命令查看机器上安装的硬盘信息</li>
+</ol>
+<p> <img src="/../../images/linux/disk-partitions-and-parted/1.jpg"></p>
+<p>上面的信息告诉我们这台机器拥有3块硬盘，其中只有第一块硬盘进行了分区，剩余的两块尚未分区。</p>
+<p>2，使用fdisk对某个硬盘进行分区</p>
+<p>这里我们展示的是对硬盘&#x2F;dev&#x2F;xvdc的分区操作，首先键入“fdisk &#x2F;dev&#x2F;xvdc”进入分区的向导模式：</p>
+<blockquote>
+<ol>
+<li><p>输入n，表示要建立一个新的分区</p>
+</li>
+<li><p>输入p, 表示我们想要创建一个主分区</p>
+</li>
+<li><p>直接回车，使用默认的起始柱面，也就是柱面1</p>
+</li>
+<li><p>直接回车，使用默认的截止柱面，也就是柱面4894， 也就是说对于这块硬盘，我们就建立一个分区，大小是整个磁盘。</p>
+</li>
+<li><p>输入w, 保存分区表并退出</p>
+</li>
+</ol>
+</blockquote>
+<p> <img src="/../../images/linux/disk-partitions-and-parted/2.jpg"></p>
+<ol start="3">
+<li>格式化新创建的分区</li>
+</ol>
+<p>是的，最后一步都是一样的，对新建的分区进行格式化，这里我们选择ext4文件系统。</p>
+<p><strong>mkfs.ext4 &#x2F;dev&#x2F;xvdc1</strong> </p>
+<p>如果使用xfs文件系统，使用命令：</p>
+<p><strong>mkfs.xfs &#x2F;dev&#x2F;xvdc1</strong> </p>
+<p><strong>注意：格式化时指定的是“分区”而不是硬盘！这里的xvdc1显然是硬盘xvdc的第一个分区，如果错写成xvdc就意味着要格式化整个硬盘</strong> </p>
+<p><strong>三 创建一个大于2TB的分区</strong> </p>
+<p>MBR 与 GPT,都是分区格式,其中MBR最大分区小于等于2TB,而GPT分区没有2TB的限制，理论最大分区18 EB！</p>
+<p>现在我们知道了要创建一个大于2TB的分区，就不能使用MBR 格式的分区表了，而要使用GPT格式的分区表，我们最常用的fdisk 分区工具就爱莫能助了，需要使用linux 下的Parted分区工具!</p>
+<p>测试环境为：</p>
+<p>Dell R710  2u 服务器</p>
+<p>cpu 2* XEON 5606</p>
+<p>mem 16G</p>
+<p>disk 6*1TB sas 7200rpm</p>
+<p>raid raid level 5  perc 6i卡</p>
+<p>rhel 6 64bit ,创建一个4TB大小分区</p>
+<p><strong>下面正式开始分区：</strong> </p>
+<p>1 在使用parted 分区之前，我们先用fdisk -l 来查看下硬盘信息！</p>
+<p>[ <img src="/../../images/linux/disk-partitions-and-parted/3.png"></p>
+<p>](<a target="_blank" rel="noopener" href="https://i-blog.csdnimg.cn/blog_migrate/b04c566f5949f225172fd2dd9a610a49.png">https://i-blog.csdnimg.cn/blog_migrate/b04c566f5949f225172fd2dd9a610a49.png</a>) </p>
+<p><a target="_blank" rel="noopener" href="http://img1.51cto.com/attachment/201108/100140886.png">
+</a> </p>
+<p>2 上边的信息我们知道 &#x2F;dev&#x2F;sdb 4.6TB，现在使用parted 命令，如下图。</p>
+<p>[ <img src="/../../images/linux/disk-partitions-and-parted/4.png"></p>
+<p>](<a target="_blank" rel="noopener" href="https://i-blog.csdnimg.cn/blog_migrate/7c8a1d78dc028cde2a9723832d49e591.png">https://i-blog.csdnimg.cn/blog_migrate/7c8a1d78dc028cde2a9723832d49e591.png</a>) </p>
+<p>3 进入parted 后，执行2,3,4,5,6,7,8,9,10,10,11步骤,指令下边有解释！</p>
+<p>[ <img src="/../../images/linux/disk-partitions-and-parted/5.png"></p>
+<p>](<a target="_blank" rel="noopener" href="https://i-blog.csdnimg.cn/blog_migrate/19f5567c8b0ee60d93894720a56ae64c.png">https://i-blog.csdnimg.cn/blog_migrate/19f5567c8b0ee60d93894720a56ae64c.png</a>) </p>
+<p>4 分区完成后使用print 可以看到刚才分区的信息！大小 4684GB</p>
+<p>[ <img src="/../../images/linux/disk-partitions-and-parted/6.png"></p>
+<p>](<a target="_blank" rel="noopener" href="https://i-blog.csdnimg.cn/blog_migrate/78c93cfac6931150a7764626cfdd3d71.png">https://i-blog.csdnimg.cn/blog_migrate/78c93cfac6931150a7764626cfdd3d71.png</a>) </p>
+<p>５ quit 用于退出parted环境，信息提示更新&#x2F;etx&#x2F;fstab！</p>
+<p>[ <img src="/../../images/linux/disk-partitions-and-parted/7.png"></p>
+<p>](<a target="_blank" rel="noopener" href="https://i-blog.csdnimg.cn/blog_migrate/3934bce4df666550139751bba23dc64b.png">https://i-blog.csdnimg.cn/blog_migrate/3934bce4df666550139751bba23dc64b.png</a>) </p>
+<p>6 再用fdisk -l 来查看下 sdb硬盘,现在已经有sdb1 分区了，注意system gpt!</p>
+<p>[ <img src="/../../images/linux/disk-partitions-and-parted/8.png"></p>
+<p>](<a target="_blank" rel="noopener" href="https://i-blog.csdnimg.cn/blog_migrate/477cc44cf6938b27301926cfecc1c09c.png">https://i-blog.csdnimg.cn/blog_migrate/477cc44cf6938b27301926cfecc1c09c.png</a>) </p>
+<p>7 parted 到这里就完成了！</p>
+<p><strong>下面格式化&#x2F;dev&#x2F;sdb1 文件系统为EXT4：</strong> </p>
+<p>1 执行 mkfs.ext4 &#x2F;dev&#x2F;sdb1 一路回车即可！</p>
+<p>[ <img src="/../../images/linux/disk-partitions-and-parted/9.png"></p>
+<p>](<a target="_blank" rel="noopener" href="https://i-blog.csdnimg.cn/blog_migrate/5e970dbacbc257208e7511b5fac953bc.png">https://i-blog.csdnimg.cn/blog_migrate/5e970dbacbc257208e7511b5fac953bc.png</a>) </p>
+<p><strong>更新&#x2F;etc&#x2F;fstab</strong> ：</p>
+<p>1.使用blkid 查看分区的uu <a target="_blank" rel="noopener" href="http://www.linuxso.com/command/id.html"> <u>id</u> </a> 如下图,复制新分区&#x2F;dev&#x2F;sdb1的 UUID</p>
+<p>[ <img src="/../../images/linux/disk-partitions-and-parted/10.png"></p>
+<p>](<a target="_blank" rel="noopener" href="https://i-blog.csdnimg.cn/blog_migrate/dd6645b7b89c8a9c5953b3de209e6671.png">https://i-blog.csdnimg.cn/blog_migrate/dd6645b7b89c8a9c5953b3de209e6671.png</a>) </p>
+<p>2 将 &#x2F;dev&#x2F;sdb1的 UUID 添加到 &#x2F;etc&#x2F;fstab,&#x2F;dev&#x2F;sdb1 挂载在 &#x2F;data 目录下！</p>
+<p>[ <img src="/../../images/linux/disk-partitions-and-parted/11.png"></p>
+<p>](<a target="_blank" rel="noopener" href="https://i-blog.csdnimg.cn/blog_migrate/866a83e0097cd0289764b0b530118e23.png">https://i-blog.csdnimg.cn/blog_migrate/866a83e0097cd0289764b0b530118e23.png</a>) </p>
+<p>3 至此全部完成, 下面检查一下！</p>
+<p>mount -a 重新挂载 &#x2F;etc&#x2F;fstab 文件中的记录！</p>
+<p>mount 可以发现 &#x2F;dev&#x2F;sdb1 已经挂载到 &#x2F;data 目录下了！</p>
+<p>df -h 发现 &#x2F;data 4.2TB</p>
+<p>[ <img src="/../../images/linux/disk-partitions-and-parted/12.png"></p>
+<p>](<a target="_blank" rel="noopener" href="https://i-blog.csdnimg.cn/blog_migrate/e8aa0409d8c972e0fd29892deaad1e38.png">https://i-blog.csdnimg.cn/blog_migrate/e8aa0409d8c972e0fd29892deaad1e38.png</a>) </p>
+<p><strong>三 详细介绍下Parted命令</strong> </p>
+<p>[root@abintel ~]# parted –help<br>用法：parted [选项]… [设备 [命令 [参数]…]…]<br>将带有“参数”的命令应用于“设备”。如果没有给出“命令”，则以交互模式运行。</p>
+<p>选项：<br>-h, –help                    显示此求助信息<br>-i, –interactive             在必要时，提示用户<br>-s, –script                  从不提示用户<br>-v, –version                 显示版本</p>
+<p>命令：<br>检查 MINOR                   对文件系统进行一个简单的检查<br>cp [FROM-DEVICE] FROM-MINOR TO-MINOR      将文件系统复制到另一个分区<br>help [ COMMAND ]                打印通用求助信息，或关于 COMMAND 的信息<br>mklabel 标签类型              创建新的磁盘标签 (分区表)<br>mkfs MINOR 文件系统类型       在 MINOR 创建类型为“文件系统类型”的文件系统<br>mkpart 分区类型 [文件系统类型] 起始点 终止点 创建一个分区<br>mkpartfs 分区类型 文件系统类型 起始点 终止点 创建一个带有文件系统的分区<br>move MINOR 起始点 终止点      移动编号为 MINOR 的分区<br>name MINOR 名称               将编号为 MINOR 的分区命名为“名称”<br>print [MINOR] 打印分区表，或者分区<br>quit                          退出程序<br>rescue 起始点 终止点          挽救临近“起始点”、“终止点”的遗失的分区<br>resize MINOR 起始点 终止点    改变位于编号为 MINOR 的分区中文件系统的大小<br>rm MINOR 删除编号为 MINOR 的分区<br>select 设备                     选择要编辑的设备<br>set MINOR 标志 状态           改变编号为 MINOR 的分区的标志</p>
+<p><strong>注意</strong> </p>
+<p>mklabel label-type 必须是一下这些类型：</p>
+<ul>
+<li><p>bsd</p>
+</li>
+<li><p>loop (raw disk access)</p>
+</li>
+<li><p>gpt</p>
+</li>
+<li><p>mac</p>
+</li>
+<li><p>msdos</p>
+</li>
+<li><p>pc98</p>
+</li>
+<li><p>sun</p>
+</li>
+</ul>
+<p>例：(parted) mklabel gtp 或者 (parted) mklabel msdos</p>
+<p>mkpart（建立新分区）</p>
+<p>格式：mkpart <em>part-type fs-type start end</em> </p>
+<p>建立一个新的分区</p>
+<p>part-type是以下类型之一 primary（主分区）, extended（扩展分区）, logical（逻辑分区）。</p>
+<p>fs-type来指定文件系统，比如ext4 。</p>
+<p>start和end是新分区开始和结束的具体位置。0表示起止，-1表示结尾；或者以mb表示或者GB表示！</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>硬盘分区备忘（主分区，扩展分区和逻辑分区）以及Linux硬盘分区工具parted 介绍</p><p><a href="https://laurence.enlightgram.com/linux/disk-partitions-and-parted/">https://laurence.enlightgram.com/linux/disk-partitions-and-parted/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2013-06-27</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Linux/">Linux</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/hadoop/hadoop-textinputformat-split-lines/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Hadoop源码解析之: TextInputFormat如何处理跨split的行</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/database/sqlserver-copy-database-script/"><span class="level-item">SqlServer一键复制数据库脚本</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><!--!--></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

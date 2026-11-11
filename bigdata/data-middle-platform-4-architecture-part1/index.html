@@ -1,0 +1,799 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>中台架构详解（上）| 建设数据中台系列（四） - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="中台打破了应用系统的壁垒，从企业全局梳理和规划业务程，重构了组织架构、业务架构与IT 架构。 在梳理了企业的IT 现状并回顾了SOA 的历史之后，我们需要对中台架构进行一番详细的介绍， 阿里巴巴 的Aliware 团队曾经给中台下过这样的定义： *将企业的核心能力随着业务不断发展以数字化形式沉淀到平台，形成以服务为中心，由业务中台和数据中台构建起数据闭环运转的运营体系，供企业更高效地进行业务探索和"><meta property="og:type" content="article"><meta property="og:title" content="中台架构详解（上）| 建设数据中台系列（四）"><meta property="og:url" content="https://laurence.enlightgram.com/bigdata/data-middle-platform-4-architecture-part1/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="中台打破了应用系统的壁垒，从企业全局梳理和规划业务程，重构了组织架构、业务架构与IT 架构。 在梳理了企业的IT 现状并回顾了SOA 的历史之后，我们需要对中台架构进行一番详细的介绍， 阿里巴巴 的Aliware 团队曾经给中台下过这样的定义： *将企业的核心能力随着业务不断发展以数字化形式沉淀到平台，形成以服务为中心，由业务中台和数据中台构建起数据闭环运转的运营体系，供企业更高效地进行业务探索和"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/bigdata/data-middle-platform-4-architecture-part1/1.png"><meta property="article:published_time" content="2020-08-15T20:59:57.000Z"><meta property="article:modified_time" content="2026-11-11T03:37:39.300Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="大数据"><meta property="article:tag" content="数据中台"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/bigdata/data-middle-platform-4-architecture-part1/1.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/bigdata/data-middle-platform-4-architecture-part1/"},"headline":"中台架构详解（上）| 建设数据中台系列（四）","image":["https://laurence.enlightgram.com/images/bigdata/data-middle-platform-4-architecture-part1/1.png"],"datePublished":"2020-08-15T20:59:57.000Z","dateModified":"2026-11-11T03:37:39.300Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"中台打破了应用系统的壁垒，从企业全局梳理和规划业务程，重构了组织架构、业务架构与IT 架构。 在梳理了企业的IT 现状并回顾了SOA 的历史之后，我们需要对中台架构进行一番详细的介绍， 阿里巴巴 的Aliware 团队曾经给中台下过这样的定义： *将企业的核心能力随着业务不断发展以数字化形式沉淀到平台，形成以服务为中心，由业务中台和数据中台构建起数据闭环运转的运营体系，供企业更高效地进行业务探索和"}</script><link rel="canonical" href="https://laurence.enlightgram.com/bigdata/data-middle-platform-4-architecture-part1/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">中台架构详解（上）| 建设数据中台系列（四）</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Big-Data/">Big Data</a></span><span class="level-item">发表于：<time dateTime="2020-08-15T20:59:57.000Z" title="2020-08-15 13:59:57">2020-08-15</time></span><span class="level-item">阅读用时：32 分钟 (约 4850 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><blockquote>
+<p><strong>中台打破了应用系统的壁垒，从企业全局梳理和规划业务程，重构了组织架构、业务架构与IT 架构。</strong> </p>
+</blockquote>
+<p>在梳理了企业的IT 现状并回顾了SOA 的历史之后，我们需要对中台架构进行一番详细的介绍， 阿里巴巴 的Aliware 团队曾经给中台下过这样的定义：</p>
+<p><em>将企业的核心能力随着业务不断发展以数字化形式沉淀到平台，形成以服务为中心，由业务中台和数据中台构建起数据闭环运转的运营体系，供企业更高效地进行业务探索和创新，实现以数字化资产的形态构建企业核心差异化竞争力。</em> </p>
+<p>现在中台战略常被简单地概括为“大中台，小前台”，意思是说将企业的核心业务能力沉淀和聚集到由业务中心组成的中台层上，前台应用以中台为支撑，向轻量化、敏捷化转变。本文核心观点援引自作者所著的 <a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a> 一书，全书对数据中台的理念、架构和具体实现做了详细论述。 （注：本文已由CSDN云计算公众号首发）</p>
+<p><img src="/../../images/bigdata/data-middle-platform-4-architecture-part1/1.png" alt="在这里插入图片描述"></p>
+<center>图1 战场中的中台阵型</center>
+
+<p>图1 是《企业IT 架构转型之道：阿里巴巴中台战略思想与架构实战》一书中给出的关于中台战略非常形象的描述。这张图描述的是Mei军现行的作战模式，在一线战场，Mei军通常以班为单位组织军事行动，这种极小型团队行动敏捷，容易捕获战机，一旦发现敌情就通过指挥系统呼叫强大的炮火和空中支援给敌军以重创。美军的这种战场组织阵型与中台架构的思想是一致的，战斗小组就是“小前台”，强大的炮火群和空中力量是“大中台”。在强大中台的有力支撑下，前端在进行业务运营和创新时会变得非常高效且灵活，企业可以根据最新的市场动态展开各种尝试和调整，一旦发现并验证了新的市场机遇，就可以调集中台的强大能力迅速跟进，抢占市场。</p>
+<p>中台作为面向互联网时代的企业新一代IT 架构最大的威力不在于解决眼前的问题，而是系统性、结构性地重组企业的IT 生态系统、业务架构及组织架构，它能帮助企业从本质上提升竞争力，降低成本。它将带给企业如下的能力与收益：</p>
+<ul>
+<li><p>应对未来所需的更快的业务创新和成本更低的业务探索；</p>
+</li>
+<li><p>给企业带来核心竞争力的提升，提质转型、降本增效；</p>
+</li>
+<li><p>给业务快速响应和创新带来的业务价值；</p>
+</li>
+<li><p>给信息中心带来组织职能转变的机会；</p>
+</li>
+<li><p>共享服务架构能提升企业整体效能。</p>
+</li>
+</ul>
+<h3 id="1-中台架构概述"><a href="#1-中台架构概述" class="headerlink" title="1 中台架构概述"></a>1 中台架构概述</h3><p>以中台的视角看待企业的整个IT 生态，可以将其分成前台、中台及后台三大组成部分，三者的定位如下：</p>
+<ul>
+<li><p>前台：由直接面向市场和终端用户的业务应用组成，负责支撑企业的前端业务；</p>
+</li>
+<li><p>中台：由按业务领域细分的服务中心组成，负责支撑企业的共享业务；</p>
+</li>
+<li><p>后台：由企业内部业务系统组成，如生产、库存、物流等管理系统。</p>
+</li>
+</ul>
+<p>前台与中台的关系是：业务中台负责提供企业范围内共享的基础业务服务，前台应用会对这些基础业务服务进行组织编排，快速地在前端以产品形式将业务能力展开，以适应日新月异的市场变化。</p>
+<p>中台与后台的关系并不像前台与中台的关系那样紧密，中台架构是为了让企业拥有开放、创新和灵活的市场应变能力而提出的，这对于生产、库存、物流等后端系统的影响并不大，并且这些系统需要严谨和规范的组织与管理，因而会保持相对传统的组织架构与生态。</p>
+<p>由此可见，中台在企业的整体业务体系中起着核心作用，而建设中台的最大挑战也来自对中台层各服务中心业务能力的提炼和萃取。</p>
+<p>以零售和消费品行业的企业为例，往往会有如下一些面向市场和终端消费者的服务中心：</p>
+<ul>
+<li><p>用户中心：负责用户信息的全面管理，建设和维护会员体系，制定并推行会员运营策略；</p>
+</li>
+<li><p>商品中心：负责商品的全面管理，包括SKU、品类及商品相关的各种属性、标签的管理；</p>
+</li>
+<li><p>交易中心：负责统一管理线上和线下所有的购物车、订单及交易数据，并提供交易相关的各种服务；</p>
+</li>
+<li><p>营销中心：负责全渠道的营销，对营销活动的全过程进行管理。</p>
+</li>
+</ul>
+<p>以上四个是比较有代表性的业务中心，每一家企业还可能会基于自己的业务模式组织其他诸如支付、门店、内容、促销等中心。从服务中心的职责和定位我们也可以发现中台的一个重要特征，那就是应用系统的边界被彻底地打破了，不会再有CRM 和OMS 这样的孤立业务系统了，而是将它们所承载的共享业务能力分拆并重组到了各个业务中心，每个业务中心对接和服务的是来自企业全渠道的需求，如何能支撑这些复杂多变的前端需求是建设中台的挑战之一。针对每个业务中心，在业务和技术上都必须要有专业的架构师带领团队来统一梳理这些需求，识别哪些需求应该由中台实现，哪些需求应该由前台实现，这是确保中台架构能够合理存在并稳定发挥作用的重要前提，这个过程不会一蹴而就，而需要在不断的迭代和试错中逐渐明了。不难想象，如果这种切分不够合理就会出现如下两种结果：</p>
+<ul>
+<li><p>如果本应属于共享的服务与逻辑切分到前台，就会导致前台应用过“重”，且不可避免地会出现重复建设问题，因为前台应用无法从中台获得相关支持；</p>
+</li>
+<li><p>如果过多的非共享服务与逻辑切分到中台，就会导致中台服务的复用性变差，前台应用无法直接调用，因此会产生很多“副作用”和“连带后果”。</p>
+</li>
+</ul>
+<p>以上两种情形在现实里时有发生，这是企业打磨中台的一个必经阶段，也是团队磨炼对业务认知和对技术把控能力的一场“修行”。</p>
+<p>就“服务”这个概念而言，中台对外提供的“服务”与SOA 中倡导的“服务”并没有本质上的差别。在某种程度上，中台的定位会更加有助于实现真正可重用的“服务”，因为中台不再局限于某一个应用上，而是超脱于应用之上，宏观地看待一个“服务”如何能支持不同场景下的共性需求。因此，那些在SOA 中对服务粒度进行界定和组织的方法依然是值得借鉴的，特别是对基础服务、复合服务及业务流程服务这三个服务层次的划分是非常实用的。</p>
+<p>作为一个呼应，我们来看一下中台架构下“会员管理”是如何进行的：原有的CRM 系统将不复存在，取而代之的是“用户中心”，用户中心沉淀了与用户相关的共享服务，会员注册就是其中之一，前台应用系统进行会员注册时会调用用户中心上的会员注册API 来实现，当然，前台应用可能需要对用户数据进行一定的处理、转换以适配统一的API 规范，这样前台各个应用不再维护自己的“用户模块”，因此也不再需要同步会员数据。</p>
+<p>前面我们讨论的“中台”更具体地说是指业务中台，对于中台的另一个组成部分“数据中台”来说，它更侧重于企业数据的统一收集和处理。相对于应用系统而言，数据的平台化要相对容易一些，这也是很多企业早期就能建立数仓这种中心化、平台化的系统，而在应用系统上却陷入烟囱式的生态的原因之一。不过数据中台并不是传统数仓升级换代那么简单，从技术上讲，数据中台完全构建在大数据平台上，数仓是数据中台的重要组成部分，但远远不是全部。数据中台通常还要具备实时的数据处理能力和高级的算法分析能力，当数据处理完成后，数据中台还要提供强大的“数据服务”，能将结果数据通过各种协议以实时或批量的方式提供给业务中台或应用前台。</p>
+<p>此外，业务中台的建立也会对数据中台的建设起到很大的促进作用。一方面由于业务的梳理和中心化，使采集业务数据变得相对简单，业务中心的后台数据库将是数据中台主要的外围数据源；另一方面，业务中台对业务的切分和领域建模将对构建数据中台上的数仓和数据服务有很大的指导意义，例如，每个业务中心天然就是一个大的数据主题，相应地，也有会有一个独立的API 的namespace 等。</p>
+<p>下面我们把业务中台和数据中台放在一起，结合前面举例的零售和消费品行业来看看一个完整的中台架构，如图2 所示。</p>
+<p><img src="/../../images/bigdata/data-middle-platform-4-architecture-part1/2.png" alt="在这里插入图片描述"></p>
+<center>图2 中台逻辑架构示意图</center>
+
+<p>这是一张混合了技术和业务的中台逻辑架构示意图，前台应用部分我们将零售和消费品行业需要对接消费者的若干应用系统一一列举了出来，但是在中台架构下它们已经和传统的“应用系统”有了很大的差别，变得非常“轻量”。过去很多自行实现的业务功能都通过调用业务中台的各个业务中心完成了，如前面列举的会员注册功能，在中台架构下都是调用会员中心上的统一接口完成的。与此同时，各业务中心的数据都将通过数据中台上的数据采集组件采集到大 数据平台 上，然后通过批处理和实时处理机制构建出企业的数仓体系和高级数据分析能力，最后通过构建数据API （Web 服务）、OLAP 及专有的报表数据库等手段，将结果数据以Restful API、JDBC&#x2F;ODBC 或FTP 等形式提供给外部使用。</p>
+<h3 id="2-中台的技术体系"><a href="#2-中台的技术体系" class="headerlink" title="2 中台的技术体系"></a>2 中台的技术体系</h3><p>中台由阿里巴巴提出并在业界获得广泛认可之后，阿里巴巴就一直希望通过 阿里云 平台向企业用户推广一整套的中台技术解决方案，这套方案就是Aliware——面向企业级互联网架构的PaaS 服务。Aliware 包含了企业级分布式应用服务（EDAS）、消息队列（MQ）、全局事务服务（GTS）等，这些服务涵盖了企业应用开发涉及的各个方面。但是中台并非必须构建在阿里云的这些PaaS 服务上，实际上，Aliware 是将当前企业级应用开发的主流技术和框架封装成PaaS 服务供开发者直接使用，所以本质上Aliware 与中台架构并没有必然的关系。</p>
+<p>中台作为一种生态系统级的架构，不会受底层技术的制约，反而倚重和遵循业界主流的技术体系，特别是开源的技术平台与框架。简单地说：</p>
+<ul>
+<li><p>业务中台的主要技术体系是：微服务；</p>
+</li>
+<li><p>数据中台的主要技术体系是：大数据。</p>
+</li>
+</ul>
+<p>与技术相配套的是设计思想和方法论，现在微服务的主流设计思想是领域驱动设计，大数据的主要设计思想是 数据仓库 理论。我们来分别介绍一下这两种技术与它们使用的设计理论。</p>
+<h4 id="2-1-业务中台技术体系"><a href="#2-1-业务中台技术体系" class="headerlink" title="2.1 业务中台技术体系"></a>2.1 业务中台技术体系</h4><h5 id="1．-微服务"><a href="#1．-微服务" class="headerlink" title="1． 微服务"></a>1． 微服务</h5><p>微服务架构最大的特征是解构了过去的单体应用，按照业务功能对系统进行了更细粒度的切分，每一个微服务都是一个可独立部署的单元，微服务内部高内聚，微服务之间低耦合。系统被微服务化之后会在很多方面得到提升和改善，过去在单一应用服务器和数据库服务器上部署的系统将转变为纯正的分布式系统，部署于多台服务器上，这相当于赋予了系统水平伸缩能力，同时局部节点的失效也不会再导致整个系统宕机，而是可以被限制在有限影响范围之内。</p>
+<p>微服务的这些优势使其在最近几年几乎成了企业级应用的架构标准，与之相配套的是一系列基础设施服务和支撑技术。</p>
+<ul>
+<li><p>服务注册与发现；</p>
+</li>
+<li><p>服务配置管理；</p>
+</li>
+<li><p>服务网关（API Gateway）；</p>
+</li>
+<li><p>事件&#x2F;消息总线；</p>
+</li>
+<li><p>负载均衡；</p>
+</li>
+<li><p>容错与熔断；</p>
+</li>
+<li><p>监控与报警；</p>
+</li>
+<li><p>安全和访问控制；</p>
+</li>
+<li><p>日志收集与处理。</p>
+</li>
+</ul>
+<p>经过多年的沉淀和积累，业界在上述领域有很多成熟工具和框架，其中最主流的一站式方案非Spring Cloud 莫属。</p>
+<p>在微服务架构逐渐形成规模之后，就会对硬件资源虚拟化和自动化部署提出要求，与此同时，伴随着Docker 的崛起，人们发现容器化与微服务是一组绝佳搭档，再配合DevOps 技术的推动，最终在业界形成了“微服务 + 容器技术（Dockers + Kubernetes）+ DevOps”三位一体的微服务生态体系，这些技术汇集在一起为微服务的落地和持续演进铺平了道路。</p>
+<h5 id="2．领域驱动设计"><a href="#2．领域驱动设计" class="headerlink" title="2．领域驱动设计"></a>2．领域驱动设计</h5><p>恰到好处的微服务设计是一项很有挑战性的工作，识别、界定与设计微服务考验的是开发人员对业务的理解和设计能力，这需要对业务反复梳理和提炼，再经过仔细地斟酌和拿捏才能有一个比较好的方案。这与技术框架没有太大的关系，考验的是设计人员的“内功心法”，也就是设计能力和对业务理解的透彻程度。以往诸多项目的经验表明，糟糕的设计会极大地削弱微服务的作用，让其变得粗糙、难以被复用。过去，开发人员一直使用一些常规的方法论来设计微服务，如面向对象（OOD）的设计思想，但是取得的效果并不理想，直到后来领域驱动设计（Domain-Driven Design，也被简称为DDD）被社区发掘出来，逐渐成了微服务事实上的设计理论。</p>
+<p>领域驱动设计最早起源于Eric Evans 在2003 年撰写的一本名为Domain-Driven Design: Tackling Complexity in the Heart of Software 的著作，这本书全面系统地阐述了领域驱动设计的思想和方法论。早年间DDD 还较为小众，没有在业界得到推广，但是伴随着微服务的崛起，人们意识到领域驱动设计的诸多思想对于设计微服务有莫大的帮助，一个特别典型的例子就是根据限界上下文（Bounded Context）来划定微服务边界。</p>
+<p>简单总结一下，在技术上微服务是实现业务中台的最佳技术方案，再借助领域驱动设计，中台的业务中心可以构建得足够灵活和强大。</p>
+<h4 id="2-2-数据中台技术体系"><a href="#2-2-数据中台技术体系" class="headerlink" title="2.2 数据中台技术体系"></a>2.2 数据中台技术体系</h4><p>在数据中台上，目前的技术选型也是非常统一的，基于Hadoop、Spark 的大数据技术是当前构建数据中台的主流方案，本系列也是以大数据技术为基础来讨论如何建设数据中台的。</p>
+<p>大数据涉及的技术非常多，在数据采集、存储、消息队列、批处理、实时处理、作业调度等诸多环节上都有对应的技术和工具来完成相关工作，在后续的章节里我们会逐一讨论它们，但通常人们会用Hadoop、Spark 来指代大数据技术，因为两者不单单是技术，更代表着一个技术生态圈，在它们背后有一组相关的配套工具。</p>
+<p>对于建设数据中台的方法论（确切地说是数据中台的批处理部分），传统的数据仓库理论依然是主要的方法论。数据中台的使命是将企业的全域数据收集起来，然后规范地处理它们，最后给到前端应用。对于如何规范地处理数据，目前业界最为成熟的理论是数据仓库（数仓）。在经过数仓体系的治理之后，最终会在数仓的最上层得到高质量的数据集，然后通过Web Service、ODBC、JDBC 等多种数据服务对外发布出去。</p>
+<p>简单总结一下，在技术上Hadoop、Spark 是实现数据中台的主要技术方案，遵循数据仓库理论对数据进行组织和处理，在最上层封装为数据服务的形式去支持前台和业务中台对数据的需求。</p>
+<hr>
+<p>关于作者：耿立超，架构师，14年IT系统开发和架构经验，对大数据、企业级应用架构、SaaS、分布式存储和领域驱动设计有丰富的实践经验，热衷函数式编程。目前负责企业数据中台的架构设计和开发工作，对Hadoop&#x2F;Spark 生态系统有深入和广泛的了解，参与过Hadoop商业发行版的开发，曾带领团队建设过数个完备的企业数据平台，个人技术博客：<a href="https://laurence.enlightgram.com/">https://laurence.enlightgram.com/</a></p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>中台架构详解（上）| 建设数据中台系列（四）</p><p><a href="https://laurence.enlightgram.com/bigdata/data-middle-platform-4-architecture-part1/">https://laurence.enlightgram.com/bigdata/data-middle-platform-4-architecture-part1/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2020-08-15</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE/">大数据</a><a class="link-muted mr-2" rel="tag" href="/tags/%E6%95%B0%E6%8D%AE%E4%B8%AD%E5%8F%B0/">数据中台</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/hbase/opentsdb-24-log-file-error/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">OpenTSDB 2.4安装报FileNotFoundException: LOG_FILE_IS_UNDEFINED (Permission denied)错误</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/others/git-common-operations/"><span class="level-item">Git常用操作备忘</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-中台架构概述"><span class="level-left"><span class="level-item">1 中台架构概述</span></span></a></li><li><a class="level is-mobile" href="#2-中台的技术体系"><span class="level-left"><span class="level-item">2 中台的技术体系</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-1-业务中台技术体系"><span class="level-left"><span class="level-item">2.1 业务中台技术体系</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#1．-微服务"><span class="level-left"><span class="level-item">1． 微服务</span></span></a></li><li><a class="level is-mobile" href="#2．领域驱动设计"><span class="level-left"><span class="level-item">2．领域驱动设计</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-2-数据中台技术体系"><span class="level-left"><span class="level-item">2.2 数据中台技术体系</span></span></a></li></ul></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

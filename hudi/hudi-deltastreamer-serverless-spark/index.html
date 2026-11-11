@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>CDC 一键入湖：当 Apache Hudi DeltaStreamer 遇见 Serverless Spark - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="Apache Hudi的DeltaStreamer是一种以近实时方式摄取数据并写入Hudi表的工具类，它简化了流式数据入湖并存储为Hudi表的操作，自 0.10.0 版开始，Hudi又在DeltaStreamer的基础上增加了基于Debezium的CDC数据处理能力，这使得其可以直接将Debezium采集的CDC数据落地成Hudi表，这一功能极大地简化了从源头业务数据库到Hudi数据湖的数据集成工"><meta property="og:type" content="article"><meta property="og:title" content="CDC 一键入湖：当 Apache Hudi DeltaStreamer 遇见 Serverless Spark"><meta property="og:url" content="https://laurence.enlightgram.com/hudi/hudi-deltastreamer-serverless-spark/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="Apache Hudi的DeltaStreamer是一种以近实时方式摄取数据并写入Hudi表的工具类，它简化了流式数据入湖并存储为Hudi表的操作，自 0.10.0 版开始，Hudi又在DeltaStreamer的基础上增加了基于Debezium的CDC数据处理能力，这使得其可以直接将Debezium采集的CDC数据落地成Hudi表，这一功能极大地简化了从源头业务数据库到Hudi数据湖的数据集成工"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/hudi/hudi-deltastreamer-serverless-spark/2.jpeg"><meta property="article:published_time" content="2023-07-31T16:34:54.000Z"><meta property="article:modified_time" content="2026-11-11T03:37:39.338Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="Spark"><meta property="article:tag" content="Serverless"><meta property="article:tag" content="Hudi"><meta property="article:tag" content="CDC"><meta property="article:tag" content="DeltaStreamer"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/hudi/hudi-deltastreamer-serverless-spark/2.jpeg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/hudi/hudi-deltastreamer-serverless-spark/"},"headline":"CDC 一键入湖：当 Apache Hudi DeltaStreamer 遇见 Serverless Spark","image":["https://laurence.enlightgram.com/images/hudi/hudi-deltastreamer-serverless-spark/2.jpeg"],"datePublished":"2023-07-31T16:34:54.000Z","dateModified":"2026-11-11T03:37:39.338Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"Apache Hudi的DeltaStreamer是一种以近实时方式摄取数据并写入Hudi表的工具类，它简化了流式数据入湖并存储为Hudi表的操作，自 0.10.0 版开始，Hudi又在DeltaStreamer的基础上增加了基于Debezium的CDC数据处理能力，这使得其可以直接将Debezium采集的CDC数据落地成Hudi表，这一功能极大地简化了从源头业务数据库到Hudi数据湖的数据集成工"}</script><link rel="canonical" href="https://laurence.enlightgram.com/hudi/hudi-deltastreamer-serverless-spark/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">CDC 一键入湖：当 Apache Hudi DeltaStreamer 遇见 Serverless Spark</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Hudi/">Hudi</a></span><span class="level-item">发表于：<time dateTime="2023-07-31T16:34:54.000Z" title="2023-07-31 09:34:54">2023-07-31</time></span><span class="level-item">阅读用时：31 分钟 (约 4724 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>Apache Hudi的DeltaStreamer是一种以近实时方式摄取数据并写入Hudi表的工具类，它简化了流式数据入湖并存储为Hudi表的操作，自 <code>0.10.0</code> 版开始，Hudi又在DeltaStreamer的基础上增加了基于Debezium的CDC数据处理能力，这使得其可以直接将Debezium采集的CDC数据落地成Hudi表，这一功能极大地简化了从源头业务数据库到Hudi数据湖的数据集成工作。本文发表于Apache Hudi公众号，本文地址： <a href="/hudi/hudi-deltastreamer-serverless-spark/">https://laurence.enlightgram.com/hudi/hudi-deltastreamer-serverless-spark/</a> ，转载请注明出处！</p>
+<p>另一方面，得益于开箱即用和零运维的极致体验，越来越多的云上用户开始拥抱Serverless产品。 Amazon 云平台上的EMR是一个集成了多款主流大数据工具的计算平台，自 <code>6.6.0</code> 版本开始，EMR推出了 Serverless版本，开始提供无服务器的Spark运行环境，用户无需维护Hadoop&#x2F;Spark集群，即可轻松提交Spark作业。</p>
+<p>一个是“全配置”的Hudi工具类， 一个是“开箱即用”的Spark运行环境，两者结合在一起，无需编写CDC处理代码，无需构建Spark集群，仅通过一条命令，就可以轻松实现CDC数据入湖，这是一个非常吸引人的技术方案，本文我们就详细介绍一下这一方案的整体 架构 和实现细节。</p>
+<h2 id="1-整体架构"><a href="#1-整体架构" class="headerlink" title="1. 整体架构"></a>1. 整体架构</h2><p>Apache Huid在 <code>0.10.0</code> 版引入的DeltaStreamer CDC是一整条CDC数据处理链路中的末端环节，为了能让大家清楚地理解DeltaStreamer在其中所处的位置和发挥的作用，我们有必要看一下完整架构：</p>
+<p> <img src="/../../images/hudi/hudi-deltastreamer-serverless-spark/2.jpeg" alt="请添加图片描述"></p>
+<p>①：MySQL是一个业务数据库，是CDC数据的源头；</p>
+<p>②：系统使用一个CDC摄取工具实时读取MySQL的binlog，业界主流的CDC摄取工具有：Debezium，Maxwell，FlinkCDC等，在该架构中，选型的是安装了Debezium MySQL Connector的Kafka Connect；</p>
+<p>③：现在越来越多的CDC数据摄取方案开始引入Schema Registry用于更好的控制上游业务系统的Schema变更，实现更可控的Schema Evolution。在开源社区，较为主流的产品是Confluent Schema Registry，且目前Hudi的DeltaStreamer也仅支持Confluent这一种Schema Registry，所以该架构选型的也是它。引入Schema Registry之后，Kafka Connect在捕获一条记录时，会先在其本地的Schema Cache中查找是否已经存在对应的Schema，如果有，则直接从本地Cache中获得Schema ID，如果没有，则会将其提交给Schema Registry，由Schema Registry完成该Schema的注册并将生成的Schema ID返回给Kafka Connect，Kafka Connect会基于Schema ID对原始的CDC数据进行封装（序列化）：一是将Schema ID添加到消息中，二是如果使用Avro格式传递消息，Kafka Connect会去除Avro消息中的Schema部分，只保留Raw Data，因为Schema信息已缓存在Producer和Consumer本地或可通过Schema Registry一次性获得，没有必要伴随Raw Data传输，这样可以大大减小Avro消息的体积，提升传输效率。这些工作是通过Confluent提供的Avro Converter（ <code>io.confluent.connect.avro.AvroConverter</code> ）完成的；</p>
+<p>④：Kafka Connect将封装好的Avro消息投递给Kafka</p>
+<p>⑤：EMR Serverless为DeltaStreamer提供Serverless的Spark运行环境；</p>
+<p>⑥：Hudi的DeltaStreamer作为一个Spark作业运行在EMR Serverless环境中，它从Kafka读取到Avro消息后，会使用Confluent提供的Avro反序列化器（ <code>io.confluent.kafka.serializers.KafkaAvroDeserializer</code> ）解析Avro消息，得到Schema ID和Raw Data，反序列化器同样会先在本地的Schema Cache中根据ID查找对应的Schema，如果找到就根据这个Schema将Raw Data反序列化，如果没有找到，就向Schema Registry请求获取该ID对应的Schema，然后再进行反序列化；</p>
+<p>⑦：DeltaStreamer将解析出来的数据写入存放在S3上的Hudi表，如果数据表不存在，会自动创建表并同步到Hive MetaStore中</p>
+<h2 id="2-环境准备"><a href="#2-环境准备" class="headerlink" title="2. 环境准备"></a>2. 环境准备</h2><p>限于篇幅，本文不会介绍①、②、③、④环节的构建工作，读者可以参考以下文档自行构建一套完整的测试环境：</p>
+<p>①MySQL：如果仅以测试为目的，建议使用Debezium提供的 <a target="_blank" rel="noopener" href="https://hub.docker.com/r/debezium/example-mysql">官方Docker镜像</a> ，构建操作可参考其 <a target="_blank" rel="noopener" href="https://debezium.io/documentation/reference/1.0/tutorial.html#starting-mysql-database">官方文档</a> （下文将给出的操作示例所处理的CDC数据就是自于该MySQL镜像中的inventory数据库）；</p>
+<p>②Kafka Connect：如果仅以测试为目的，建议使用Confluent提供的 <a target="_blank" rel="noopener" href="https://hub.docker.com/r/confluentinc/cp-kafka-connect">官方Docker镜像</a> ，构建操作可参考其 <a target="_blank" rel="noopener" href="https://docs.confluent.io/platform/7.4/installation/docker/config-reference.html#kconnect-long-configuration">官方文档</a> ，或者使用AWS上托管的Kafka Connct：Amazon MSK Connect。需要提醒的是：Kafka Connect上必须安装Debezium MySQL Connector和Confluent Avro Converter两个插件，因此需要在官方镜像的基础上手动添加这两个插件；</p>
+<p>③Confluent Schema Registry：如果仅以测试为目的，建议使用Confluent提供的 <a target="_blank" rel="noopener" href="https://hub.docker.com/r/confluentinc/cp-schema-registry">官方Docker镜像</a> ，构建操作可参考其 <a target="_blank" rel="noopener" href="https://docs.confluent.io/platform/7.4/installation/docker/config-reference.html#sr-long-configuration">官方文档</a> ；</p>
+<p>④Kafka：如果仅以测试为目的，建议使用Confluent提供的 <a target="_blank" rel="noopener" href="https://hub.docker.com/r/confluentinc/cp-kafka">官方Docker镜像</a> ，构建操作可参考其 <a target="_blank" rel="noopener" href="https://docs.confluent.io/platform/7.4/installation/docker/config-reference.html#cp-kakfa-example">官方文档</a> ，或者使用AWS上托管的Kafka：Amazon MSK</p>
+<p>完成上述工作后，我们会获得“Confluent Schema Registry”和“Kafka Bootstrap Servers”两项依赖服务的地址，它们是启动DeltaStreamer CDC作业的必要条件，后续会以参数形式传递给DeltaStreamer作业。</p>
+<h2 id="3-配置全局变量"><a href="#3-配置全局变量" class="headerlink" title="3. 配置全局变量"></a>3. 配置全局变量</h2><p>环境准备工作就绪后，就可以着手第⑤、⑥、⑦部分的工作了。本文所有操作全部通过命令完成，以shell脚本形式提供给读者使用，脚本上会标注实操步骤的序号，如果是二选一操作，会使用字母a&#x2F;b加以标识，部分操作还有示例供读者参考。为了使脚本具有良好的可移植性，我们将与环境相关的依赖项和需要用户自定义的配置项抽离出来，以全局变量的形式集中配置，如果您在自己的环境中执行本文操作，只需修改下面的全局变量即可，不必修改具体命令：</p>
+<table>
+<thead>
+<tr>
+<th align="left">变量</th>
+<th align="left">说明</th>
+<th align="left">设定时机</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">APP_NAME</td>
+<td align="left">由用户为本应用设定的名称</td>
+<td align="left">提前设定</td>
+</tr>
+<tr>
+<td align="left">APP_S3_HOME</td>
+<td align="left">由用户为本应用设定的S3专属桶</td>
+<td align="left">提前设定</td>
+</tr>
+<tr>
+<td align="left">APP_LOCAL_HOME</td>
+<td align="left">由用户为本应用设定的本地工作目录</td>
+<td align="left">提前设定</td>
+</tr>
+<tr>
+<td align="left">SCHEMA_REGISTRY_URL</td>
+<td align="left">用户环境中的Confluent Schema Registry地址</td>
+<td align="left">提前设定</td>
+</tr>
+<tr>
+<td align="left">KAFKA_BOOTSTRAP_SERVERS</td>
+<td align="left">用户环境中的Kafka Bootstrap Servers地址</td>
+<td align="left">提前设定</td>
+</tr>
+<tr>
+<td align="left">EMR_SERVERLESS_APP_SUBNET_ID</td>
+<td align="left">将要创建的EMR Serverless Application所属子网ID</td>
+<td align="left">提前设定</td>
+</tr>
+<tr>
+<td align="left">EMR_SERVERLESS_APP_SECURITY_GROUP_ID</td>
+<td align="left">将要创建的EMR Serverless Application所属安全组ID</td>
+<td align="left">提前设定</td>
+</tr>
+<tr>
+<td align="left">EMR_SERVERLESS_APP_ID</td>
+<td align="left">将要创建的EMR Serverless Application的ID</td>
+<td align="left">过程中产生</td>
+</tr>
+<tr>
+<td align="left">EMR_SERVERLESS_EXECUTION_ROLE_ARN</td>
+<td align="left">将要创建的EMR Serverless Execution Role的ARN</td>
+<td align="left">过程中产生</td>
+</tr>
+<tr>
+<td align="left">EMR_SERVERLESS_JOB_RUN_ID</td>
+<td align="left">提交EMR Serverless作业后返回的作业ID</td>
+<td align="left">过程中产生</td>
+</tr>
+</tbody></table>
+<p>接下来，我们将进入实操阶段，需要您拥有一个安装了 <a target="_blank" rel="noopener" href="https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html">AWS CLI</a> 并配置了 <a target="_blank" rel="noopener" href="https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html">用户凭证</a> 的 Linux 环境（建议使用Amazon Linux2），通过SSH登录后，先使用命令 <code>sudo yum -y install jq</code> 安装操作 json文件 的命令行工具：jq（后续脚本会使用到它），然后将以上全局变量悉数导出（请根据您的AWS账号和本地环境替换命令行中的相应值）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 实操步骤(1)</span></span><br><span class="line"><span class="built_in">export</span> APP_NAME=<span class="string">&#x27;change-to-your-app-name&#x27;</span></span><br><span class="line"><span class="built_in">export</span> APP_S3_HOME=<span class="string">&#x27;change-to-your-app-s3-home&#x27;</span></span><br><span class="line"><span class="built_in">export</span> APP_LOCAL_HOME=<span class="string">&#x27;change-to-your-app-local-home&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SCHEMA_REGISTRY_URL=<span class="string">&#x27;change-to-your-schema-registry-url&#x27;</span></span><br><span class="line"><span class="built_in">export</span> KAFKA_BOOTSTRAP_SERVERS=<span class="string">&#x27;change-to-your-kafka-bootstrap-servers&#x27;</span></span><br><span class="line"><span class="built_in">export</span> EMR_SERVERLESS_APP_SUBNET_ID=<span class="string">&#x27;change-to-your-subnet-id&#x27;</span></span><br><span class="line"><span class="built_in">export</span> EMR_SERVERLESS_APP_SECURITY_GROUP_ID=<span class="string">&#x27;change-to-your-security-group-id&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>以下是一份示例：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 示例(非实操步骤)</span></span><br><span class="line"><span class="built_in">export</span> APP_NAME=<span class="string">&#x27;apache-hudi-delta-streamer&#x27;</span></span><br><span class="line"><span class="built_in">export</span> APP_S3_HOME=<span class="string">&#x27;s3://apache-hudi-delta-streamer&#x27;</span></span><br><span class="line"><span class="built_in">export</span> APP_LOCAL_HOME=<span class="string">&#x27;/home/ec2-user/apache-hudi-delta-streamer&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SCHEMA_REGISTRY_URL=<span class="string">&#x27;http://localhost:8081&#x27;</span></span><br><span class="line"><span class="built_in">export</span> KAFKA_BOOTSTRAP_SERVERS=<span class="string">&#x27;localhost:9092&#x27;</span></span><br><span class="line"><span class="built_in">export</span> EMR_SERVERLESS_APP_SUBNET_ID=<span class="string">&#x27;subnet-0a11afe6dbb4df759&#x27;</span></span><br><span class="line"><span class="built_in">export</span> EMR_SERVERLESS_APP_SECURITY_GROUP_ID=<span class="string">&#x27;sg-071f18562f41b5804&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>至于 <code>EMR_SERVERLESS_APP_ID</code> 、 <code>EMR_SERVERLESS_EXECUTION_ROLE_ARN</code> 、 <code>EMR_SERVERLESS_JOB_RUN_ID</code> 三个变量将在后续的操作过程中产生并导出。</p>
+<h2 id="4-创建专属工作目录和存储桶"><a href="#4-创建专属工作目录和存储桶" class="headerlink" title="4. 创建专属工作目录和存储桶"></a>4. 创建专属工作目录和存储桶</h2><p>作为一项最佳实践，我们先为应用程序（Job）创建一个专属的本地工作目录（即 <code>APP_LOCAL_HOME</code> 设定的路径）和一个S3存储桶（即 <code>APP_S3_HOME</code> 设定的桶），应用程序的脚本、配置文件、依赖包、日志以及产生的数据都统一存放在专属目录和存储桶中，这样会便于维护：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 实操步骤(2)</span></span><br><span class="line"><span class="built_in">mkdir</span> -p <span class="variable">$APP_LOCAL_HOME</span></span><br><span class="line">aws s3 mb <span class="variable">$APP_S3_HOME</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="5-创建-EMR-Serverless-Execution-Role"><a href="#5-创建-EMR-Serverless-Execution-Role" class="headerlink" title="5. 创建 EMR Serverless Execution Role"></a>5. 创建 EMR Serverless Execution Role</h2><p>运行EMR Serverless作业需要配置一个IAM Role，这个Role将赋予EMR Serverless作业访问AWS相关资源的权限，我们的DeltaStreamer CDC作业应至少需要分配：</p>
+<ul>
+<li><p>对S3专属桶的读写权限</p>
+</li>
+<li><p>对Glue Data Catalog的读写权限</p>
+</li>
+<li><p>对Glue Schema Registry的读写权限</p>
+</li>
+</ul>
+<p>您可以根据EMR Serverless的 <a target="_blank" rel="noopener" href="https://docs.aws.amazon.com/emr/latest/EMR-Serverless-UserGuide/security-iam-runtime-role.html">官方文档</a> 手动创建这个Role，然后将其ARN作为变量导出（请根据您的AWS账号环境替换 命令行 中的相应值）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 实操步骤(3/a)</span></span><br><span class="line"><span class="built_in">export</span> EMR_SERVERLESS_EXECUTION_ROLE_ARN=<span class="string">&#x27;change-to-your-emr-serverless-execution-role-arn&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>以下是一份示例：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 示例(非实操步骤)</span></span><br><span class="line"><span class="built_in">export</span> EMR_SERVERLESS_EXECUTION_ROLE_ARN=<span class="string">&#x27;arn:aws:iam::123456789000:role/EMR_SERVERLESS_ADMIN&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>考虑到手动创建这个Role较为烦琐，本文提供如下一段脚本，可以在您的AWS账号中创建一个拥有管理员权限的Role： <code>EMR_SERVERLESS_ADMIN</code> ，从而帮助您快速完成本节工作（注意：由于该Role具有最高权限，应谨慎使用，完成快速验证后，还是应该在生产环境中配置严格限定权限的专有Execution Role）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 实操步骤(3/b)</span></span><br><span class="line">EMR_SERVERLESS_EXECUTION_ROLE_NAME=<span class="string">&#x27;EMR_SERVERLESS_ADMIN&#x27;</span></span><br><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF &gt; $APP_LOCAL_HOME/assume-role-policy.json</span></span><br><span class="line"><span class="string">&#123;</span></span><br><span class="line"><span class="string">    &quot;Version&quot;: &quot;2012-10-17&quot;,</span></span><br><span class="line"><span class="string">    &quot;Statement&quot;: [</span></span><br><span class="line"><span class="string">        &#123;</span></span><br><span class="line"><span class="string">            &quot;Sid&quot;: &quot;EMRServerlessTrustPolicy&quot;,</span></span><br><span class="line"><span class="string">            &quot;Effect&quot;: &quot;Allow&quot;,</span></span><br><span class="line"><span class="string">            &quot;Principal&quot;: &#123;</span></span><br><span class="line"><span class="string">                &quot;Service&quot;: &quot;emr-serverless.amazonaws.com&quot;</span></span><br><span class="line"><span class="string">            &#125;,</span></span><br><span class="line"><span class="string">            &quot;Action&quot;: &quot;sts:AssumeRole&quot;</span></span><br><span class="line"><span class="string">        &#125;</span></span><br><span class="line"><span class="string">    ]</span></span><br><span class="line"><span class="string">&#125;</span></span><br><span class="line"><span class="string">EOF</span></span><br><span class="line">jq . <span class="variable">$APP_LOCAL_HOME</span>/assume-role-policy.json</span><br><span class="line"><span class="built_in">export</span> EMR_SERVERLESS_EXECUTION_ROLE_ARN=$(aws iam create-role \</span><br><span class="line">    --no-paginate --no-cli-pager --output text \</span><br><span class="line">    --role-name <span class="string">&quot;<span class="variable">$EMR_SERVERLESS_EXECUTION_ROLE_NAME</span>&quot;</span> \</span><br><span class="line">    --assume-role-policy-document file://<span class="variable">$APP_LOCAL_HOME</span>/assume-role-policy.json \</span><br><span class="line">    --query Role.Arn)</span><br><span class="line">aws iam attach-role-policy \</span><br><span class="line">    --policy-arn <span class="string">&quot;arn:aws:iam::aws:policy/AdministratorAccess&quot;</span> \</span><br><span class="line">    --role-name <span class="string">&quot;<span class="variable">$EMR_SERVERLESS_EXECUTION_ROLE_NAME</span>&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="6-创建-EMR-Serverless-Application"><a href="#6-创建-EMR-Serverless-Application" class="headerlink" title="6. 创建 EMR Serverless Application"></a>6. 创建 EMR Serverless Application</h2><p>向EMR Serverless提交作业前，需要先创建一个EMR Serverless Application，这是EMR Serverless中的一个概念，可以理解为一个虚拟的EMR集群。在创建Application时，需要指定EMR的版本，网络配置，集群规模，预热节点等信息。通常，我们仅需如下一条命令就可以完成创建工作：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 示例(非实操步骤)</span></span><br><span class="line">aws emr-serverless create-application \</span><br><span class="line">    --name <span class="string">&quot;<span class="variable">$APP_NAME</span>&quot;</span> \</span><br><span class="line">    --<span class="built_in">type</span> <span class="string">&quot;SPARK&quot;</span> \</span><br><span class="line">    --release-label <span class="string">&quot;emr-6.11.0&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>但是，这样创建出的Application是没有网络配置的，由于我们的DeltaStreamer CDC作业需要访问位于特定VPC中的Confluent Schema Registry和Kafka Bootstrap Servers，所以必须显式地为Application设定子网和安全组，以确保DeltaStreamer可以连通这两项服务。因此，我们需要使用以下命令创建一个带有特定网络配置的Application：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 实操步骤(4)</span></span><br><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF &gt; $APP_LOCAL_HOME/create-application.json</span></span><br><span class="line"><span class="string">&#123;</span></span><br><span class="line"><span class="string">    &quot;name&quot;:&quot;$APP_NAME&quot;,</span></span><br><span class="line"><span class="string">    &quot;releaseLabel&quot;:&quot;emr-6.11.0&quot;,</span></span><br><span class="line"><span class="string">    &quot;type&quot;:&quot;SPARK&quot;,</span></span><br><span class="line"><span class="string">    &quot;networkConfiguration&quot;:&#123;</span></span><br><span class="line"><span class="string">        &quot;subnetIds&quot;:[</span></span><br><span class="line"><span class="string">            &quot;$EMR_SERVERLESS_APP_SUBNET_ID&quot;</span></span><br><span class="line"><span class="string">        ],</span></span><br><span class="line"><span class="string">        &quot;securityGroupIds&quot;:[</span></span><br><span class="line"><span class="string">            &quot;$EMR_SERVERLESS_APP_SECURITY_GROUP_ID&quot;</span></span><br><span class="line"><span class="string">        ]</span></span><br><span class="line"><span class="string">    &#125;</span></span><br><span class="line"><span class="string">&#125;</span></span><br><span class="line"><span class="string">EOF</span></span><br><span class="line">jq . <span class="variable">$APP_LOCAL_HOME</span>/create-application.json</span><br><span class="line"><span class="built_in">export</span> EMR_SERVERLESS_APP_ID=$(aws emr-serverless create-application \</span><br><span class="line">    --no-paginate --no-cli-pager --output text \</span><br><span class="line">    --release-label <span class="string">&quot;emr-6.11.0&quot;</span> --<span class="built_in">type</span> <span class="string">&quot;SPARK&quot;</span> \</span><br><span class="line">    --cli-input-json file://<span class="variable">$APP_LOCAL_HOME</span>/create-application.json \</span><br><span class="line">    --query <span class="string">&quot;applicationId&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<h2 id="7-提交-Apache-Hudi-DeltaStreamer-CDC-作业"><a href="#7-提交-Apache-Hudi-DeltaStreamer-CDC-作业" class="headerlink" title="7. 提交 Apache Hudi DeltaStreamer CDC 作业"></a>7. 提交 Apache Hudi DeltaStreamer CDC 作业</h2><p>创建好Application就可以提交作业了，Apache Hudi DeltaStreamer CDC是一个较为复杂的作业，配置项非常多，这一点从Hudi官方博客给出的 <a target="_blank" rel="noopener" href="https://hudi.apache.org/blog/2022/01/14/change-data-capture-with-debezium-and-apache-hudi/#hudi-deltastreamer">示例</a> 中可见一斑，我们要做的是：将使用spark-submit命令提交的作业“翻译”成EMR Serverless的作业。</p>
+<h3 id="7-1-准备作业描述文件"><a href="#7-1-准备作业描述文件" class="headerlink" title="7.1 准备作业描述文件"></a>7.1 准备作业描述文件</h3><p>使用命令行提交EMR Serverless作业需要提供一个json格式的作业描述文件，通常在spark-submit命令行中配置的参数都会由这个文件来描述。由于DeltaStreamer作业的配置项非常多，限于篇幅，我们无法一一做出解释，您可以将下面的作业描述文件和Hudi官方博客提供的 <a target="_blank" rel="noopener" href="https://hudi.apache.org/blog/2022/01/14/change-data-capture-with-debezium-and-apache-hudi/#hudi-deltastreamer">原生Spark作业</a> 做一下对比，然后就能相对容易地理解作业描述文件的作用了。</p>
+<p>需要注意的是，在执行下面的脚本时，请根据您的AWS账号和本地环境替换脚本中所有的 <code>&lt;your-xxx&gt;</code> 部分，这些被替换的部分取决于您本地环境中的源头数据库、数据表，Kakfa Topic以及Schema Registry等信息，每换一张表都需要调整相应的值，所以没有被抽离到全局变量中。</p>
+<p>此外，该作业其实并不依赖任何第三方Jar包，其使用的Confluent Avro Converter已经集成到了 <code>hudi-utilities-bundle.jar</code> 中，这里我们特意在配置中声明 <code>--conf spark.jars=$(...)</code> （参考示例命令）是为了演示“如何加载三方类库”，供有需要的读者参考。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 实操步骤(5)</span></span><br><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF &gt; $APP_LOCAL_HOME/start-job-run.json</span></span><br><span class="line"><span class="string">&#123;</span></span><br><span class="line"><span class="string">    &quot;name&quot;:&quot;apache-hudi-delta-streamer&quot;,</span></span><br><span class="line"><span class="string">    &quot;applicationId&quot;:&quot;$EMR_SERVERLESS_APP_ID&quot;,</span></span><br><span class="line"><span class="string">    &quot;executionRoleArn&quot;:&quot;$EMR_SERVERLESS_EXECUTION_ROLE_ARN&quot;,</span></span><br><span class="line"><span class="string">    &quot;jobDriver&quot;:&#123;</span></span><br><span class="line"><span class="string">        &quot;sparkSubmit&quot;:&#123;</span></span><br><span class="line"><span class="string">        &quot;entryPoint&quot;:&quot;/usr/lib/hudi/hudi-utilities-bundle.jar&quot;,</span></span><br><span class="line"><span class="string">        &quot;entryPointArguments&quot;:[</span></span><br><span class="line"><span class="string">            &quot;--continuous&quot;,</span></span><br><span class="line"><span class="string">            &quot;--enable-sync&quot;,</span></span><br><span class="line"><span class="string">            &quot;--table-type&quot;, &quot;COPY_ON_WRITE&quot;,</span></span><br><span class="line"><span class="string">            &quot;--op&quot;, &quot;UPSERT&quot;,</span></span><br><span class="line"><span class="string">            &quot;--target-base-path&quot;, &quot;&lt;your-table-s3-path&gt;&quot;,</span></span><br><span class="line"><span class="string">            &quot;--target-table&quot;, &quot;&lt;your-table&gt;&quot;,</span></span><br><span class="line"><span class="string">            &quot;--min-sync-interval-seconds&quot;, &quot;60&quot;,</span></span><br><span class="line"><span class="string">            &quot;--source-class&quot;, &quot;org.apache.hudi.utilities.sources.debezium.MysqlDebeziumSource&quot;,</span></span><br><span class="line"><span class="string">            &quot;--source-ordering-field&quot;, &quot;_event_origin_ts_ms&quot;,</span></span><br><span class="line"><span class="string">            &quot;--payload-class&quot;, &quot;org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload&quot;,</span></span><br><span class="line"><span class="string">            &quot;--hoodie-conf&quot;, &quot;bootstrap.servers=$KAFKA_BOOTSTRAP_SERVERS&quot;,</span></span><br><span class="line"><span class="string">            &quot;--hoodie-conf&quot;, &quot;schema.registry.url=$SCHEMA_REGISTRY_URL&quot;,</span></span><br><span class="line"><span class="string">            &quot;--hoodie-conf&quot;, &quot;hoodie.deltastreamer.schemaprovider.registry.url=$&#123;SCHEMA_REGISTRY_URL&#125;/subjects/&lt;your-registry-name&gt;.&lt;your-src-database&gt;.&lt;your-src-table&gt;-value/versions/latest&quot;,</span></span><br><span class="line"><span class="string">            &quot;--hoodie-conf&quot;, &quot;hoodie.deltastreamer.source.kafka.value.deserializer.class=io.confluent.kafka.serializers.KafkaAvroDeserializer&quot;,</span></span><br><span class="line"><span class="string">            &quot;--hoodie-conf&quot;, &quot;hoodie.deltastreamer.source.kafka.topic=&lt;your-kafka-topic-of-your-table-cdc-message&gt;&quot;,</span></span><br><span class="line"><span class="string">            &quot;--hoodie-conf&quot;, &quot;auto.offset.reset=earliest&quot;,</span></span><br><span class="line"><span class="string">            &quot;--hoodie-conf&quot;, &quot;hoodie.datasource.write.recordkey.field=&lt;your-table-recordkey-field&gt;&quot;,</span></span><br><span class="line"><span class="string">            &quot;--hoodie-conf&quot;, &quot;hoodie.datasource.write.partitionpath.field=&lt;your-table-partitionpath-field&gt;&quot;,</span></span><br><span class="line"><span class="string">            &quot;--hoodie-conf&quot;, &quot;hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.MultiPartKeysValueExtractor&quot;,</span></span><br><span class="line"><span class="string">            &quot;--hoodie-conf&quot;, &quot;hoodie.datasource.write.hive_style_partitioning=true&quot;,</span></span><br><span class="line"><span class="string">            &quot;--hoodie-conf&quot;, &quot;hoodie.datasource.hive_sync.database=&lt;your-sync-database&gt;&quot;,</span></span><br><span class="line"><span class="string">            &quot;--hoodie-conf&quot;, &quot;hoodie.datasource.hive_sync.table==&lt;your-sync-table&gt;&quot;,</span></span><br><span class="line"><span class="string">            &quot;--hoodie-conf&quot;, &quot;hoodie.datasource.hive_sync.partition_fields=&lt;your-table-partition-fields&gt;&quot;</span></span><br><span class="line"><span class="string">        ],</span></span><br><span class="line"><span class="string">         &quot;sparkSubmitParameters&quot;:&quot;--class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer --conf spark.serializer=org.apache.spark.serializer.KryoSerializer --conf spark.hadoop.hive.metastore.client.factory.class=com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory --conf spark.jars=&lt;your-app-dependent-jars&gt;&quot;</span></span><br><span class="line"><span class="string">        &#125;</span></span><br><span class="line"><span class="string">   &#125;,</span></span><br><span class="line"><span class="string">   &quot;configurationOverrides&quot;:&#123;</span></span><br><span class="line"><span class="string">        &quot;monitoringConfiguration&quot;:&#123;</span></span><br><span class="line"><span class="string">            &quot;s3MonitoringConfiguration&quot;:&#123;</span></span><br><span class="line"><span class="string">                &quot;logUri&quot;:&quot;&lt;your-s3-location-for-emr-logs&gt;&quot;</span></span><br><span class="line"><span class="string">            &#125;</span></span><br><span class="line"><span class="string">        &#125;</span></span><br><span class="line"><span class="string">   &#125;</span></span><br><span class="line"><span class="string">&#125;</span></span><br><span class="line"><span class="string">EOF</span></span><br><span class="line">jq . <span class="variable">$APP_LOCAL_HOME</span>/start-job-run.json</span><br></pre></td></tr></table></figure>
+
+<p>以下是一份示例：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"># 示例(非实操步骤)</span><br><span class="line">cat &lt;&lt; EOF &gt; $APP_LOCAL_HOME/start-job-run.json</span><br><span class="line">&#123;</span><br><span class="line">    &quot;name&quot;:&quot;apache-hudi-delta-streamer&quot;,</span><br><span class="line">    &quot;applicationId&quot;:&quot;$EMR_SERVERLESS_APP_ID&quot;,</span><br><span class="line">    &quot;executionRoleArn&quot;:&quot;$EMR_SERVERLESS_EXECUTION_ROLE_ARN&quot;,</span><br><span class="line">    &quot;jobDriver&quot;:&#123;</span><br><span class="line">        &quot;sparkSubmit&quot;:&#123;</span><br><span class="line">        &quot;entryPoint&quot;:&quot;/usr/lib/hudi/hudi-utilities-bundle.jar&quot;,</span><br><span class="line">        &quot;entryPointArguments&quot;:[</span><br><span class="line">            &quot;--continuous&quot;,</span><br><span class="line">            &quot;--enable-sync&quot;,</span><br><span class="line">            &quot;--table-type&quot;, &quot;COPY_ON_WRITE&quot;,</span><br><span class="line">            &quot;--op&quot;, &quot;UPSERT&quot;,</span><br><span class="line">            &quot;--target-base-path&quot;, &quot;$APP_S3_HOME/data/mysql-server-3/inventory/orders&quot;,</span><br><span class="line">            &quot;--target-table&quot;, &quot;orders&quot;,</span><br><span class="line">            &quot;--min-sync-interval-seconds&quot;, &quot;60&quot;,</span><br><span class="line">            &quot;--source-class&quot;, &quot;org.apache.hudi.utilities.sources.debezium.MysqlDebeziumSource&quot;,</span><br><span class="line">            &quot;--source-ordering-field&quot;, &quot;_event_origin_ts_ms&quot;,</span><br><span class="line">            &quot;--payload-class&quot;, &quot;org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload&quot;,</span><br><span class="line">            &quot;--hoodie-conf&quot;, &quot;bootstrap.servers=$KAFKA_BOOTSTRAP_SERVERS&quot;,</span><br><span class="line">            &quot;--hoodie-conf&quot;, &quot;schema.registry.url=$SCHEMA_REGISTRY_URL&quot;,</span><br><span class="line">            &quot;--hoodie-conf&quot;, &quot;hoodie.deltastreamer.schemaprovider.registry.url=$&#123;SCHEMA_REGISTRY_URL&#125;/subjects/osci.mysql-server-3.inventory.orders-value/versions/latest&quot;,</span><br><span class="line">            &quot;--hoodie-conf&quot;, &quot;hoodie.deltastreamer.source.kafka.value.deserializer.class=io.confluent.kafka.serializers.KafkaAvroDeserializer&quot;,</span><br><span class="line">            &quot;--hoodie-conf&quot;, &quot;hoodie.deltastreamer.source.kafka.topic=osci.mysql-server-3.inventory.orders&quot;,</span><br><span class="line">            &quot;--hoodie-conf&quot;, &quot;auto.offset.reset=earliest&quot;,</span><br><span class="line">            &quot;--hoodie-conf&quot;, &quot;hoodie.datasource.write.recordkey.field=order_number&quot;,</span><br><span class="line">            &quot;--hoodie-conf&quot;, &quot;hoodie.datasource.write.partitionpath.field=order_date&quot;,</span><br><span class="line">            &quot;--hoodie-conf&quot;, &quot;hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.MultiPartKeysValueExtractor&quot;,</span><br><span class="line">            &quot;--hoodie-conf&quot;, &quot;hoodie.datasource.write.hive_style_partitioning=true&quot;,</span><br><span class="line">            &quot;--hoodie-conf&quot;, &quot;hoodie.datasource.hive_sync.database=inventory&quot;,</span><br><span class="line">            &quot;--hoodie-conf&quot;, &quot;hoodie.datasource.hive_sync.table=orders&quot;,</span><br><span class="line">            &quot;--hoodie-conf&quot;, &quot;hoodie.datasource.hive_sync.partition_fields=order_date&quot;</span><br><span class="line">        ],</span><br><span class="line">         &quot;sparkSubmitParameters&quot;:&quot;--class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer --conf spark.serializer=org.apache.spark.serializer.KryoSerializer --conf spark.hadoop.hive.metastore.client.factory.class=com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory --conf spark.jars=$(aws s3 ls $APP_S3_HOME/jars/ | grep -o &#x27;\S*\.jar$&#x27;| awk &#x27;&#123;print &quot;&#x27;&quot;$APP_S3_HOME/jars/&quot;&#x27;&quot;$1&quot;,&quot;&#125;&#x27; | tr -d &#x27;\n&#x27; | sed &#x27;s/,$//&#x27;)&quot;</span><br><span class="line">        &#125;</span><br><span class="line">   &#125;,</span><br><span class="line">   &quot;configurationOverrides&quot;:&#123;</span><br><span class="line">        &quot;monitoringConfiguration&quot;:&#123;</span><br><span class="line">            &quot;s3MonitoringConfiguration&quot;:&#123;</span><br><span class="line">                &quot;logUri&quot;:&quot;$APP_S3_HOME/logs&quot;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">   &#125;</span><br><span class="line">&#125;</span><br><span class="line">EOF</span><br><span class="line">jq . $APP_LOCAL_HOME/start-job-run.json</span><br></pre></td></tr></table></figure>
+
+<h3 id="7-2-提交作业"><a href="#7-2-提交作业" class="headerlink" title="7.2 提交作业"></a>7.2 提交作业</h3><p>准备好作业描述文件后，就可以正式提交作业了，命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 实操步骤(6)</span></span><br><span class="line"><span class="built_in">export</span> EMR_SERVERLESS_JOB_RUN_ID=$(aws emr-serverless start-job-run \</span><br><span class="line">    --no-paginate --no-cli-pager --output text \</span><br><span class="line">    --name apache-hudi-delta-streamer \</span><br><span class="line">    --application-id <span class="variable">$EMR_SERVERLESS_APP_ID</span> \</span><br><span class="line">    --execution-role-arn <span class="variable">$EMR_SERVERLESS_EXECUTION_ROLE_ARN</span> \</span><br><span class="line">    --execution-timeout-minutes 0 \</span><br><span class="line">    --cli-input-json file://<span class="variable">$APP_LOCAL_HOME</span>/start-job-run.json \</span><br><span class="line">    --query jobRunId)</span><br></pre></td></tr></table></figure>
+
+<h3 id="7-3-监控作业"><a href="#7-3-监控作业" class="headerlink" title="7.3 监控作业"></a>7.3 监控作业</h3><p>作业提交后，可以在控制台查看作业运行状态。如果想在命令行窗口持续监控作业，可以使用如下脚本：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 实操步骤(7)</span></span><br><span class="line">now=$(<span class="built_in">date</span> +%s)sec</span><br><span class="line"><span class="keyword">while</span> <span class="literal">true</span>; <span class="keyword">do</span></span><br><span class="line">    jobStatus=$(aws emr-serverless get-job-run \</span><br><span class="line">                    --no-paginate --no-cli-pager --output text \</span><br><span class="line">                    --application-id <span class="variable">$EMR_SERVERLESS_APP_ID</span> \</span><br><span class="line">                    --job-run-id <span class="variable">$EMR_SERVERLESS_JOB_RUN_ID</span> \</span><br><span class="line">                    --query jobRun.state)</span><br><span class="line">    <span class="keyword">if</span> [ <span class="string">&quot;<span class="variable">$jobStatus</span>&quot;</span> = <span class="string">&quot;PENDING&quot;</span> ] || [ <span class="string">&quot;<span class="variable">$jobStatus</span>&quot;</span> = <span class="string">&quot;SCHEDULED&quot;</span> ] || [ <span class="string">&quot;<span class="variable">$jobStatus</span>&quot;</span> = <span class="string">&quot;RUNNING&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> &#123;0..5&#125;; <span class="keyword">do</span></span><br><span class="line">            <span class="built_in">echo</span> -ne <span class="string">&quot;\E[33;5m&gt;&gt;&gt; The job [ <span class="variable">$EMR_SERVERLESS_JOB_RUN_ID</span> ] state is [ <span class="variable">$jobStatus</span> ], duration [ <span class="subst">$(date -u --date now-$now +%H:%M:%S)</span> ] ....\r\E[0m&quot;</span></span><br><span class="line">            <span class="built_in">sleep</span> 1</span><br><span class="line">        <span class="keyword">done</span></span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">        <span class="built_in">echo</span> -ne <span class="string">&quot;The job [ <span class="variable">$EMR_SERVERLESS_JOB_RUN_ID</span> ] is [ <span class="variable">$jobStatus</span> ]\n\n&quot;</span></span><br><span class="line">        <span class="built_in">break</span></span><br><span class="line">    <span class="keyword">fi</span></span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="7-4-错误检索"><a href="#7-4-错误检索" class="headerlink" title="7.4 错误检索"></a>7.4 错误检索</h3><p>作业开始运行后，Spark Driver和Executor会持续生成日志，这些日志存放在配置的 <code>$APP_S3_HOME/logs</code> 路径下，如果作业失败，可以使用下面的脚本快速检索到错误信息：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 实操步骤(8)</span></span><br><span class="line">JOB_LOG_HOME=<span class="variable">$APP_LOCAL_HOME</span>/log/<span class="variable">$EMR_SERVERLESS_JOB_RUN_ID</span></span><br><span class="line"><span class="built_in">rm</span> -rf <span class="variable">$JOB_LOG_HOME</span> &amp;&amp; <span class="built_in">mkdir</span> -p <span class="variable">$JOB_LOG_HOME</span></span><br><span class="line">aws s3 <span class="built_in">cp</span> --recursive <span class="variable">$APP_S3_HOME</span>/logs/applications/<span class="variable">$EMR_SERVERLESS_APP_ID</span>/jobs/<span class="variable">$EMR_SERVERLESS_JOB_RUN_ID</span>/ <span class="variable">$JOB_LOG_HOME</span> &gt;&amp; /dev/null</span><br><span class="line">gzip -d -r -f <span class="variable">$JOB_LOG_HOME</span> &gt;&amp; /dev/null</span><br><span class="line">grep --color=always -r -i -E <span class="string">&#x27;error|failed|exception&#x27;</span> <span class="variable">$JOB_LOG_HOME</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="7-5-停止作业"><a href="#7-5-停止作业" class="headerlink" title="7.5 停止作业"></a>7.5 停止作业</h3><p>DeltaStreamer是一个持续运行的作业，如果需要停止作业，可以使用如下命令：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 实操步骤(9)</span></span><br><span class="line">aws emr-serverless cancel-job-run \</span><br><span class="line">    --no-paginate --no-cli-pager\</span><br><span class="line">    --application-id <span class="variable">$EMR_SERVERLESS_APP_ID</span> \</span><br><span class="line">    --job-run-id <span class="variable">$EMR_SERVERLESS_JOB_RUN_ID</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="8-结果验证"><a href="#8-结果验证" class="headerlink" title="8. 结果验证"></a>8. 结果验证</h2><p>作业启动后会自动创建一个数据表，并在指定的S3位置上写入数据，使用如下命令可以查看自动创建的数据表和落地的数据文件：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 实操步骤(10)</span></span><br><span class="line">aws s3 <span class="built_in">ls</span> --recursive &lt;your-table-s3-path&gt;</span><br><span class="line">aws glue get-table --no-paginate --no-cli-pager \</span><br><span class="line">    --database-name &lt;your-sync-database&gt; --name &lt;your-sync-table&gt;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 示例(非实操步骤)</span></span><br><span class="line">aws s3 <span class="built_in">ls</span> --recursive <span class="variable">$APP_S3_HOME</span>/data/mysql-server-3/inventory/orders/</span><br><span class="line">aws glue get-table --no-paginate --no-cli-pager \</span><br><span class="line">    --database-name inventory --name orders</span><br></pre></td></tr></table></figure>
+
+<h2 id="9-评估与展望"><a href="#9-评估与展望" class="headerlink" title="9. 评估与展望"></a>9. 评估与展望</h2><p>本文，我们详细介绍了如何在EMR Serverless上运行Apapche Hudi DeltaStreamer将CDC数据接入到Hudi表中，这是一个主打“零编码”，“零运维”的超轻量解决方案。但是，它的局限性也很明显，那就是：一个DeltaStreamer作业只能接入一张表，这对于动辄就需要接入数百张甚至数千张表的数据湖来说是不实用的，尽管Hudi也提供了用于多表接入的MultiTableDeltaStreamer，但是这个工具类目前的成熟度和完备性还不足以应用于生产。此外，Hudi自 <code>0.10.0</code> 起针对Kafka Connect提供了Hudi Sink插件（目前也是仅支持单表），为CDC数据接入Hudi数据湖开辟了新的途径，这是值得持续关注的新亮点。</p>
+<p>从长远来看，CDC数据入湖并落地为Hudi表是一个非常普遍的需求，迭代并完善包括DeltaStreamer、HoodieMultiTableDeltaStreamer和Kafka Connect Hudi Sink插件在内的多种原生组件在社区的呼声将会越来越强烈，相信伴随着Hudi的蓬勃发展，这些组件将不断成熟起来，并逐步应用到生产环境中。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>CDC 一键入湖：当 Apache Hudi DeltaStreamer 遇见 Serverless Spark</p><p><a href="https://laurence.enlightgram.com/hudi/hudi-deltastreamer-serverless-spark/">https://laurence.enlightgram.com/hudi/hudi-deltastreamer-serverless-spark/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2023-07-31</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Spark/">Spark</a><a class="link-muted mr-2" rel="tag" href="/tags/Serverless/">Serverless</a><a class="link-muted mr-2" rel="tag" href="/tags/Hudi/">Hudi</a><a class="link-muted mr-2" rel="tag" href="/tags/CDC/">CDC</a><a class="link-muted mr-2" rel="tag" href="/tags/DeltaStreamer/">DeltaStreamer</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/security/user-not-found-kerberos-ad-openldap/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Hive/Spark/Yarn: User Not Found 错误和 Kerberos / AD / OpenLDAP 之间的关系与解释</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/hbase/hbase-cdc-wal-to-kafka/"><span class="level-item">HBase CDC ( WAL日志写入Kafka ) 方案和实操文档</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-整体架构"><span class="level-left"><span class="level-item">1. 整体架构</span></span></a></li><li><a class="level is-mobile" href="#2-环境准备"><span class="level-left"><span class="level-item">2. 环境准备</span></span></a></li><li><a class="level is-mobile" href="#3-配置全局变量"><span class="level-left"><span class="level-item">3. 配置全局变量</span></span></a></li><li><a class="level is-mobile" href="#4-创建专属工作目录和存储桶"><span class="level-left"><span class="level-item">4. 创建专属工作目录和存储桶</span></span></a></li><li><a class="level is-mobile" href="#5-创建-EMR-Serverless-Execution-Role"><span class="level-left"><span class="level-item">5. 创建 EMR Serverless Execution Role</span></span></a></li><li><a class="level is-mobile" href="#6-创建-EMR-Serverless-Application"><span class="level-left"><span class="level-item">6. 创建 EMR Serverless Application</span></span></a></li><li><a class="level is-mobile" href="#7-提交-Apache-Hudi-DeltaStreamer-CDC-作业"><span class="level-left"><span class="level-item">7. 提交 Apache Hudi DeltaStreamer CDC 作业</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#7-1-准备作业描述文件"><span class="level-left"><span class="level-item">7.1 准备作业描述文件</span></span></a></li><li><a class="level is-mobile" href="#7-2-提交作业"><span class="level-left"><span class="level-item">7.2 提交作业</span></span></a></li><li><a class="level is-mobile" href="#7-3-监控作业"><span class="level-left"><span class="level-item">7.3 监控作业</span></span></a></li><li><a class="level is-mobile" href="#7-4-错误检索"><span class="level-left"><span class="level-item">7.4 错误检索</span></span></a></li><li><a class="level is-mobile" href="#7-5-停止作业"><span class="level-left"><span class="level-item">7.5 停止作业</span></span></a></li></ul></li><li><a class="level is-mobile" href="#8-结果验证"><span class="level-left"><span class="level-item">8. 结果验证</span></span></a></li><li><a class="level is-mobile" href="#9-评估与展望"><span class="level-left"><span class="level-item">9. 评估与展望</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>

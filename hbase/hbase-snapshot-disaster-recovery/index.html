@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>HBase 例行灾备方案：快照备份与还原演练 - Laurence 的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence 的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence 的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="该方案是为某用户定制的 HBase 灾备方案，方案本身具有很好的适用性，可以复用于常规 HBase 灾备场景。用户对 HBase 的灾备工作非常重视，每周会对 HBase 进行一次全量备份，将快照上传至 S3 保存，同时，在消息队列和其他数据库中保存着两周以内的增量数据，当 HBase 宕机时，会先还原快照将数据库恢复至一周内某一时刻的全量状态，然后再从其他系统读取一周内的增量数据进行补录，直至数"><meta property="og:type" content="article"><meta property="og:title" content="HBase 例行灾备方案：快照备份与还原演练"><meta property="og:url" content="https://laurence.enlightgram.com/hbase/hbase-snapshot-disaster-recovery/"><meta property="og:site_name" content="Laurence 的技术博客"><meta property="og:description" content="该方案是为某用户定制的 HBase 灾备方案，方案本身具有很好的适用性，可以复用于常规 HBase 灾备场景。用户对 HBase 的灾备工作非常重视，每周会对 HBase 进行一次全量备份，将快照上传至 S3 保存，同时，在消息队列和其他数据库中保存着两周以内的增量数据，当 HBase 宕机时，会先还原快照将数据库恢复至一周内某一时刻的全量状态，然后再从其他系统读取一周内的增量数据进行补录，直至数"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/hbase/hbase-snapshot-disaster-recovery/2.jpeg"><meta property="article:published_time" content="2023-12-27T21:14:41.000Z"><meta property="article:modified_time" content="2026-11-11T02:50:16.349Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="HBase"><meta property="article:tag" content="备份"><meta property="article:tag" content="灾备"><meta property="article:tag" content="快照"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/hbase/hbase-snapshot-disaster-recovery/2.jpeg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/hbase/hbase-snapshot-disaster-recovery/"},"headline":"HBase 例行灾备方案：快照备份与还原演练","image":["https://laurence.enlightgram.com/images/hbase/hbase-snapshot-disaster-recovery/2.jpeg"],"datePublished":"2023-12-27T21:14:41.000Z","dateModified":"2026-11-11T02:50:16.349Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence 的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"该方案是为某用户定制的 HBase 灾备方案，方案本身具有很好的适用性，可以复用于常规 HBase 灾备场景。用户对 HBase 的灾备工作非常重视，每周会对 HBase 进行一次全量备份，将快照上传至 S3 保存，同时，在消息队列和其他数据库中保存着两周以内的增量数据，当 HBase 宕机时，会先还原快照将数据库恢复至一周内某一时刻的全量状态，然后再从其他系统读取一周内的增量数据进行补录，直至数"}</script><link rel="canonical" href="https://laurence.enlightgram.com/hbase/hbase-snapshot-disaster-recovery/"><link rel="icon" href="/img/favicon.png"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">HBase 例行灾备方案：快照备份与还原演练</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/HBase/">HBase</a></span><span class="level-item">发表于：<time dateTime="2023-12-27T21:14:41.000Z" title="2023-12-27 13:14:41">2023-12-27</time></span><span class="level-item">阅读用时：22 分钟 (约 3301 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>该方案是为某用户定制的 HBase 灾备方案，方案本身具有很好的适用性，可以复用于常规 HBase 灾备场景。用户对 HBase 的灾备工作非常重视，每周会对 HBase 进行一次全量备份，将快照上传至 S3 保存，同时，在消息队列和其他数据库中保存着两周以内的增量数据，当 HBase 宕机时，会先还原快照将数据库恢复至一周内某一时刻的全量状态，然后再从其他系统读取一周内的增量数据进行补录，直至数据追平。本文将重点讨论 HBase 基于快照的例行备份和灾后恢复操作，并给出详细的解释和操作脚本。更多快照导入导出操作的详细介绍可参考本文姊妹篇: <a href="/hbase/hbase-large-table-migration/">《HBase 超大表迁移、备份、还原、同步演练手册：全量快照 + 实时同步（Snapshot + Replication）不停机迁移方案》</a> </p>
+<h2 id="1-方案-架构"><a href="#1-方案-架构" class="headerlink" title="1. 方案 架构"></a>1. 方案 架构</h2><p>由于 HBase 的快照导入、导出是一个基于 Yarn 的 Map-Reduce 作业，而生产集群是一个专职的 HBase 集群，不宜为 Yarn 分配过多资源，所以，直接使用 HBase 的生产集群执行快照导入、导出作业并不是一个明智的选择，推荐的做法是：为快照导入和导出创建专用集群，这样做的好处是：</p>
+<ul>
+<li><p>HBase 的生产集群将不再需要为 Yarn 分配资源，可以将资源集中投放给 HBase；</p>
+</li>
+<li><p>用于快照导入、导出的专用集群可以将全部资源分配给 Yarn，同时在配置上针对 Map-Reduce 进行定向性能调优，以最快速度完成快照导入、导出工作；</p>
+</li>
+<li><p>在超大数据集下，无论是快照导出、导入还是还原，都需要对 HBase 做多项特定配置，包含超时和文件清理周期的调整，这些都不是正常生产集群上应有的配置，该方案可以规避修改配置并重启集群的问题；</p>
+</li>
+<li><p>导入、导出执行完毕后，可随即释放集群，无额外支出</p>
+</li>
+</ul>
+<p>以下是快照备份场景的架构示意图：</p>
+<p> <img src="/../../images/hbase/hbase-snapshot-disaster-recovery/2.jpeg" alt="请添加图片描述"></p>
+<p>在这一场景下，我们通过专用的快照导出集群从生产集群中导出快照（读取的是生产集群的 HDFS），然后将数据写入到 S3 并保存至少1周时间，从效果上等同于生产集群将自己的快照直接上传至 S3，但却不需要为此特别修改配置。</p>
+<p>以下是灾后还原场景的架构示意图：</p>
+<p> <img src="/../../images/hbase/hbase-snapshot-disaster-recovery/3.jpeg" alt="请添加图片描述"></p>
+<p>在这一场景下，我们通过专用的快照导入集群读取 S3 中的快照文件，然后将数据写入到还原集群中（写入的是还原集群的 HDFS），从效果上等同于还原集群直接从 S3 上下载快照并还原，但却不需要为此特别修改配置。</p>
+<h2 id="2-环境说明"><a href="#2-环境说明" class="headerlink" title="2. 环境说明"></a>2. 环境说明</h2><p>本次模拟演练使用的环境是：HBase 1.4.9 （EMR版本：5.23.0），全场景涉及4个 HBase 集群，分别是：</p>
+<ul>
+<li><p>生产集群：m5.4xlarge （16 vCore，64 GB），3 个 Master Node + 20 个 Core Node</p>
+</li>
+<li><p>快照导出专用集群：r5.2xlarge （8 vCore，64 GB），1 个 Master Node + 32 个 Core Node</p>
+</li>
+<li><p>快照导入专用集群：r5.2xlarge （8 vCore，64 GB），1 个 Master Node + 32 个 Core Node</p>
+</li>
+<li><p>恢复集群：m5.4xlarge （16 vCore，64 GB），3 个 Master Node + 20 个 Core Node</p>
+</li>
+</ul>
+<p>以下是4个集群的详细信息：</p>
+<table>
+<thead>
+<tr>
+<th align="left">信息项</th>
+<th align="left">生产集群</th>
+<th align="left">快照导出专用集群</th>
+<th align="left">快照导入专用集群</th>
+<th align="left">恢复集群</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">HBase 版本</td>
+<td align="left">1.4.9</td>
+<td align="left">1.4.9</td>
+<td align="left">1.4.9</td>
+<td align="left">1.4.9</td>
+</tr>
+<tr>
+<td align="left">EMR 版本</td>
+<td align="left">5.23.0</td>
+<td align="left">5.23.0</td>
+<td align="left">5.23.0</td>
+<td align="left">5.23.0</td>
+</tr>
+<tr>
+<td align="left">实例机型</td>
+<td align="left">m5.4xlarge</td>
+<td align="left">r5.2xlarge</td>
+<td align="left">r5.2xlarge</td>
+<td align="left">m5.4xlarge</td>
+</tr>
+<tr>
+<td align="left">主节点</td>
+<td align="left">3</td>
+<td align="left">1</td>
+<td align="left">1</td>
+<td align="left">3</td>
+</tr>
+<tr>
+<td align="left">Core节点</td>
+<td align="left">20</td>
+<td align="left">&lt;&#x3D; 32</td>
+<td align="left">32</td>
+<td align="left">20</td>
+</tr>
+<tr>
+<td align="left">存储介质</td>
+<td align="left">HDFS</td>
+<td align="left">HDFS</td>
+<td align="left">HDFS</td>
+<td align="left">HDFS</td>
+</tr>
+</tbody></table>
+<h2 id="3-前置条件"><a href="#3-前置条件" class="headerlink" title="3. 前置条件"></a>3. 前置条件</h2><p>进行实操演练前，需要您的环境中已经创建了：</p>
+<ol>
+<li><p>一个生产集群</p>
+</li>
+<li><p>一张演练用的测试表</p>
+</li>
+</ol>
+<p>如果只是进行演练，您可以根据自身账号情况灵活配置 HBase 生产集群的规模，不必拘泥于上述建议配置；创建测试用表可以参考 <a href="">《AWS EMR HBase 超大表迁移、备份、还原、同步演练手册：全量快照 + 实时同步（Snapshot + Replication）不停机迁移方案</a> 》一文的第 5.5 - 5.7 节。</p>
+<p>进行正式演练前，需要提醒注意以下事项：</p>
+<ul>
+<li><p>本演练的多数命令都需执行较长时间，因此，命令都使用了 <code>nohup ... &amp;</code> 形式转为了后台运行，以防 Linux 终端 Session 超时导致命令意外终止；</p>
+</li>
+<li><p>本演练的操作必须按顺序执行，不可在前一个命令转为后台运行后，立即执行下一条命令；</p>
+</li>
+<li><p>演练过程中需要在各个集群和 AWS Console 上来回切换，为了提醒操作者，本文特意使用 <code>[ 执行环境 ] :: ...</code> 形式的标题强调本节操作的执行环境</p>
+</li>
+</ul>
+<h2 id="4-全局变量"><a href="#4-全局变量" class="headerlink" title="4. 全局变量"></a>4. 全局变量</h2><p>为了让脚本更具可移植性，我们将所有环境相关的信息抽离出来，以变量形式统一声明和维护（请注意替换脚本中出现的 &#96;&#96;&#96;&#96;bash<br>export TABLE_NAME&#x3D;”<your-table-name>“<br>export SNAPSHOT_NAME&#x3D;”${TABLE_NAME}-$(date +’%Y%m%d’)”<br>export SNAPSHOTS_REPO&#x3D;”s3:&#x2F;&#x2F;<your-snapshot-repo-bucket>“<br>export SNAPSHOT_S3_LOCATION&#x3D;”${SNAPSHOTS_REPO}&#x2F;${SNAPSHOT_NAME}&#x2F;“<br>export WORKER_NODES&#x3D;32<br>export SNAPSHOT_EXPORT_MAPPERS&#x3D;2040<br>export INUSE_CLUSTER_NAMENODES&#x3D;”<your-in-use-cluster-namenode>“<br>export SNAPSHOT_EXPORT_CLUSTER_NAMENODES&#x3D;”<your-snapshot-export-cluster-namenode>“<br>export SNAPSHOT_IMPORT_CLUSTER_NAMENODES&#x3D;”<your-snapshot-import-cluster-namenode>“<br>export RESTORED_CLUSTER_NAMENODES&#x3D;”<your-restored-cluster-namenode-namenode>“</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">## 5. 备份快照 ( 例行灾备作业 )</span><br><span class="line"></span><br><span class="line">快照备份工作每周执行一次，快照文件会导出到 S3 上存储。本演练文档会给出详细的步骤说明和操作脚本，在实际运维中，该部分操作应提升为脚本或工作流由调度引擎每周触发执行。</span><br><span class="line"></span><br><span class="line">### 5.1. [ 生产集群 ] :: 创建快照</span><br><span class="line"></span><br><span class="line">由于生产环境的 HBase 集群不能停机，所以我们在创建快照时，不可以 disable table，而是直接创建快照：</span><br><span class="line"></span><br><span class="line">```bash</span><br><span class="line"># create snapshot</span><br><span class="line">sudo -u hbase hbase snapshot create -n $SNAPSHOT_NAME -t $TABLE_NAME</span><br><span class="line"># sleep for a while, snapshot may be NOT available immediately.</span><br><span class="line">sleep 120</span><br><span class="line"># check if snapshot is available</span><br><span class="line">sudo -u hbase hbase snapshot info -list-snapshots</span><br></pre></td></tr></table></figure>
+
+<p>通过这种方式创建出来的快照叫：Online Snapshot，如果事先 disable table，则创建出来的就叫 Offline Snapshot。</p>
+<h3 id="5-2-AWS-控制台-创建快照导出专用集群"><a href="#5-2-AWS-控制台-创建快照导出专用集群" class="headerlink" title="5.2. [ AWS 控制台 ] :: 创建快照导出专用集群"></a>5.2. [ AWS 控制台 ] :: 创建快照导出专用集群</h3><p>对于快照导入、导出集群的机型和配置，我们做了多轮测试，最终选定了 r5.2xlarge，因为导入导出作业是一个内存和网络IO密集型作业，网络IO的上限已由生产集群的机型和节点数量决定了，所以，我们从内存上找到了一些优化空间，最终选定了 r5.2xlarge 机型，并将 60 GB 内存分配给 Yarn，单一 worker 节点切分 16 个 Container，Map 任务数量是 Container 的 4 倍，这样的配置在多种配置组合中，性能最佳。以下是具体配置 (请注意替换配置文件中的 <code>&lt;your-aws-access-key-id&gt;</code> 和 <code>&lt;your-aws-secret-access-key&gt;</code> )：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">[</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;Classification&quot;</span><span class="punctuation">:</span> <span class="string">&quot;hdfs-site&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;Properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;dfs.replication&quot;</span><span class="punctuation">:</span> <span class="string">&quot;1&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;Classification&quot;</span><span class="punctuation">:</span> <span class="string">&quot;emrfs-site&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;Properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;fs.s3.maxRetries&quot;</span><span class="punctuation">:</span> <span class="string">&quot;50&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;fs.s3.maxConnections&quot;</span><span class="punctuation">:</span> <span class="string">&quot;500000&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;Classification&quot;</span><span class="punctuation">:</span> <span class="string">&quot;core-site&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;Properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;fs.s3n.multipart.uploads.split.size&quot;</span><span class="punctuation">:</span> <span class="string">&quot;1073741824&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;fs.s3.awsAccessKeyId&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&lt;your-aws-access-key-id&gt;&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;fs.s3.awsSecretAccessKey&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&lt;your-aws-secret-access-key&gt;&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;Classification&quot;</span><span class="punctuation">:</span> <span class="string">&quot;yarn-site&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;Properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;yarn.nodemanager.resource.memory-mb&quot;</span><span class="punctuation">:</span> <span class="string">&quot;61440&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;yarn.scheduler.maximum-allocation-mb&quot;</span><span class="punctuation">:</span> <span class="string">&quot;61440&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;yarn.scheduler.minimum-allocation-mb&quot;</span><span class="punctuation">:</span> <span class="string">&quot;1&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;yarn.nodemanager.vmem-pmem-ratio&quot;</span><span class="punctuation">:</span> <span class="string">&quot;10&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;Classification&quot;</span><span class="punctuation">:</span> <span class="string">&quot;mapred-site&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;Properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;mapred.job.jvm.num.tasks&quot;</span><span class="punctuation">:</span> <span class="string">&quot;-1&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;mapreduce.map.memory.mb&quot;</span><span class="punctuation">:</span> <span class="string">&quot;3840&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;mapreduce.map.java.opts&quot;</span><span class="punctuation">:</span> <span class="string">&quot;-Xmx3072m&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;mapreduce.map.cpu.vcores&quot;</span><span class="punctuation">:</span> <span class="string">&quot;2&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;mapreduce.reduce.memory.mb&quot;</span><span class="punctuation">:</span> <span class="string">&quot;7680&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;mapreduce.reduce.java.opts&quot;</span><span class="punctuation">:</span> <span class="string">&quot;-Xmx6144m&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;mapreduce.reduce.cpu.vcores&quot;</span><span class="punctuation">:</span> <span class="string">&quot;4&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;yarn.app.mapreduce.am.resource.mb&quot;</span><span class="punctuation">:</span> <span class="string">&quot;7680&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;yarn.app.mapreduce.am.resource.cpu-vcores&quot;</span><span class="punctuation">:</span> <span class="string">&quot;4&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">]</span></span><br></pre></td></tr></table></figure>
+
+<p>不同于生产集群，导入导出集群并不存储数据，所以无需增加磁盘存储，使用默认配置即可。此外， <strong>集群创建完毕后，须用 Primary Node 的 Private DNS 或 IP 为全局变量 <code>INUSE_CLUSTER_NAMENODES</code> 赋值，并在 Master 节点上执行一次第 4 节的全局变量声明脚本。</strong> </p>
+<h3 id="5-3-快照导出专用集群-导出快照"><a href="#5-3-快照导出专用集群-导出快照" class="headerlink" title="5.3. [ 快照导出专用集群 ] :: 导出快照"></a>5.3. [ 快照导出专用集群 ] :: 导出快照</h3><p>在快照导出专用集群的主节点上，执行如下命令：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">nohup</span> <span class="built_in">sudo</span> -u hbase hbase snapshot <span class="built_in">export</span> \</span><br><span class="line">    -snapshot <span class="variable">$SNAPSHOT_NAME</span> \</span><br><span class="line">    -copy-from <span class="string">&quot;hdfs://<span class="variable">$&#123;INUSE_CLUSTER_NAMENODES&#125;</span>:8020/user/hbase/&quot;</span> \</span><br><span class="line">    -copy-to <span class="variable">$&#123;SNAPSHOT_S3_LOCATION&#125;</span> \</span><br><span class="line">    -mappers <span class="variable">$SNAPSHOT_EXPORT_MAPPERS</span> \</span><br><span class="line">    -bandwidth $((<span class="number">2</span>**<span class="number">31</span>-<span class="number">1</span>)) &amp;&gt; <span class="built_in">export</span>-<span class="variable">$SNAPSHOT_NAME</span>.out &amp;</span><br><span class="line"><span class="built_in">tail</span> -f /var/log/hbase/hbase.log</span><br></pre></td></tr></table></figure>
+
+<p>注意：</p>
+<ul>
+<li><p><code>-mappers</code> 参数的设定值 <code>$SNAPSHOT_EXPORT_MAPPERS</code> 是根据集群配置优化过的，如果不了解该配置项的细节，请勿随意修改，否则会影响性能</p>
+</li>
+<li><p><code>-bandwidth</code> 参数用于限制带宽，默认值是 <code>100</code> ，单位是 MBps，此处设定为 <code> $((2**31-1))</code> ，是 Java 中的 Integer.MAX_VALUE，目的是不进行带宽限制，由于快照导出会对生成集群造成一定的压力，特别是会占用相当份额的网络带宽，所以是否需要限速可视实际情况进行调整，具体可参考第 7 节的详细说明。</p>
+</li>
+</ul>
+<h3 id="5-4-生产集群-删除快照"><a href="#5-4-生产集群-删除快照" class="headerlink" title="5.4. [ 生产集群 ] :: 删除快照"></a>5.4. [ 生产集群 ] :: 删除快照</h3><p><strong>快照导出后，须及时删除快照</strong> ！因为创建快照后，快照引用的 HFile 将不再被自动清理，随着时间推移，在经历了几轮 Compaction 后，HBase 的 archive 文件夹通常会有大幅增长，HDFS 会有被写满的危险。执行以下命令可删除快照：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> -u hbase hbase shell &lt;&lt;&lt; <span class="string">&quot;delete_snapshot &#x27;<span class="variable">$SNAPSHOT_NAME</span>&#x27;&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="5-5-AWS-控制台-终止快照导出专用集群"><a href="#5-5-AWS-控制台-终止快照导出专用集群" class="headerlink" title="5.5. [ AWS 控制台 ] :: 终止快照导出专用集群"></a>5.5. [ AWS 控制台 ] :: 终止快照导出专用集群</h3><p>导出完成后，即可在控制台上终止快照导出专用集群。## 6. 还原快照 ( 灾后恢复作业 )</p>
+<p>快照还原仅发生在系统宕机后的恢复阶段，非例行作业，可以按本文档手动操作完成。### 6.1. [ AWS 控制台 ] :: 创建恢复集群</p>
+<p>恢复集群就是重建后的生产集群，其配置应完全参照原生产集群，但是，**要特别注意 hbase-site.xml 中的<code>hbase.master.cleaner.interval</code> ，这是还原集群的一个必配项（初始创建的生产集群通常不会配置该项），这个配置项的值应大于从启动恢复集群到完成全部快照导入和还原操作的总时间！**此外， <strong>集群创建完毕后，须用 Primary Node 的 Private DNS 或 IP 为全局变量 <code>RESTORED_CLUSTER_NAMENODES</code> 赋值，并在 Master 节点上执行一次第 4 节的全局变量声明脚本。</strong> </p>
+<h3 id="6-2-AWS-控制台-创建快照导入专用集群"><a href="#6-2-AWS-控制台-创建快照导入专用集群" class="headerlink" title="6.2. [ AWS 控制台 ] :: 创建快照导入专用集群"></a>6.2. [ AWS 控制台 ] :: 创建快照导入专用集群</h3><p>快照还原专用集群的配置和操作与 5.2. 节：“创建快照导出专用集群” 完全一致，请参考此节。### 6.3. [ 快照导入专用集群 ] :: 导入快照</p>
+<p>在快照导入专用集群的主节点上，执行如下命令：&#96;&#96;&#96;bash<br>nohup sudo -u hbase hbase snapshot export <br>    -snapshot $SNAPSHOT_NAME <br>    -copy-from ${SNAPSHOT_S3_LOCATION} <br>    -copy-to “hdfs:&#x2F;&#x2F;${INUSE_CLUSTER_NAMENODES}:8020&#x2F;user&#x2F;hbase&#x2F;“ <br>    -mappers $SNAPSHOT_EXPORT_MAPPERS <br>    -bandwidth $((2**31-1)) &amp;&gt; import-$SNAPSHOT_NAME.out &amp;<br>tail -f &#x2F;var&#x2F;log&#x2F;hbase&#x2F;hbase.log</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">注意：</span><br><span class="line"></span><br><span class="line">- 这里是一个导入操作，但依旧使用的是 export 命令，导入和导出是一个相对概念，HBase 中没有 snapshot import 命令</span><br><span class="line"></span><br><span class="line">- `-mappers` 参数的设定值 `$SNAPSHOT_EXPORT_MAPPERS` 是根据集群配置优化过的，如果不了解该配置项的细节，请勿随意修改，否则会影响性能</span><br><span class="line"></span><br><span class="line">- `-bandwidth` 参数用于限制带宽，默认值是 `100` ，单位是 MBps，此处设定为 ` $((2**31-1))` ，是 Java 中的 Integer.MAX_VALUE，目的是不进行带宽限制，还原阶段恢复集群尚未上线，可以全力接收导入的数据，因为无需限速。</span><br><span class="line"></span><br><span class="line">### 6.4. [ 还原集群 ] :: 还原快照</span><br><span class="line"></span><br><span class="line">快照导入完毕后，登录还原集群，检查快照是否已就绪：</span><br><span class="line"></span><br><span class="line">```bash</span><br><span class="line">sudo -u hbase hbase snapshot info -list-snapshots</span><br></pre></td></tr></table></figure>
+
+<p>确认快照已存在就可以执行快照还原了：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF | nohup sudo -u hbase hbase shell &amp;&gt; restore-$SNAPSHOT_NAME.out &amp;</span></span><br><span class="line"><span class="string">restore_snapshot &#x27;$SNAPSHOT_NAME&#x27;</span></span><br><span class="line"><span class="string">enable &#x27;$TABLE_NAME&#x27;</span></span><br><span class="line"><span class="string">EOF</span></span><br><span class="line"><span class="built_in">tail</span> -f restore-<span class="variable">$SNAPSHOT_NAME</span>.out</span><br></pre></td></tr></table></figure>
+
+<h3 id="6-5-还原集群-删除快照"><a href="#6-5-还原集群-删除快照" class="headerlink" title="6.5. [ 还原集群 ] :: 删除快照"></a>6.5. [ 还原集群 ] :: 删除快照</h3><p>快照还原后，同样 <strong>应及时删除还原集群上的快照</strong> ，原因与 4.4 节的解释一样。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> -u hbase hbase shell &lt;&lt;&lt; <span class="string">&quot;delete_snapshot &#x27;<span class="variable">$SNAPSHOT_NAME</span>&#x27;&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="6-6-AWS-控制台-终止快照导入专用集群"><a href="#6-6-AWS-控制台-终止快照导入专用集群" class="headerlink" title="6.6. [ AWS 控制台 ] :: 终止快照导入专用集群"></a>6.6. [ AWS 控制台 ] :: 终止快照导入专用集群</h3><p>导入完成后，即可在控制台上终止快照导入专用集群。</p>
+<h2 id="7-注意事项"><a href="#7-注意事项" class="headerlink" title="7. 注意事项"></a>7. 注意事项</h2><h3 id="7-1-快照备份的带宽控制"><a href="#7-1-快照备份的带宽控制" class="headerlink" title="7.1. 快照备份的带宽控制"></a>7.1. 快照备份的带宽控制</h3><p>在执行快照导出作业时，HBase 的生产集需要承担输出 HDFS 数据的任务，会占用较大份额的上行网络带宽，下图是执行 9 个批次（每个批次导出 10TB 数据）的导出作业时，源端集群（即本文档所指的生产集群）一个 Core 节点的负载情况。 <strong>右下角的网络 IO 指标需要特别注意，因为 m5.4xlarge 的基准带宽是 4750Mbps，即：每秒最多可上传 593.75 MB 数据, 从上图可知：导出作业的上行带宽峰值已经逼近 600 MB。虽然导出作业会选择业务低估期执行，但如果认定此时占用的带宽已经影响到了线上生产，则需要缩减导出集群的规模或进行限速处理，但要注意的是：这就意味着导出时间会变长，相应地又会影响到 <code>hbase.master.cleaner.interval</code> 参数的设置。这是一个需要权衡的问题，应该根据生产环境的实际状况进行调整。</strong> </p>
+<p> <img src="/../../images/hbase/hbase-snapshot-disaster-recovery/4.png" alt="m5_4xlarge_20_nodes_1x1_source_node"></p>
+<h3 id="7-2-快照还原的带宽控制"><a href="#7-2-快照还原的带宽控制" class="headerlink" title="7.2. 快照还原的带宽控制"></a>7.2. 快照还原的带宽控制</h3><p>在快照导入阶段，由于还原集群尚未接入生产，无其他负载，从尽量缩短故障恢复时间的角度出发，应以在最短时间内以最大吞吐率完成快照还原操作，所以，快照导入集群不应也不需要限速，推荐使用 32 节点的 r5.2xlarge 集群以最短时间完成导入作业。</p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>HBase 例行灾备方案：快照备份与还原演练</p><p><a href="https://laurence.enlightgram.com/hbase/hbase-snapshot-disaster-recovery/">https://laurence.enlightgram.com/hbase/hbase-snapshot-disaster-recovery/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2023-12-27</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/HBase/">HBase</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%A4%87%E4%BB%BD/">备份</a><a class="link-muted mr-2" rel="tag" href="/tags/%E7%81%BE%E5%A4%87/">灾备</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%BF%AB%E7%85%A7/">快照</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/linux/async-profiler/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">使用 async-profiler 分析 CPU 和内存使用情况</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/hbase/ycsb-table-pre-split/"><span class="level-item">YCSB 测试表预分区</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">678</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">25</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-方案-架构"><span class="level-left"><span class="level-item">1. 方案 架构</span></span></a></li><li><a class="level is-mobile" href="#2-环境说明"><span class="level-left"><span class="level-item">2. 环境说明</span></span></a></li><li><a class="level is-mobile" href="#3-前置条件"><span class="level-left"><span class="level-item">3. 前置条件</span></span></a></li><li><a class="level is-mobile" href="#4-全局变量"><span class="level-left"><span class="level-item">4. 全局变量</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#5-2-AWS-控制台-创建快照导出专用集群"><span class="level-left"><span class="level-item">5.2. [ AWS 控制台 ] :: 创建快照导出专用集群</span></span></a></li><li><a class="level is-mobile" href="#5-3-快照导出专用集群-导出快照"><span class="level-left"><span class="level-item">5.3. [ 快照导出专用集群 ] :: 导出快照</span></span></a></li><li><a class="level is-mobile" href="#5-4-生产集群-删除快照"><span class="level-left"><span class="level-item">5.4. [ 生产集群 ] :: 删除快照</span></span></a></li><li><a class="level is-mobile" href="#5-5-AWS-控制台-终止快照导出专用集群"><span class="level-left"><span class="level-item">5.5. [ AWS 控制台 ] :: 终止快照导出专用集群</span></span></a></li><li><a class="level is-mobile" href="#6-2-AWS-控制台-创建快照导入专用集群"><span class="level-left"><span class="level-item">6.2. [ AWS 控制台 ] :: 创建快照导入专用集群</span></span></a></li><li><a class="level is-mobile" href="#6-5-还原集群-删除快照"><span class="level-left"><span class="level-item">6.5. [ 还原集群 ] :: 删除快照</span></span></a></li><li><a class="level is-mobile" href="#6-6-AWS-控制台-终止快照导入专用集群"><span class="level-left"><span class="level-item">6.6. [ AWS 控制台 ] :: 终止快照导入专用集群</span></span></a></li></ul></li><li><a class="level is-mobile" href="#7-注意事项"><span class="level-left"><span class="level-item">7. 注意事项</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#7-1-快照备份的带宽控制"><span class="level-left"><span class="level-item">7.1. 快照备份的带宽控制</span></span></a></li><li><a class="level is-mobile" href="#7-2-快照还原的带宽控制"><span class="level-left"><span class="level-item">7.2. 快照还原的带宽控制</span></span></a></li></ul></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>
