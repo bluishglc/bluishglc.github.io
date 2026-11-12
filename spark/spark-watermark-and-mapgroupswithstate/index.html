@@ -42,56 +42,61 @@
       window.addEventListener('hashchange', switchTab, false);
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
-</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Spark基于事件时间的“状态”流的深层分析 - withWatermark与mapGroupsWithState的关系</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Spark/">Spark</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2018-06-27T16:48:27.000Z" title="2018-06-27 09:48:27">2018-06-27</time></span><span class="level-item is-hidden-mobile">阅读用时：12 分钟 (约 1839 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>不管是基于watermark的窗口计算还是自维护的状态流，它们都是有状态的，watermark只是规定了数据进入“状态”（有资格参与状态计算）的条件，并没有（也不适合）声明状态的“退出”机制。对于watermark的窗口计算来说，它们的“退出”机制是：如果最近某个还处于active状态的窗口它的EndTime比当前批次中最新的一个事件时间减去watermark规定的阈值还要“早”，说明这个窗口所有的数据都就绪了，不会再被更新了，就可以把正式“decommission”了。由于这个逻辑对于watermark的窗口计算来说是通行的， 所以被Spark封装在窗口计算中，对开发人员是透明的，但是对于自维护的状态来说“退出”机制是要根据实际情况进行处理的，因此必须要由开发员人员通过编码来实现，这其中除了 业务逻辑 上决定的“主动”退出（例如接收到了某类session关闭的消息）之外，还需要有一种“保底”的推出机制：状态超时，对于某些有状态的流，可能并没有对应的关闭消息，可以约定在多长时间内没有收到消息就认定状态终结了，那这时就是基于时间阈值的判断，那就又会涉及到是基于事件时间还是处理时间，显然，Spark是同时支持两种模式的，只是有一点会让新人疑惑的是：在基于事件时间的有状态的流计算上，在API层面“似乎”没有给开发人员一个声明“哪个字段是事件时间”的地方，转而是这样约定的： <strong>如果开发人员需要开发基于事件时间的有状态的流计算，则必须使用watermark机制，对应到代码层面就是，当你使用 <code>mapGroupsWithState(GroupStateTimeout.EventTimeTimeout())(yourGroupStateUpdateFunc)</code> 时，前面一定要先声明 <code>withWatermark(&quot;yourEnenTimeColumnName&quot;, yourWatermarkDuration)</code></strong> </p>
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Spark基于事件时间的“状态”流的深层分析 - withWatermark与mapGroupsWithState的关系</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Spark/">Spark</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2018-06-27T16:48:27.000Z" title="2018-06-27 09:48:27">2018-06-27</time></span><span class="level-item is-hidden-mobile">阅读用时：12 分钟 (约 1839 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>不管是基于watermark的窗口计算还是自维护的状态流，它们都是有状态的，watermark只是规定了数据进入“状态”（有资格参与状态计算）的条件，并没有（也不适合）声明状态的“退出”机制。对于watermark的窗口计算来说，它们的“退出”机制是：如果最近某个还处于active状态的窗口它的EndTime比当前批次中最新的一个事件时间减去watermark规定的阈值还要“早”，说明这个窗口所有的数据都就绪了，不会再被更新了，就可以把正式“decommission”了。由于这个逻辑对于watermark的窗口计算来说是通行的， 所以被Spark封装在窗口计算中，对开发人员是透明的，但是对于自维护的状态来说“退出”机制是要根据实际情况进行处理的，因此必须要由开发员人员通过编码来实现，这其中除了 业务逻辑 上决定的“主动”退出（例如接收到了某类session关闭的消息）之外，还需要有一种“保底”的推出机制：状态超时，对于某些有状态的流，可能并没有对应的关闭消息，可以约定在多长时间内没有收到消息就认定状态终结了，那这时就是基于时间阈值的判断，那就又会涉及到是基于事件时间还是处理时间，显然，Spark是同时支持两种模式的，只是有一点会让新人疑惑的是：在基于事件时间的有状态的流计算上，在API层面“似乎”没有给开发人员一个声明“哪个字段是事件时间”的地方，转而是这样约定的： <strong>如果开发人员需要开发基于事件时间的有状态的流计算，则必须使用watermark机制，对应到代码层面就是，当你使用 <code>mapGroupsWithState(GroupStateTimeout.EventTimeTimeout())(yourGroupStateUpdateFunc)</code> 时，前面一定要先声明 <code>withWatermark(&quot;yourEnenTimeColumnName&quot;, yourWatermarkDuration)</code></strong></p>
 <figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">sparkSession</span><br><span class="line">    ...</span><br><span class="line">    .withWatermark(<span class="string">&quot;yourEnenTimeColumnName&quot;</span>, yourWatermarkDuration)</span><br><span class="line">    ...</span><br><span class="line">    .groupByKey(...)</span><br><span class="line">  	.mapGroupsWithState(<span class="type">GroupStateTimeout</span>.<span class="type">EventTimeTimeout</span>())(yourGroupStateUpdateFunc)</span><br><span class="line">    ...</span><br></pre></td></tr></table></figure>
-
 <p>我们怎么解读这两者之间的关系呢？首先：我们应该清晰地认识到：这里涉及到的是两个“时间”点和三种“度量”标准的问题，两个“时间”点指的是：数据“进入”状态参与计算的“时效条件”与状态退出的“时效条件”，三种”度量“标准是指以事件时间为准还是以处理时间为准还是不指定时间维度上度量阈值，以下是对它们之间逻辑上的关联关系的总结：</p>
 <table>
 <thead>
 <tr>
-<th align="center"></th>
-<th align="center">基于事件时间</th>
-<th align="center">基于处理时间</th>
-<th align="center">不指定</th>
+<th style="text-align:center"></th>
+<th style="text-align:center">基于事件时间</th>
+<th style="text-align:center">基于处理时间</th>
+<th style="text-align:center">不指定</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="center">由Spark维护的有状态计算（如window计算），决定 <strong>数据是否能进入状态</strong> 的“时效条件”</td>
-<td align="center">withWatermark(…)</td>
-<td align="center">N&#x2F;A，不适用，因为当事件没有进入状态前，是没有”处理时间”这个值的，也就不存在这种case</td>
-<td align="center">如果不指定，即没有声明withWatermark,直接进行窗口计算，此时的含义将变为“不设条件”，所有事件“无条件”进入窗口进行计算。</td>
+<tbody>
+<tr>
+<td style="text-align:center">由Spark维护的有状态计算（如window计算），决定 <strong>数据是否能进入状态</strong> 的“时效条件”</td>
+<td style="text-align:center">withWatermark(…)</td>
+<td style="text-align:center">N/A，不适用，因为当事件没有进入状态前，是没有&quot;处理时间&quot;这个值的，也就不存在这种case</td>
+<td style="text-align:center">如果不指定，即没有声明withWatermark,直接进行窗口计算，此时的含义将变为“不设条件”，所有事件“无条件”进入窗口进行计算。</td>
 </tr>
 <tr>
-<td align="center">由Spark维护的有状态计算（如window计算），决定 <strong>状态是否退出</strong> 的“时效条件”</td>
-<td align="center">首先前提是必须声明了withWatermark(…)，这是确保基于事件时间的前提。如果该窗口的EndTime比当前批次中最新的一个事件时间减去watermark规定的阈值还要“早”，则自动退出，相关中间状态和退出动作由Spark封装，不需要显式的编码工作</td>
-<td align="center">N&#x2F;A，不适用，对于状态的退出，虽然可以参照处理时间，但是Spark并没有提供这方面的支持，显然，Spark认为基于事件时间是更有实际意义的</td>
-<td align="center">如果不指定，即没有申明withWatermark,则所有的窗口对应的状态永不“退出”，不管过去多长时间都可以被更新（实际编码时是不可取的）</td>
+<td style="text-align:center">由Spark维护的有状态计算（如window计算），决定 <strong>状态是否退出</strong> 的“时效条件”</td>
+<td style="text-align:center">首先前提是必须声明了withWatermark(…)，这是确保基于事件时间的前提。如果该窗口的EndTime比当前批次中最新的一个事件时间减去watermark规定的阈值还要“早”，则自动退出，相关中间状态和退出动作由Spark封装，不需要显式的编码工作</td>
+<td style="text-align:center">N/A，不适用，对于状态的退出，虽然可以参照处理时间，但是Spark并没有提供这方面的支持，显然，Spark认为基于事件时间是更有实际意义的</td>
+<td style="text-align:center">如果不指定，即没有申明withWatermark,则所有的窗口对应的状态永不“退出”，不管过去多长时间都可以被更新（实际编码时是不可取的）</td>
 </tr>
 <tr>
-<td align="center">自维护的状态，决定 <strong>数据是否能进入状态</strong> 的“时效条件”</td>
-<td align="center">withWatermark(…)</td>
-<td align="center">N&#x2F;A，不适用，因为当事件没有进入状态前，是没有”处理时间”这个值的，也就不存在这种case</td>
-<td align="center">如果不指定，即没有声明withWatermark,直接进行窗口计算，此时的含义将变为“不设条件”，所有事件“无条件”进入窗口进行计算。</td>
+<td style="text-align:center">自维护的状态，决定 <strong>数据是否能进入状态</strong> 的“时效条件”</td>
+<td style="text-align:center">withWatermark(…)</td>
+<td style="text-align:center">N/A，不适用，因为当事件没有进入状态前，是没有&quot;处理时间&quot;这个值的，也就不存在这种case</td>
+<td style="text-align:center">如果不指定，即没有声明withWatermark,直接进行窗口计算，此时的含义将变为“不设条件”，所有事件“无条件”进入窗口进行计算。</td>
 </tr>
 <tr>
-<td align="center">自维护的状态，决定 <strong>状态是否退出</strong> 的“时效条件”</td>
-<td align="center">首先前提是必须声明了withWatermark(…)，这是确保基于事件时间的前提。然后使用mapGroupsWithState (GroupStateTimeout.EventTimeTimeout())(…)，显式地表明状态的超时将以事件时间为准，超时阈值在每个GroupState中使用setTimeoutTimestamp单独设定！</td>
-<td align="center">不声明withWatermark，表示不使用事件时间框架，然后使用 mapGroupsWithState (GroupStateTimeout.ProcessingTimeTimeout())(…)，显式地表明状态的超时将以处理时间为准，超时阈值在每个GroupState中使用setTimeoutDuration单独设定！</td>
-<td align="center">即不设置不在GroupState中设置任何超时，这时状态永远不会退出！（不推荐）</td>
+<td style="text-align:center">自维护的状态，决定 <strong>状态是否退出</strong> 的“时效条件”</td>
+<td style="text-align:center">首先前提是必须声明了withWatermark(…)，这是确保基于事件时间的前提。然后使用mapGroupsWithState (GroupStateTimeout.EventTimeTimeout())(…)，显式地表明状态的超时将以事件时间为准，超时阈值在每个GroupState中使用setTimeoutTimestamp单独设定！</td>
+<td style="text-align:center">不声明withWatermark，表示不使用事件时间框架，然后使用 mapGroupsWithState (GroupStateTimeout.ProcessingTimeTimeout())(…)，显式地表明状态的超时将以处理时间为准，超时阈值在每个GroupState中使用setTimeoutDuration单独设定！</td>
+<td style="text-align:center">即不设置不在GroupState中设置任何超时，这时状态永远不会退出！（不推荐）</td>
 </tr>
-</tbody></table>
+</tbody>
+</table>
 <p>从是否使用withWatermark的角度总结是：</p>
 <ol>
-<li><p>一旦使用withWatermark(…), 就意味着：在决定 <strong>数据是否能进入状态</strong> 时，完全基于withWatermark指定的事件时间去计算，而在决定 <strong>状态是否退出</strong> 时，对于基于窗口的由Spark来维护的状态计算，会基于withWatermark指定的阈值基于事件时间进行判断，对于自维护的状态，可以基于事件时间，也可以基于处理时间。</p>
+<li>
+<p>一旦使用withWatermark(…), 就意味着：在决定 <strong>数据是否能进入状态</strong> 时，完全基于withWatermark指定的事件时间去计算，而在决定 <strong>状态是否退出</strong> 时，对于基于窗口的由Spark来维护的状态计算，会基于withWatermark指定的阈值基于事件时间进行判断，对于自维护的状态，可以基于事件时间，也可以基于处理时间。</p>
 </li>
-<li><p>但是如果没有使用withWatermark(…)，就意味着：在决定 <strong>数据是否能进入状态</strong> 时，是无条件的，所有数据都会进入状态，而在决定 <strong>状态是否退出</strong> 时，对于基于窗口的由Spark维护的状态计算，状态永不退出，对于自维护的状态，可以永不退出，如果基于时间进行退出，只能基于“处理时间”，因为没有使用withWatermark(…)就意味着没有开启时间时间框架，数据进入状态与状态退出都不能依赖事件时间。</p>
+<li>
+<p>但是如果没有使用withWatermark(…)，就意味着：在决定 <strong>数据是否能进入状态</strong> 时，是无条件的，所有数据都会进入状态，而在决定 <strong>状态是否退出</strong> 时，对于基于窗口的由Spark维护的状态计算，状态永不退出，对于自维护的状态，可以永不退出，如果基于时间进行退出，只能基于“处理时间”，因为没有使用withWatermark(…)就意味着没有开启时间时间框架，数据进入状态与状态退出都不能依赖事件时间。</p>
 </li>
 </ol>
 <p>从“状态”是由Spark维护还是自维护的角度总结是：</p>
 <ol>
-<li><p>如果“状态”是由Spark维护的基于窗口的流，如果使用withWatermark(…)，则数据进入状态与状态退出都是基于事件时间的。如果没有使用withWatermark(…)，不存在基于哪种时间决定数据进入状态与状态退出，而是无条件进入与永不退出！</p>
+<li>
+<p>如果“状态”是由Spark维护的基于窗口的流，如果使用withWatermark(…)，则数据进入状态与状态退出都是基于事件时间的。如果没有使用withWatermark(…)，不存在基于哪种时间决定数据进入状态与状态退出，而是无条件进入与永不退出！</p>
 </li>
-<li><p>如果是“状态”自维护的计算，如果使用withWatermark(…)，则数据是否进入状态是基于事件时间判断的，状态退出可以基于事件时间或处理时间判断，取决于设置的是GroupStateTimeout.EventTimeTimeout还是GroupStateTimeout.ProcessTimeTimeout</p>
+<li>
+<p>如果是“状态”自维护的计算，如果使用withWatermark(…)，则数据是否进入状态是基于事件时间判断的，状态退出可以基于事件时间或处理时间判断，取决于设置的是GroupStateTimeout.EventTimeTimeout还是GroupStateTimeout.ProcessTimeTimeout</p>
 </li>
 </ol>
 <p>以上总结比较晦涩难懂，究其原因，我认为是Spark Structured Streaming 的API没有在一开始很好的规划这些事情，而是在早期没有考虑完善的版本上逐渐累加新API导致的，这可以从Spark的版本历史中看出来，相信Spark以后会梳理出一些更加完备而直白的API。</p>

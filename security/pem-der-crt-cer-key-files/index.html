@@ -44,59 +44,65 @@
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">关于PEM, DER, CRT, CER，KEY等各类证书与密钥文件后缀的解释</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Security/">Security</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2022-03-18T15:52:47.000Z" title="2022-03-18 08:52:47">2022-03-18</time></span><span class="level-item is-hidden-mobile">阅读用时：7 分钟 (约 1007 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>总得来说这些文件都与X.509证书和密钥文件有关，从文件编码上分，只有两大 类 ：</p>
 <ul>
-<li><p>PEM格式：使用Base64 ASCII进行编码的纯文本格式</p>
+<li>
+<p>PEM格式：使用Base64 ASCII进行编码的纯文本格式</p>
 </li>
-<li><p>DER格式：二机制格式</p>
+<li>
+<p>DER格式：二机制格式</p>
 </li>
 </ul>
 <p>而CRT, CER，KEY这几种证书和密钥文件，它们都有自己的schema，在存储为物理文件时，既可以是PEM格式，也可以DER格式。</p>
 <ul>
-<li><p>CER：一般用于windows的证书文件格式</p>
+<li>
+<p>CER：一般用于windows的证书文件格式</p>
 </li>
-<li><p>CRT：一般用于Linux的证书，包含公钥和主体信息</p>
+<li>
+<p>CRT：一般用于Linux的证书，包含公钥和主体信息</p>
 </li>
-<li><p>KEY：一般用于密钥，特别是私钥</p>
+<li>
+<p>KEY：一般用于密钥，特别是私钥</p>
 </li>
 </ul>
 <p>打个比方：CER，CRT，KEY相当于论文，说明书等，有规定好的行文格式与规范，而PEM和DER相当于txt格式还是word格式。</p>
-<h3 id="1-PEM文件"><a href="#1-PEM文件" class="headerlink" title="1. PEM文件"></a>1. PEM文件</h3><p>为了更好的理解这些文件格式，我们找一个真实的证书文件看一下。使用 <code>openssl s_client</code> 能我们从一个启用了https协议的网站获取到它的证书文件，我们以百度为例，命令如下：</p>
+<h3 id="1-PEM文件">1. PEM文件</h3>
+<p>为了更好的理解这些文件格式，我们找一个真实的证书文件看一下。使用 <code>openssl s_client</code> 能我们从一个启用了https协议的网站获取到它的证书文件，我们以百度为例，命令如下：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">openssl s_client -connect baidu.com:443 &lt; /dev/null | sed -ne <span class="string">&#x27;/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p&#x27;</span> &gt; baidu.crt</span><br></pre></td></tr></table></figure>
-
 <p>命令执行后生成了这个baidu.crt文件，就是一个标准的证书。如果我们使用文本编辑器打开这个证书，只会看到一串冗长的像是随机生成的字符串：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">-----BEGIN CERTIFICATE-----</span><br><span class="line">MIIHTDCCBjSgAwIBAgIQCLPO7uNabgv8Poil6e7qETANBgkqhkiG9w0BAQsFADBQ</span><br><span class="line">MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMSowKAYDVQQDEyFE</span><br><span class="line">....</span><br><span class="line">....</span><br><span class="line">....</span><br><span class="line">k8UOBRNo0AtT4y07sC95ShVkInHFlcKWS0I2zH5gibu2Xbq+jM7Xt6ej23atGtcZ</span><br><span class="line">-----END CERTIFICATE-----</span><br></pre></td></tr></table></figure>
-
 <p>原因是这个crt文件的实际格式其实是pem，如前所述，pem文件是使用 Base64 ASCII编码后的纯文本文件。不管是证书还是密钥，只要是pem格式，使用文本编辑器打开都是类似的样子，一串冗长的字符串。</p>
 <p>想到看到证书的真实内容，应该使用 <code>openssl x509</code> 命令：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">openssl x509 -<span class="keyword">in</span> baidu.crt -text -noout </span><br></pre></td></tr></table></figure>
-
 <p>这个命令能读出baidu.crt这个证书文件所有内容：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">Certificate:</span><br><span class="line">    Data:</span><br><span class="line">        Version: 3 (0x2)</span><br><span class="line">        Serial Number:</span><br><span class="line">            08:b3:ce:ee:e3:5a:6e:0b:fc:3e:88:a5:e9:ee:ea:11</span><br><span class="line">    Signature Algorithm: sha256WithRSAEncryption</span><br><span class="line">        Issuer: C=US, O=DigiCert Inc, CN=DigiCert Secure Site Pro CN CA G3</span><br><span class="line">        Validity</span><br><span class="line">            Not Before: Feb 11 00:00:00 2022 GMT</span><br><span class="line">            Not After : Feb 25 23:59:59 2023 GMT</span><br><span class="line">        Subject: C=CN, ST=Beijing, O=BeiJing Baidu Netcom Science Technology Co., Ltd, CN=www.baidu.cn</span><br><span class="line">        Subject Public Key Info:</span><br><span class="line">...</span><br><span class="line">...</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
-
-<p>也就是说： <strong><code>openssl x509</code> 命令才是打开证书的正确方式！</strong> </p>
-<h3 id="2-DER文件"><a href="#2-DER文件" class="headerlink" title="2. DER文件"></a>2. DER文件</h3><p>既然DER是二进制文件，那么和所有二进制文件一样，如果使用文本编辑器打开的话，看到的都是无法阅读的乱码，此时，我们可以再次祭出 <code>openssl x509</code> 命令来查看其实际内容：</p>
+<p>也就是说： <strong><code>openssl x509</code> 命令才是打开证书的正确方式！</strong></p>
+<h3 id="2-DER文件">2. DER文件</h3>
+<p>既然DER是二进制文件，那么和所有二进制文件一样，如果使用文本编辑器打开的话，看到的都是无法阅读的乱码，此时，我们可以再次祭出 <code>openssl x509</code> 命令来查看其实际内容：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">openssl x509 -inform der -<span class="keyword">in</span> baidu.der -text -noout</span><br></pre></td></tr></table></figure>
-
 <p>这里baidu.der文件是从baidu.crt文件转化过来的，我们下面就介绍两种文件的转换。</p>
-<h3 id="PEM与DER的相互转换"><a href="#PEM与DER的相互转换" class="headerlink" title="PEM与DER的相互转换"></a>PEM与DER的相互转换</h3><p>既然PEM与DER只是编码格式上的不同，那么不管是证书还是密钥，都可以随意转换为想要的格式：</p>
+<h3 id="PEM与DER的相互转换">PEM与DER的相互转换</h3>
+<p>既然PEM与DER只是编码格式上的不同，那么不管是证书还是密钥，都可以随意转换为想要的格式：</p>
 <ul>
 <li>PEM转DER：</li>
 </ul>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">openssl x509 -outform der -<span class="keyword">in</span> baidu.pem -out baidu.der</span><br></pre></td></tr></table></figure>
-
 <ul>
 <li>DER专PEM</li>
 </ul>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">openssl x509 -inform der -<span class="keyword">in</span> baidu.der -out baidu.crt</span><br></pre></td></tr></table></figure>
-
-<h3 id="3-各种密钥证书文件解释"><a href="#3-各种密钥证书文件解释" class="headerlink" title="3. 各种密钥证书文件解释"></a>3. 各种密钥证书文件解释</h3><h4 id="3-1-csr"><a href="#3-1-csr" class="headerlink" title="3.1 [ .csr ]"></a>3.1 [ .csr ]</h4><p>Certificate Signing Request，即证书签名请求文件。证书申请者在生成私钥的同时也生成证书请求文件。把CSR文件提交给证书颁发机构后，证书颁发机构使用其根证书私钥签名就生成了证书公钥文件，也就是颁发给用户的证书。</p>
-<h4 id="3-2-key"><a href="#3-2-key" class="headerlink" title="3.2 [ .key ]"></a>3.2 [ .key ]</h4><p>私钥，与证书一一配对</p>
-<h4 id="3-3-crt-cert-cer"><a href="#3-3-crt-cert-cer" class="headerlink" title="3.3 [ .crt ] [ .cert ] [ .cer ]"></a>3.3 [ .crt ] [ .cert ] [ .cer ]</h4><p>可以是二进制格式(der)，可以是文本格式(pem)。只包含证书，不保存私钥。一般 Linux 使用.crt后缀，.cer是windows后缀。</p>
+<h3 id="3-各种密钥证书文件解释">3. 各种密钥证书文件解释</h3>
+<h4 id="3-1-csr">3.1 [ .csr ]</h4>
+<p>Certificate Signing Request，即证书签名请求文件。证书申请者在生成私钥的同时也生成证书请求文件。把CSR文件提交给证书颁发机构后，证书颁发机构使用其根证书私钥签名就生成了证书公钥文件，也就是颁发给用户的证书。</p>
+<h4 id="3-2-key">3.2 [ .key ]</h4>
+<p>私钥，与证书一一配对</p>
+<h4 id="3-3-crt-cert-cer">3.3 [ .crt ] [ .cert ] [ .cer ]</h4>
+<p>可以是二进制格式(der)，可以是文本格式(pem)。只包含证书，不保存私钥。一般 Linux 使用.crt后缀，.cer是windows后缀。</p>
 <p>此外，可以将多级证书导入同一个证书文件中，形成一个包含完整证书链的证书</p>
-<h4 id="3-4-pkcs12-p12-pfx"><a href="#3-4-pkcs12-p12-pfx" class="headerlink" title="3.4 [ .pkcs12 ] [ .p12 ] [ .pfx ]"></a>3.4 [ .pkcs12 ] [ .p12 ] [ .pfx ]</h4><p>二进制格式，同时包含证书和私钥（通过.crt或者.cer与私钥.key合成），一般有密码保护。</p>
+<h4 id="3-4-pkcs12-p12-pfx">3.4 [ .pkcs12 ] [ .p12 ] [ .pfx ]</h4>
+<p>二进制格式，同时包含证书和私钥（通过.crt或者.cer与私钥.key合成），一般有密码保护。</p>
 <p>查看p12证书信息:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">openssl pkcs12 -info -nocerts -<span class="keyword">in</span> keystore.p12</span><br></pre></td></tr></table></figure>
-
-<h4 id="3-5-jks"><a href="#3-5-jks" class="headerlink" title="3.5 [ .jks ]"></a>3.5 [ .jks ]</h4><p>Java 密钥库. 同时包含证书和私钥，一般有密码保护。可以由p12转换而来。</p>
+<h4 id="3-5-jks">3.5 [ .jks ]</h4>
+<p>Java 密钥库. 同时包含证书和私钥，一般有密码保护。可以由p12转换而来。</p>
 <p>查看jks证书信息：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">keytool -v -list -keystore keystore_file</span><br></pre></td></tr></table></figure>
 </div><div class="article-licensing box"><div class="licensing-title"><p>关于PEM, DER, CRT, CER，KEY等各类证书与密钥文件后缀的解释</p><p><a href="https://laurence.enlightgram.com/security/pem-der-crt-cer-key-files/">https://laurence.enlightgram.com/security/pem-der-crt-cer-key-files/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2022-03-18</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Security/">Security</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/security/openssl-certificates/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">使用OpenSSL生成/签发证书的原理、流程与示例</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/security/ssl-tls-explained/"><span class="level-item">SSL/TLS工作原理的朴素理解和演绎</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {

@@ -43,44 +43,54 @@
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">vsftpd中关于ftpusers和user_list两个文件的说明以及vsftpd.conf中的userlist_enable和userlist_deny两个配置项的解释</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Linux/">Linux</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2014-12-31T17:09:30.000Z" title="2014-12-31 09:09:30">2014-12-31</time></span><span class="level-item is-hidden-mobile">阅读用时：5 分钟 (约 747 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>本文原文出处: <a href="/linux/vsftpd-ftpusers-and-user-list/">https://laurence.enlightgram.com/linux/vsftpd-ftpusers-and-user-list/</a> 严禁任何形式的转载，否则将委托CSDN官方维护权益！</p>
-<p><strong>问题一：ftpusers和user_list两个文件各自的用途是什么？有何关系？</strong> </p>
-<p>首先请明确一点： <strong>ftpusers不受任何配制项的影响，它总是有效</strong> ，它是一个黑名单！<br>该文件存放的是一个禁止访问FTP的用户列表，通常为了安全考虑，管理员不希望一些拥有过大权限的帐号（比如root)登入FTP，以免通过该帐号从FTP上传或下载一些危险位置上的文件从而对系统造成损坏。</p>
+<p><strong>问题一：ftpusers和user_list两个文件各自的用途是什么？有何关系？</strong></p>
+<p>首先请明确一点： <strong>ftpusers不受任何配制项的影响，它总是有效</strong> ，它是一个黑名单！<br>
+该文件存放的是一个禁止访问FTP的用户列表，通常为了安全考虑，管理员不希望一些拥有过大权限的帐号（比如root)登入FTP，以免通过该帐号从FTP上传或下载一些危险位置上的文件从而对系统造成损坏。</p>
 <p>而user_list则是和vsftpd.conf中的userlist_enable和userlist_deny两个配置项紧密相关的，它可以有效，也可以无效，有效时它可以是一个黑名单，也可以是一个白名单！那么是什么的设置决定了它的作用呢？这就是问题二要解释的。</p>
 <p>所以简单总结就是：ftpusers和user_list没有任何关系，ftpusers文件总是生效，user_list则取决于userlist_enable和userlist_deny两项配置。</p>
-<p><strong>问题二：vsftpd.conf中的userlist_enable和userlist_deny两个配置项各自起什么作用，两者如何搭配使用?</strong> </p>
+<p><strong>问题二：vsftpd.conf中的userlist_enable和userlist_deny两个配置项各自起什么作用，两者如何搭配使用?</strong></p>
 <p>为了说明这个问题，我们来建立两个测试用户：</p>
 <blockquote>
-<p>tom: 在user_list中<br>jim:不在user_list中</p>
+<p>tom: 在user_list中<br>
+jim:不在user_list中</p>
 </blockquote>
 <p>然后我们分别给两个配置项取不同的值，分4种Case进行测试：</p>
-<p>Case 1: userlist_enable&#x3D;YES, userlist_deny&#x3D;YES</p>
+<p>Case 1: userlist_enable=YES, userlist_deny=YES</p>
 <blockquote>
-<p>tom: 拒绝登入<br>jim: 允许登录</p>
+<p>tom: 拒绝登入<br>
+jim: 允许登录</p>
 </blockquote>
-<p>Case 2: userlist_enable&#x3D;YES, userlist_deny&#x3D;NO</p>
+<p>Case 2: userlist_enable=YES, userlist_deny=NO</p>
 <blockquote>
-<p>tom: 允许登录<br>jim:拒绝登录（如user_list文件开头的注释所述，甚至不会提示输入密码，即无登入提示框，直接拒绝连接）</p>
+<p>tom: 允许登录<br>
+jim:拒绝登录（如user_list文件开头的注释所述，甚至不会提示输入密码，即无登入提示框，直接拒绝连接）</p>
 </blockquote>
-<p>Case 3: userlist_enable&#x3D;NO,userlist_deny&#x3D;NO</p>
+<p>Case 3: userlist_enable=NO,userlist_deny=NO</p>
 <blockquote>
-<p>tom: 允许登录<br>jim: 允许登录</p>
+<p>tom: 允许登录<br>
+jim: 允许登录</p>
 </blockquote>
-<p>Case 4: userlist_enable&#x3D;NO,userlist_deny&#x3D;YES</p>
+<p>Case 4: userlist_enable=NO,userlist_deny=YES</p>
 <blockquote>
-<p>tom: 允许登录<br>jim: 允许登录</p>
+<p>tom: 允许登录<br>
+jim: 允许登录</p>
 </blockquote>
 <p>综上实验得出以下结论：</p>
 <ol>
-<li><p>userlist_enable和userlist_deny两个选项联合起来针对的是：本地全体用户（除去ftpusers中的用户）和出现在user_list文件中的用户以及不在在user_list文件中的用户这三类用户集合进行的设置。</p>
+<li>
+<p>userlist_enable和userlist_deny两个选项联合起来针对的是：本地全体用户（除去ftpusers中的用户）和出现在user_list文件中的用户以及不在在user_list文件中的用户这三类用户集合进行的设置。</p>
 </li>
-<li><p>当且仅当userlist_enable&#x3D;YES时：userlist_deny项的配置才有效，user_list文件才会被使用；当其为NO时，无论userlist_deny项为何值都是无效的，本地全体用户（除去ftpusers中的用户）都可以登入FTP</p>
+<li>
+<p>当且仅当userlist_enable=YES时：userlist_deny项的配置才有效，user_list文件才会被使用；当其为NO时，无论userlist_deny项为何值都是无效的，本地全体用户（除去ftpusers中的用户）都可以登入FTP</p>
 </li>
-<li><p>当userlist_enable&#x3D;YES时，userlist_deny&#x3D;YES时：user_list是一个 <strong>黑名单</strong> ，即：所有出现在名单中的用户都会被拒绝登入；</p>
+<li>
+<p>当userlist_enable=YES时，userlist_deny=YES时：user_list是一个 <strong>黑名单</strong> ，即：所有出现在名单中的用户都会被拒绝登入；</p>
 </li>
-<li><p>当userlist_enable&#x3D;YES时，userlist_deny&#x3D;NO时：user_list是一个 <strong>白名单</strong> ，即：只有出现在名单中的用户才会被准许登入(user_list之外的用户都被拒绝登入)；另外需要特别提醒的是： <strong>使用白名单后，匿名用户将无法登入！除非显式在user_list中加入一行：anonymous</strong></p>
+<li>
+<p>当userlist_enable=YES时，userlist_deny=NO时：user_list是一个 <strong>白名单</strong> ，即：只有出现在名单中的用户才会被准许登入(user_list之外的用户都被拒绝登入)；另外需要特别提醒的是： <strong>使用白名单后，匿名用户将无法登入！除非显式在user_list中加入一行：anonymous</strong></p>
 </li>
 </ol>
-</div><div class="article-licensing box"><div class="licensing-title"><p>vsftpd中关于ftpusers和user_list两个文件的说明以及vsftpd.conf中的userlist_enable和userlist_deny两个配置项的解释</p><p><a href="https://laurence.enlightgram.com/linux/vsftpd-ftpusers-and-user-list/">https://laurence.enlightgram.com/linux/vsftpd-ftpusers-and-user-list/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2014-12-31</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Linux/">Linux</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/linux/vsftpd-chroot/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">vsftpd 配置:chroot_local_user与chroot_list_enable详解</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/linux/linux-svn-server/"><span class="level-item">Linux搭建SVN服务器极简备忘</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+</div><div class="article-licensing box"><div class="licensing-title"><p>vsftpd中关于ftpusers和user_list两个文件的说明以及vsftpd.conf中的userlist_enable和userlist_deny两个配置项的解释</p><p><a href="https://laurence.enlightgram.com/linux/vsftpd-ftpusers-and-user-list/">https://laurence.enlightgram.com/linux/vsftpd-ftpusers-and-user-list/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2014-12-31</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Linux/">Linux</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/linux/vsftpd-500-oops-chroot/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">vsftpd：500 OOPS: vsftpd: refusing to run with writable root inside chroot ()错误的解决方法</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/linux/linux-svn-server/"><span class="level-item">Linux搭建SVN服务器极简备忘</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {
       return;

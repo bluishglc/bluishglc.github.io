@@ -43,52 +43,56 @@
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Kafka 的 Consumer Group 解读</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Kafka/">Kafka</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2024-01-17T01:16:59.000Z" title="2024-01-16 17:16:59">2024-01-16</time></span><span class="level-item is-hidden-mobile">阅读用时：7 分钟 (约 1097 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>作为一份笔记，本文再次梳理一下 Kafka 的 Consumer Group。我们知道，一个 Topic 往往会有多个 Partition，一条消息只会被写到一个 Kafka 的 Partition 中，那 Consumer 是怎么消费 Message 的呢？ Consumer Group 又从中起到了什么作用呢？</p>
-<h2 id="Consumer-Group-与-Consumer-到底有何不同？"><a href="#Consumer-Group-与-Consumer-到底有何不同？" class="headerlink" title="Consumer Group 与 Consumer 到底有何不同？"></a>Consumer Group 与 Consumer 到底有何不同？</h2><p>首先，我们必须要非常清楚地明确一点： <strong>Consumer Group 才是消费一个 Topic 的“独立单位”，什么意思呢？就是说：一个 Consumer Group 才是一个通常意义上和 Consumer Client，它下面的 Consumer 实例是作为一个整体消费且只消费一遍 Topic 里的消息，而不是每一个 Consumer 独立消费一遍</strong> 。当然，如果一个 Consumer Group 只有一个 Consumer，就没有区别了。</p>
+<h2 id="Consumer-Group-与-Consumer-到底有何不同？">Consumer Group 与 Consumer 到底有何不同？</h2>
+<p>首先，我们必须要非常清楚地明确一点： <strong>Consumer Group 才是消费一个 Topic 的“独立单位”，什么意思呢？就是说：一个 Consumer Group 才是一个通常意义上和 Consumer Client，它下面的 Consumer 实例是作为一个整体消费且只消费一遍 Topic 里的消息，而不是每一个 Consumer 独立消费一遍</strong> 。当然，如果一个 Consumer Group 只有一个 Consumer，就没有区别了。</p>
 <p>这样的话，一个 Consumer Group 下的多个 Consumer 是怎么分配消息的呢？一条消息投递到 Kafka 中究竟会被哪个 Consumer 读取？这中间的具体逻辑是什么呢？下图给出个非常清晰的解释：（摘抄自  Kafka The Definitive Guide, 2nd Edition ）：</p>
-<p> <img src="/../../images/kafka/kafka-consumer-group/1.png" alt="image-20240116150556174"></p>
-<p>下图同理：<br> <img src="/../../images/kafka/kafka-consumer-group/2.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/kafka/kafka-consumer-group/1.png" alt="image-20240116150556174"></p>
+<p>下图同理：<br>
+<img src="../../images/kafka/kafka-consumer-group/2.png" alt="在这里插入图片描述"></p>
 <p>上图中 Consumer Group 中有三个 Consumer 实例，Topic 中有四个分区，Kafka 的安排是：其中两个 Consumer 各自读取一个 Partition，剩下的一个 Consumer 读取其余两个 Partition。所以，你会看到：没有一个 Consumer 能读全所有的消息！大家更像是在分头消化各自的“责任田”。下图是以两个 Consumer Group 为例，再次描述了同样的逻辑：</p>
-<p><img src="/../../images/kafka/kafka-consumer-group/3.png" alt="kafka_consumer_group_scenario_4"></p>
+<p><img src="../../images/kafka/kafka-consumer-group/3.png" alt="kafka_consumer_group_scenario_4"></p>
 <p>下面的两张图依然是描述了这个事实：</p>
-<p> <img src="/../../images/kafka/kafka-consumer-group/4.png" alt="在这里插入图片描述"></p>
-<p> <img src="/../../images/kafka/kafka-consumer-group/5.jpeg" alt="6d9de5f98c922ba6e9cb6a9b592cc529"></p>
+<p><img src="../../images/kafka/kafka-consumer-group/4.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/kafka/kafka-consumer-group/5.jpeg" alt="6d9de5f98c922ba6e9cb6a9b592cc529"></p>
 <p>根据 Consumer Group 的工作特点，我们不难看出：</p>
 <ol>
-<li><p>一个 Partition 只会被一个 Consumer Group 中的一个 Consumer 实例消费 （不会有同 Group 的两个 Consumer 重复消费一条消息）</p>
+<li>
+<p>一个 Partition 只会被一个 Consumer Group 中的一个 Consumer 实例消费 （不会有同 Group 的两个 Consumer 重复消费一条消息）</p>
 </li>
-<li><p>一个 Consumer Group 的 一个 Consumer 实例可能会消费一个 Partition，也可能会消费两个或两个以上的 Partition，还有可能一个 Partition 都不消费，这取决于 Partition 和 Consumer 的数量！以下是我们说的三种可能情形的示意图：</p>
+<li>
+<p>一个 Consumer Group 的 一个 Consumer 实例可能会消费一个 Partition，也可能会消费两个或两个以上的 Partition，还有可能一个 Partition 都不消费，这取决于 Partition 和 Consumer 的数量！以下是我们说的三种可能情形的示意图：</p>
 </li>
 </ol>
 <ul>
 <li>Case 1：一个 Consumer Group 只有一个 Consumer，该 Consumer 能读取到全部消息</li>
 </ul>
-<p><img src="/../../images/kafka/kafka-consumer-group/6.png" alt="kafka_consumer_group_scenario_1"></p>
+<p><img src="../../images/kafka/kafka-consumer-group/6.png" alt="kafka_consumer_group_scenario_1"></p>
 <ul>
 <li>Case 2：一个 Consumer Group 有多个 Consumer，Consumer 均分 Partition，每个 Consumer 都读取一部分消息</li>
 </ul>
-<p><img src="/../../images/kafka/kafka-consumer-group/7.png" alt="kafka_consumer_group_scenario_2"></p>
+<p><img src="../../images/kafka/kafka-consumer-group/7.png" alt="kafka_consumer_group_scenario_2"></p>
 <ul>
 <li>Case 3：一个 Consumer Group 的 Consumer 数量超过了 Partition 的数量，部分 Consumer 因未分配到 Partition，一条消息也不会读到</li>
 </ul>
-<p><img src="/../../images/kafka/kafka-consumer-group/8.png" alt="kafka_consumer_group_scenario_3"></p>
-<h2 id="Kafka-为什么要设计-Consumer-Group-而不是直接以-Consumer-为单位读取-Message？"><a href="#Kafka-为什么要设计-Consumer-Group-而不是直接以-Consumer-为单位读取-Message？" class="headerlink" title="Kafka 为什么要设计 Consumer Group 而不是直接以 Consumer 为单位读取 Message？"></a>Kafka 为什么要设计 Consumer Group 而不是直接以 Consumer 为单位读取 Message？</h2><p>Kafka 设计  Consumer Group 的意图应该不难揣测，这样做显然是让 Topic 从只能由一个 Consumer 消费变成了：可以多个 Consumer 消费并行消费且还不用担心有重复数据，这样能提升消费端的整体吞吐能力。不过，要注意的是：Kafka 只能保证单个分区内的消息是按产生的先后顺序排列的，在多分区下，无法从整体上保证消息的有序性，所以，当一个 Consumer Group 下有多个 Consumer 一起读取消息时，是不能保证消息的时序性的！</p>
+<p><img src="../../images/kafka/kafka-consumer-group/8.png" alt="kafka_consumer_group_scenario_3"></p>
+<h2 id="Kafka-为什么要设计-Consumer-Group-而不是直接以-Consumer-为单位读取-Message？">Kafka 为什么要设计 Consumer Group 而不是直接以 Consumer 为单位读取 Message？</h2>
+<p>Kafka 设计  Consumer Group 的意图应该不难揣测，这样做显然是让 Topic 从只能由一个 Consumer 消费变成了：可以多个 Consumer 消费并行消费且还不用担心有重复数据，这样能提升消费端的整体吞吐能力。不过，要注意的是：Kafka 只能保证单个分区内的消息是按产生的先后顺序排列的，在多分区下，无法从整体上保证消息的有序性，所以，当一个 Consumer Group 下有多个 Consumer 一起读取消息时，是不能保证消息的时序性的！</p>
 <p>另外由于kafka目前只提供单个分区内的消息顺序，而不会维护全局消息顺序，因此如果用户要实现topic全局消息顺序，就只能通过让每个consumer group下只包含一个consumer实例的方式来间接实现的。</p>
-<h2 id="Consumer-Group-的相关操作"><a href="#Consumer-Group-的相关操作" class="headerlink" title="Consumer Group 的相关操作"></a>Consumer Group 的相关操作</h2><ol>
+<h2 id="Consumer-Group-的相关操作">Consumer Group 的相关操作</h2>
+<ol>
 <li>列出某个 Topics 下的所有 consumer group</li>
 </ol>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kafka-consumer-groups.sh --bootstrap-server <span class="variable">$KAFKA_BOOTSTRAP_SERVERS</span> --list</span><br></pre></td></tr></table></figure>
-
 <ol start="2">
 <li>查看某个 Consumer Group 的详细信息</li>
 </ol>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kafka-consumer-groups.sh --bootstrap-server <span class="variable">$KAFKA_BOOTSTRAP_SERVERS</span> --describe --group console-consumer-76923</span><br></pre></td></tr></table></figure>
-
 <ol start="3">
 <li>重置偏移量</li>
 </ol>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kafka-consumer-groups.sh --bootstrap-server <span class="variable">$KAFKA_BOOTSTRAP_SERVERS</span> --topic <span class="string">&#x27;osci.mysql-server-3.inventory.orders&#x27;</span> --group console-consumer-76923 --reset-offsets --to-earliest --execute</span><br></pre></td></tr></table></figure>
-
-<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>最后，我们再简单总结一下：</p>
+<h2 id="小结">小结</h2>
+<p>最后，我们再简单总结一下：</p>
 <p>Kafka中的每一个Consumer都归属于一个特定的Consumer Group，如果不指定，那么所有的Consumer都属于同一个默认的 Consumer Group。Consumer Group 由一个或多个Consumer组成，同一个Consumer Group中的Consumer对同一条消息只消费一次。每个 Consumer Group 都有一个唯一的ID，即Group ID，也称之为 Group Name。Consumer Group 内的所有 Consumer 协调在一起订阅一个Topic的所有Partition，且每个Partition只能由一个 Consumer Group中的一个Consumer进行消费。</p>
 <p>参考资料</p>
 <p><a target="_blank" rel="noopener" href="https://www.luozhiyun.com/archives/260">https://www.luozhiyun.com/archives/260</a></p>

@@ -49,7 +49,11 @@
 <p>引入DTO的好处在于：可以把领域对象封装在领域模型内部。本质上讲，视图层需要的仅仅是从领域层得来的数据，当然它自己也有逻辑，不过这些都是展示逻辑，与业务无关，所以说，我应该只传送数据就好。另外，如果使用领域对象做为数据载体在领域层和展现层之间进行传递，会有一些问题：如果领域对象的创建较为复杂，那么在Action里创建领域对象会变得很不方便，因为毕竟不是在领域模型里，简单例子是，如果我们需要的对象A是通过对象B的工厂方法创建的，那么这个在Action里写出来就会很怪异。另外，DTO并不是与领域对象一一对应的，它是粗粒度的，面向视图层的。这也是引入DTO的一个目的。</p>
 <p>2.在应用层关于service和data的设置意图。</p>
 <p>显然，在应用层，不存在面向对象那种数据和行为的封装，因此， service承担了“行为”，data承载的“数据”。在应用层内部，我们会创建领域对象，并把data的值populate到领域对象里，然后再通过领域对象的业务方法执行业务操作。这一模式是非常合理而有效的。</p>
-<p>3.关于DTOAssembler装配DTO的问题：<br>一般来说，从领域对象抽取数据装配DTO没有问题，因为领域对象包含全部<br>可能的数据，装配DTO时只是一个选取的过程。但是反过来可能会存在问题<br>。比如：保存一个Thread需要设置它所属的Forum。从页面传递过来的Threa<br>dDTO中除了Thread的基本信息外，还提供了一个ForumId.对于Assembler来说，如果想要组装一个Thread领域对象，需要通过ForumId加载出一个Forum实例来（注：在hibernate里，要通过session.load方法加载一个代理，这样才不会有效率问题），但这需要repository的协助。</p>
+<p>3.关于DTOAssembler装配DTO的问题：<br>
+一般来说，从领域对象抽取数据装配DTO没有问题，因为领域对象包含全部<br>
+可能的数据，装配DTO时只是一个选取的过程。但是反过来可能会存在问题<br>
+。比如：保存一个Thread需要设置它所属的Forum。从页面传递过来的Threa<br>
+dDTO中除了Thread的基本信息外，还提供了一个ForumId.对于Assembler来说，如果想要组装一个Thread领域对象，需要通过ForumId加载出一个Forum实例来（注：在hibernate里，要通过session.load方法加载一个代理，这样才不会有效率问题），但这需要repository的协助。</p>
 <p>4.关于是否需要引入ServiceFacade的思考</p>
 <p>目前工程已经引入了DTO。按照标准的j2ee模式，DTO总是配合ServiceFacade一起使用使用的(4月27日做出的修正：DTO并不只是配合ServiceFacade使用的，基本上我们需要引入DTO，那么ApplicationService也必将使用DTO。并不是说DTO只能出现在Facade的接口里。这一点在PoEAA和CoreJ2EEPatterns两本中的代码中都有所体现)。对于是否引入这一组件我的思考是：</p>
 <p>传统意义上来看，DTO是面向Client（或者说是展现层）的数据结构，ServiceFacade是面向Client的UserAction，或者说是面向UseCase的。DTO和ServiceFacade联合起来构成一个Client（或者说是展现层）和业务层（领域模型）之间的适配器。典型的情况是：如果一个UserAction需要多个Service共同工作才能写成时，ServiceFacade的作用就突显出来了。它本身并没有业务逻辑，但是它会将Action的请求委派给合适的Service进行处理。</p>
@@ -57,7 +61,7 @@
 <p>4月27日：通过对ServiceFacade和AppliationService的继续思考，我有一些新的认识：</p>
 <p>之前提到，当一个用户请求需要多个Service来共同处理时，Facade的作用就会凸显出来，这确实是引入Facade的决定性原因。我想这种情况是确实存在的。当这种情况出现时，在Client的Controller方法里就会出现这样一种现象：这个方法调用2个以上的Service来委派用户的请求。这就是一个信号，说明应该把这些Service封装到一个统一的facade里面了。或者反向推论:如果在某种规范的约束下，要求我们只能以一个Service的一个接口来处理这个请求时，你可能会想到，是否需要让这个Service依赖那些用到的Service呢？显然，Service之间是不能用依赖的。这也从反向说明，我们确实需要一个更高层的封装来把这些用到Service放到一起了。</p>
 <p>基本上ApplicationService是以实体特别是聚合根为单位组织的。我相信会有一些很heigh level的请求需要跨越多个实体或者聚合来实现的，这个时候我们就需要Facade的了。</p>
-<p>这就是上面我反复思考的Service和Facade之间的粒度标准问题。简单总结一下就是： <strong>ApplicationService是以实体特别是聚合根为单位组织的,它的接口是直接面向用例（用户请求者是UserAction）的.而Facade的粒度没有明确的上限（或许你可以为一个模块设计一个Facade），但其下限是很明确的，即针对那些跨越两个以上实体或聚合的用例而服务。它的接口同样是面向用例的。</strong> </p>
+<p>这就是上面我反复思考的Service和Facade之间的粒度标准问题。简单总结一下就是： <strong>ApplicationService是以实体特别是聚合根为单位组织的,它的接口是直接面向用例（用户请求者是UserAction）的.而Facade的粒度没有明确的上限（或许你可以为一个模块设计一个Facade），但其下限是很明确的，即针对那些跨越两个以上实体或聚合的用例而服务。它的接口同样是面向用例的。</strong></p>
 <p>不过有个问题需要注意：即UserAction或许可以成为一个力度标准，但是一个UserAction可是有大有小，有时候差距是很大的。这个要引起注意。</p>
 <p>PS：这些Service接口传入传出的数据还是DTO。</p>
 <p>2010-4-26:今天，通过查阅《PoEAA》，我对这个问题有了一些更为深入的认识。</p>
@@ -69,15 +73,15 @@
 <p>而在基于DomainModel的系统，Service只是一层很薄的接口，或者说是DomainModel的Facade，它通过委派领域对象完成业务处理。</p>
 <p>Applications implement use cases that coordinate multiple <a href="ch07lev1sec5.html#ch07lev1sec5">Business Objects</a> (374) and services. However, you shouldn’t implement use case-coordinating behavior specifically within <a href="ch07lev1sec5.html#ch07lev1sec5">Business Objects</a> (374), because it increases coupling and reduces cohesion between these <a href="ch07lev1sec5.html#ch07lev1sec5">Business Objects</a> (374). Likewise, you don’t want to add this business logic to a service facade, because the business logic potentially gets duplicated among different facades, reducing the reusability and maintainability of common code.</p>
 <p>实现一个用例（或者简单地说一个UserAction），在DomainModel有两部分的逻辑，一部分是领域对象自身的行为逻辑（也就是方法），另一部分是协调各领域对象的逻辑，这也是非常重要的一部分。你不能把这部分逻辑写到领域对象里，这样领域对象就会耦合在一起。那这部分逻辑的在哪里呢？ <strong>应用服务</strong> 里！</p>
-<p><strong>ApplicationService是包含业务逻辑的，它的业务逻辑就是领域对象之间如何协作的逻辑！本身上讲它是领域对象的Facade!</strong> </p>
+<p><strong>ApplicationService是包含业务逻辑的，它的业务逻辑就是领域对象之间如何协作的逻辑！本身上讲它是领域对象的Facade!</strong></p>
 <p>In non-EJB applications, where you need to reduce coupling between the presentation-tier components and business-tier components such as <a href="ch07lev1sec5.html#ch07lev1sec5">Business Objects</a> (374) and other services, Application Services provide that intermediary function between the two tiers. An Application Service exposes a finer-grained interface than a service facade and a coarser-grained interface than the underlying <a href="ch07lev1sec5.html#ch07lev1sec5">Business Objects</a> (374) and other services.</p>
 <p>应用服务的接口比ServiceFacade细，比领域对象粗，是面向用例的！</p>
-<p><strong>而ServiceFacade则是另外一种东西了，它是ApplicationService的Facade。那ServiceFacade到底是面向什么的呢？我们又回到了开头！</strong> </p>
-<p><strong>请参考一下Core J2EE Patterns一书ApplicationService一节的SampleCode吧，我想一个Facade对应一个模块会比较合适吧，但是又为什么非要设计出这个Facade呢？</strong> </p>
-<p><strong>但是至少有一点我们现在非常明确了：</strong> </p>
-<p><strong>那就是ApplicationService传入传出的数据是DTO！这一点在PoEAA和Core J2EE Patterns一书的代码中都有验证，而ApplicationService的职责也决定它就应该使用DTO！（当然是在需要DTO的系统里）</strong> </p>
+<p><strong>而ServiceFacade则是另外一种东西了，它是ApplicationService的Facade。那ServiceFacade到底是面向什么的呢？我们又回到了开头！</strong></p>
+<p><strong>请参考一下Core J2EE Patterns一书ApplicationService一节的SampleCode吧，我想一个Facade对应一个模块会比较合适吧，但是又为什么非要设计出这个Facade呢？</strong></p>
+<p><strong>但是至少有一点我们现在非常明确了：</strong></p>
+<p><strong>那就是ApplicationService传入传出的数据是DTO！这一点在PoEAA和Core J2EE Patterns一书的代码中都有验证，而ApplicationService的职责也决定它就应该使用DTO！（当然是在需要DTO的系统里）</strong></p>
 <p>关于DTO与所依赖的领域对象：</p>
-<p>当们需要persist&#x2F;update一个领域对象时，页面数据以DTO形式传入service，当这个领域对象依赖其他领域对象时，页面上传来的多是这个对象的ID。那么我们如何通过ID加载出这些对象并设置它们之间的关系呢？</p>
+<p>当们需要persist/update一个领域对象时，页面数据以DTO形式传入service，当这个领域对象依赖其他领域对象时，页面上传来的多是这个对象的ID。那么我们如何通过ID加载出这些对象并设置它们之间的关系呢？</p>
 <p>比如：当我们新建一个thread时，它会依赖到的实体有一个forum,和一个user.那么页面传到service的只是一个forumid和一个userid.我们有两个问题：</p>
 <p>1.这些ID是放到DTO里还是单独作为参数传入。</p>
 <p>2.在哪里load这些实体并将它们与thread关联起来。</p>
@@ -87,10 +91,10 @@
 <p>思前想后，我还把这些简单工厂方法给去掉了。现在看来，我觉得这其中的道理可以做为一种经验记录一下：</p>
 <p>我认为工厂方法最好能生产完备的产品。如果生产出的是一个半成品，我们还要在其他地方为这个半成品再赋值和加工的话，这个工厂方法可能就不那么必须了吧？</p>
 <p>应用服务k考虑一下：像Swiz那样dispatch领域事件，然后委派给repository进行数据访问的方案！</p>
-<p><strong>A</strong> </p>
-<p><strong>a</strong> </p>
-<p><strong>a</strong> </p>
-<p><strong>a</strong> </p>
+<p><strong>A</strong></p>
+<p><strong>a</strong></p>
+<p><strong>a</strong></p>
+<p><strong>a</strong></p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>oobbs开发手记</p><p><a href="https://laurence.enlightgram.com/architecture/oobbs-dev-notes/">https://laurence.enlightgram.com/architecture/oobbs-dev-notes/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2010-03-12</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E9%A2%86%E5%9F%9F%E6%A8%A1%E5%9E%8B/">领域模型</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%A4%9A%E7%BA%BF%E7%A8%8B/">多线程</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/database/transaction-isolation-levels/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">数据库事务隔离级别（转）</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/web/jsp-relative-and-absolute-paths/"><span class="level-item">JSP中的相对路径和绝对路径</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

@@ -43,75 +43,87 @@
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Flink：流式 Join 类型 / 分类 盘点</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Flink/">Flink</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2024-03-27T17:41:51.000Z" title="2024-03-27 10:41:51">2024-03-27</time></span><span class="level-item is-hidden-mobile">阅读用时：16 分钟 (约 2442 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>在Flink中，实现流之间连接的操作可以分为两 类 。第一类是基于原生State状态存储的Connect算子操作，这种方式可以实现低延迟的数据连接和转换； <strong>第二类则是基于窗口的JOIN操作，这种方式又可以细分为window join和interval join两种</strong> ，通过对数据进行时间窗口和滑动窗口的划分，实现不同粒度的数据关联和计算。</p>
-<h2 id="1-Regular-Join"><a href="#1-Regular-Join" class="headerlink" title="1. Regular Join"></a>1. Regular Join</h2><p>从 SQL 上看，它只是一条普通的 SQL，和批处理的 SQL 无异：</p>
+<h2 id="1-Regular-Join">1. Regular Join</h2>
+<p>从 SQL 上看，它只是一条普通的 SQL，和批处理的 SQL 无异：</p>
 <figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> <span class="operator">*</span> <span class="keyword">FROM</span> Orders</span><br><span class="line"><span class="keyword">INNER</span> <span class="keyword">JOIN</span> Product</span><br><span class="line"><span class="keyword">ON</span> Orders.productId <span class="operator">=</span> Product.id</span><br></pre></td></tr></table></figure>
-
 <p>在为了维持常规 Join 结果的准确性，不难判断的是：Flink 需要将 Join 输入的两边数据永远保持在状态中，所以，计算查询结果所需的状态可能会无限增长，对于长时间运行的大数据量的流来说，这种 Join 的代价是负担不起的。当然，我们可以通过配置状态的 TTL 来缓解这一问题，但这可能会导致结果不准确。总得来说就是：在流上，常规 Join 是可用的，但要慎用。</p>
 <p>Regular Join 又会细分为 <a target="_blank" rel="noopener" href="https://nightlies.apache.org/flink/flink-docs-master/zh/docs/dev/table/sql/queries/joins/#inner-equi-join">INNER Equi-JOIN</a> 和 <a target="_blank" rel="noopener" href="https://nightlies.apache.org/flink/flink-docs-master/zh/docs/dev/table/sql/queries/joins/#outer-equi-join">OUTER Equi-JOIN</a> ，具体参考文档，此处不再赘述</p>
-<h2 id="2-Interval-Join"><a href="#2-Interval-Join" class="headerlink" title="2. Interval Join"></a>2. Interval Join</h2><p>Regular Join 的条件太宽松，导致 Join 成本巨大，Interval Join 会添加一个时间范围限制，让流上仅处于指定时间区间内的数据参与 Join。</p>
+<h2 id="2-Interval-Join">2. Interval Join</h2>
+<p>Regular Join 的条件太宽松，导致 Join 成本巨大，Interval Join 会添加一个时间范围限制，让流上仅处于指定时间区间内的数据参与 Join。</p>
 <figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> <span class="operator">*</span></span><br><span class="line"><span class="keyword">FROM</span> Orders o, Shipments s</span><br><span class="line"><span class="keyword">WHERE</span> o.id <span class="operator">=</span> s.order_id</span><br><span class="line"><span class="keyword">AND</span> o.order_time <span class="keyword">BETWEEN</span> s.ship_time <span class="operator">-</span> <span class="type">INTERVAL</span> <span class="string">&#x27;4&#x27;</span> <span class="keyword">HOUR</span> <span class="keyword">AND</span> s.ship_time</span><br></pre></td></tr></table></figure>
-
 <p>上述 SQL 是一个典型的 Interval Join，它试图关联订单和它的发货记录以便获得更多信息，如果业务上保证：下单之后 4 小时以内即可发货，那上述 SQL 就能保证 order 和它的 shipment 可以关联上。我们看到，从 SQL 上来说，Interval Join 区别于 Regular Join 的地方就是：它在 Regular Join 的基础上又追加了时间范围条件，这就大大地减轻了维持 Join 状态数据的负担。以下是一些典型的 Interval Join 条件：</p>
 <ul>
-<li><p><code>ltime = rtime</code></p>
+<li>
+<p><code>ltime = rtime</code></p>
 </li>
-<li><p><code>ltime &gt;= rtime AND ltime &lt; rtime + INTERVAL &#39;10&#39; MINUTE</code></p>
+<li>
+<p><code>ltime &gt;= rtime AND ltime &lt; rtime + INTERVAL '10' MINUTE</code></p>
 </li>
-<li><p><code>ltime BETWEEN rtime - INTERVAL &#39;10&#39; SECOND AND rtime + INTERVAL &#39;5&#39; SECOND</code></p>
+<li>
+<p><code>ltime BETWEEN rtime - INTERVAL '10' SECOND AND rtime + INTERVAL '5' SECOND</code></p>
 </li>
 </ul>
-<h2 id="3-Lookup-Join"><a href="#3-Lookup-Join" class="headerlink" title="3. Lookup Join"></a>3. Lookup Join</h2><p>Lookup Join 是 Flink 在流上 Join 一张外部数据表的主要实现方式，典型应用场景就是：流上有一张事实表（动态表），需要 Join 一张 HBase &#x2F; MySQL 上的维表来丰富数据，即：Lookup Join 是维表 Join 多种实现方式中的一种，关于这一话题，请参考 <a href="/flink/flink-dimension-join-solutions/">《Flink：维表 Join 难点和技术方案汇总 》</a> 的第一节：直连外部数据库进行关联，具体的代码示例参考 <a href="/flink/flink-lookup-join/">《Flink：Lookup Join 实现与示例代码》</a> </p>
-<h2 id="4-Temporal-Join"><a href="#4-Temporal-Join" class="headerlink" title="4. Temporal Join"></a>4. Temporal Join</h2><p>Temporal Join 是一个比较大的话题，本博客的另一篇文章 <a href="/flink/flink-temporal-join/">《一文聊透 Flink 的 Temporal Join》</a> 做了全面而细致的梳理，下表是关于 Temporal Join 的关键总结：</p>
+<h2 id="3-Lookup-Join">3. Lookup Join</h2>
+<p>Lookup Join 是 Flink 在流上 Join 一张外部数据表的主要实现方式，典型应用场景就是：流上有一张事实表（动态表），需要 Join 一张 HBase / MySQL 上的维表来丰富数据，即：Lookup Join 是维表 Join 多种实现方式中的一种，关于这一话题，请参考 <a href="/flink/flink-dimension-join-solutions/">《Flink：维表 Join 难点和技术方案汇总 》</a> 的第一节：直连外部数据库进行关联，具体的代码示例参考 <a href="/flink/flink-lookup-join/">《Flink：Lookup Join 实现与示例代码》</a></p>
+<h2 id="4-Temporal-Join">4. Temporal Join</h2>
+<p>Temporal Join 是一个比较大的话题，本博客的另一篇文章 <a href="/flink/flink-temporal-join/">《一文聊透 Flink 的 Temporal Join》</a> 做了全面而细致的梳理，下表是关于 Temporal Join 的关键总结：</p>
 <table>
 <thead>
 <tr>
-<th align="left">场景 &amp; 需求</th>
-<th align="left">简单描述</th>
-<th align="left">从 时态表 的角度解释</th>
-<th align="left">从 Temporal Join 的角度解释</th>
-<th align="left">基于 Temporal Table DDL 实现</th>
-<th align="left">基于 Temporal Table Function 实现</th>
+<th style="text-align:left">场景 &amp; 需求</th>
+<th style="text-align:left">简单描述</th>
+<th style="text-align:left">从 时态表 的角度解释</th>
+<th style="text-align:left">从 Temporal Join 的角度解释</th>
+<th style="text-align:left">基于 Temporal Table DDL 实现</th>
+<th style="text-align:left">基于 Temporal Table Function 实现</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="left">事实表想关联自己的记录所代表的事件在发生时（事件时间）维表中对应的当时的数据</td>
-<td align="left">当时对当时</td>
-<td align="left">Join 时态表 （版本表）上对应时期的某个版本</td>
-<td align="left">基于 <strong>事件时间</strong> 的 Temporal Join</td>
-<td align="left">支持</td>
-<td align="left">支持</td>
+<tbody>
+<tr>
+<td style="text-align:left">事实表想关联自己的记录所代表的事件在发生时（事件时间）维表中对应的当时的数据</td>
+<td style="text-align:left">当时对当时</td>
+<td style="text-align:left">Join 时态表 （版本表）上对应时期的某个版本</td>
+<td style="text-align:left">基于 <strong>事件时间</strong> 的 Temporal Join</td>
+<td style="text-align:left">支持</td>
+<td style="text-align:left">支持</td>
 </tr>
 <tr>
-<td align="left">事实表想关联维表当前最新的数据</td>
-<td align="left">当时对最新</td>
-<td align="left">Join 时态表 （版本表）上的最新版本</td>
-<td align="left">基于 <strong>处理时间</strong> 的 Temporal Join</td>
-<td align="left">不支持（曾经支持，后因语义问题和Bug在新版本中移除）</td>
-<td align="left">支持（同样有语义问题，出于兼容考虑保留，但并未在 1.17.1 上测试成功）</td>
+<td style="text-align:left">事实表想关联维表当前最新的数据</td>
+<td style="text-align:left">当时对最新</td>
+<td style="text-align:left">Join 时态表 （版本表）上的最新版本</td>
+<td style="text-align:left">基于 <strong>处理时间</strong> 的 Temporal Join</td>
+<td style="text-align:left">不支持（曾经支持，后因语义问题和Bug在新版本中移除）</td>
+<td style="text-align:left">支持（同样有语义问题，出于兼容考虑保留，但并未在 1.17.1 上测试成功）</td>
 </tr>
-</tbody></table>
-<p>总得来说，Temporal Join 涉及 Temporal Table DDL 和 Temporal Table Function 两种时态表&#x2F;版本表的实现形式以及基于事件时间和处理时间两种场景，所以总共会有如下 4 种情形：</p>
+</tbody>
+</table>
+<p>总得来说，Temporal Join 涉及 Temporal Table DDL 和 Temporal Table Function 两种时态表/版本表的实现形式以及基于事件时间和处理时间两种场景，所以总共会有如下 4 种情形：</p>
 <ul>
-<li><p>以 Temporal Table DDL 方式实现基于事件时间的 Temporal Join &#x3D;&gt; 最标准，也是最符合通常预期的 Temporal Join 方式，但对数据供给有要求，代码演示： <a href="/flink/flink-temporal-join-1-ddl-event-time/">《Flink Temporal Join 系列 (1)：用 Temporal Table DDL 实现基于事件时间的关联》</a></p>
+<li>
+<p>以 Temporal Table DDL 方式实现基于事件时间的 Temporal Join =&gt; 最标准，也是最符合通常预期的 Temporal Join 方式，但对数据供给有要求，代码演示： <a href="/flink/flink-temporal-join-1-ddl-event-time/">《Flink Temporal Join 系列 (1)：用 Temporal Table DDL 实现基于事件时间的关联》</a></p>
 </li>
-<li><p>以 Temporal Table DDL 方式实现基于处理时间的 Temporal Join &#x3D;&gt; 现已不再支持（曾经支持，后因语义和Bug在新版中移除），代码演示： <a href="/flink/flink-temporal-join-2-ddl-processing-time/">《Flink Temporal Join 系列 (2)：用 Temporal Table DDL 实现基于处理时间的关联》</a></p>
+<li>
+<p>以 Temporal Table DDL 方式实现基于处理时间的 Temporal Join =&gt; 现已不再支持（曾经支持，后因语义和Bug在新版中移除），代码演示： <a href="/flink/flink-temporal-join-2-ddl-processing-time/">《Flink Temporal Join 系列 (2)：用 Temporal Table DDL 实现基于处理时间的关联》</a></p>
 </li>
-<li><p>以 Temporal Table Function 方式实现基于事件时间的 Temporal Join &#x3D;&gt; 与方式 1 相同，但必须在代码中实现，不推荐，代码演示： <a href="/flink/flink-temporal-join-3-function-event-time/">《Flink Temporal Join 系列 (3)：用 Temporal Table Function 实现基于事件时间的关联》</a></p>
+<li>
+<p>以 Temporal Table Function 方式实现基于事件时间的 Temporal Join =&gt; 与方式 1 相同，但必须在代码中实现，不推荐，代码演示： <a href="/flink/flink-temporal-join-3-function-event-time/">《Flink Temporal Join 系列 (3)：用 Temporal Table Function 实现基于事件时间的关联》</a></p>
 </li>
-<li><p>以 Temporal Table Function 方式实现基于处理时间的 Temporal Join &#x3D;&gt; 与方式 2 相同，文档说支持，并未实测成功，刚方式可完全被 Lookup Join 替代，亦无再研究的必要，代码演示： <a href="/flink/flink-temporal-join-4-function-processing-time/">《Flink Temporal Join 系列 (4)：用 Temporal Table Function 实现基于处理时间的关联》</a></p>
+<li>
+<p>以 Temporal Table Function 方式实现基于处理时间的 Temporal Join =&gt; 与方式 2 相同，文档说支持，并未实测成功，刚方式可完全被 Lookup Join 替代，亦无再研究的必要，代码演示： <a href="/flink/flink-temporal-join-4-function-processing-time/">《Flink Temporal Join 系列 (4)：用 Temporal Table Function 实现基于处理时间的关联》</a></p>
 </li>
 </ul>
 <p>Temporal Join 并没有对应一个精准的中文称为，但别简单地把它称为 Temporal Table Join，因为它 Join 的是 Temporal Table （时态表）中的版本表，如果要精准描述的话，应该说是：版本表 Join。</p>
 <hr>
 <p>以下内容为本文早期内容，仅供参考：</p>
-<p>要了解 Temporal Join 必须得先了解很么是 Temporal Table （时态表），对此，请参考 《关于 动态表 &#x2F; 时态表 &#x2F; 版本表 概念的澄清》一文，本文就不再解释了。 <strong>Temporal Join 就是 join 了一张版本表，那这到底有何不同呢？我们知道，既然版本表中一条记录在不同时刻可能会有不同的值（版本），那这就会引申出一个问题：当我们 join 一张版本表时，应该 join 一条记录的哪个版本呢？如果没有特别配置，那么默认行为自然是应该 join 当前的最新值（版本），那有没有需要 join 过去某个时间点的值（版本）的场景呢？有！并且有很多！官方文档给出的就是一个典型的例子：对于一张订单，我们总是应该参照下单时的汇率表去转换为一种统一货币的总价，这就需要订单表去 Join 汇率表在下单时刻的那个版本值</strong> ！</p>
-<h3 id="4-1-基于事件时间的-Temporal-Join"><a href="#4-1-基于事件时间的-Temporal-Join" class="headerlink" title="4.1. 基于事件时间的 Temporal Join"></a>4.1. 基于事件时间的 Temporal Join</h3><p>为了便于描述，我们按官方文档的介绍，让版本表作为被关联表，用”右表“指代，把主动需要关联的表称为”左表“。既然 Temporal Join 关联的右表是版本表，则关联的一方，也就是版本表必然已经定义了事件时间属性，如果关联的另一张表，也就是”左表“，也定义了事件时间属性（通过 Wartermark），且在 Join 时通过 FOR SYSTEM_TIME AS OF 关键字 指定了左表上的这个事件时间属性，那么，这就是一个”基于事件时间的 Temporal Join“，以下是一个示例：</p>
+<p>要了解 Temporal Join 必须得先了解很么是 Temporal Table （时态表），对此，请参考 《关于 动态表 / 时态表 / 版本表 概念的澄清》一文，本文就不再解释了。 <strong>Temporal Join 就是 join 了一张版本表，那这到底有何不同呢？我们知道，既然版本表中一条记录在不同时刻可能会有不同的值（版本），那这就会引申出一个问题：当我们 join 一张版本表时，应该 join 一条记录的哪个版本呢？如果没有特别配置，那么默认行为自然是应该 join 当前的最新值（版本），那有没有需要 join 过去某个时间点的值（版本）的场景呢？有！并且有很多！官方文档给出的就是一个典型的例子：对于一张订单，我们总是应该参照下单时的汇率表去转换为一种统一货币的总价，这就需要订单表去 Join 汇率表在下单时刻的那个版本值</strong> ！</p>
+<h3 id="4-1-基于事件时间的-Temporal-Join">4.1. 基于事件时间的 Temporal Join</h3>
+<p>为了便于描述，我们按官方文档的介绍，让版本表作为被关联表，用”右表“指代，把主动需要关联的表称为”左表“。既然 Temporal Join 关联的右表是版本表，则关联的一方，也就是版本表必然已经定义了事件时间属性，如果关联的另一张表，也就是”左表“，也定义了事件时间属性（通过 Wartermark），且在 Join 时通过 FOR SYSTEM_TIME AS OF 关键字 指定了左表上的这个事件时间属性，那么，这就是一个”基于事件时间的 Temporal Join“，以下是一个示例：</p>
 <figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 左表：orders, 注意 orders 表也定义了事件时间列：order_time</span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> orders (</span><br><span class="line">    order_id    STRING,</span><br><span class="line">    price       <span class="type">DECIMAL</span>(<span class="number">32</span>,<span class="number">2</span>),</span><br><span class="line">    currency    STRING,</span><br><span class="line">    order_time  <span class="type">TIMESTAMP</span>(<span class="number">3</span>),</span><br><span class="line">    WATERMARK <span class="keyword">FOR</span> order_time <span class="keyword">AS</span> order_time <span class="operator">-</span> <span class="type">INTERVAL</span> <span class="string">&#x27;15&#x27;</span> <span class="keyword">SECOND</span></span><br><span class="line">) <span class="keyword">WITH</span> (<span class="comment">/* ... */</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">-- 右表：currency_rates 是一张版本表，因为它定义了主键和事件时间</span></span><br><span class="line"><span class="comment">-- 这种表的数据通常来自 CDC 数据，也就是 数据库的 changelog</span></span><br><span class="line"><span class="comment">-- 显然，这里使用的是存放在kafka中的debezium-json格式的 changelog 数据 </span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> currency_rates (</span><br><span class="line">    currency STRING,</span><br><span class="line">    conversion_rate <span class="type">DECIMAL</span>(<span class="number">32</span>, <span class="number">2</span>),</span><br><span class="line">    update_time <span class="type">TIMESTAMP</span>(<span class="number">3</span>) METADATA <span class="keyword">FROM</span> `values.source.timestamp` VIRTUAL,</span><br><span class="line">    WATERMARK <span class="keyword">FOR</span> update_time <span class="keyword">AS</span> update_time <span class="operator">-</span> <span class="type">INTERVAL</span> <span class="string">&#x27;15&#x27;</span> <span class="keyword">SECOND</span>,</span><br><span class="line">    <span class="keyword">PRIMARY KEY</span>(currency) <span class="keyword">NOT</span> ENFORCED</span><br><span class="line">) <span class="keyword">WITH</span> (</span><br><span class="line">    <span class="string">&#x27;connector&#x27;</span> <span class="operator">=</span> <span class="string">&#x27;kafka&#x27;</span>,</span><br><span class="line">    <span class="string">&#x27;value.format&#x27;</span> <span class="operator">=</span> <span class="string">&#x27;debezium-json&#x27;</span>,</span><br><span class="line">   <span class="comment">/* ... */</span></span><br><span class="line">);</span><br><span class="line"></span><br><span class="line"><span class="keyword">SELECT</span> </span><br><span class="line">     order_id,</span><br><span class="line">     price,</span><br><span class="line">     orders.currency,</span><br><span class="line">     conversion_rate,</span><br><span class="line">     order_time</span><br><span class="line"><span class="keyword">FROM</span> orders</span><br><span class="line"><span class="comment">-- 关键字：FOR SYSTEM_TIME AS OF 用于指定左表中的一个时间类型的字段，Flink会根据这个时间和</span></span><br><span class="line"><span class="comment">-- 版本表上的指定的事件时间字段（即 currency_rates.update_time）进行比对，找到对应版本的记录</span></span><br><span class="line"><span class="comment">-- 与之进行关联。这里“对应版本”的逻辑应该是：在order_time这个时刻，currency_rates 所对应着的</span></span><br><span class="line"><span class="comment">-- 当时版本的记录值</span></span><br><span class="line"><span class="keyword">LEFT</span> <span class="keyword">JOIN</span> currency_rates <span class="keyword">FOR</span> <span class="built_in">SYSTEM_TIME</span> <span class="keyword">AS</span> <span class="keyword">OF</span> orders.order_time</span><br><span class="line"><span class="keyword">ON</span> orders.currency <span class="operator">=</span> currency_rates.currency;</span><br></pre></td></tr></table></figure>
-
 <p>在上面这个基于事件时间的 Temporal Join 中，最核心的一个逻辑在于：在按汇率计算一个 order 的总价时，到底是读的 currency_rates 版本表中的哪一个版本值？我们假设： 一个 order 的 order_time 是 <code>13:42</code> ，currency_rates 对应货币的汇率在 <code>13:40</code> 和 <code>13:45</code> 各有一个版本（假设每5分钟更新一次），分别是 <code>6.88</code> 和 <code>6.89</code> ，若当前时间 是 <code>13:46</code> 分，则这个 order join 的哪一个汇率呢？显然是 <code>6.88</code> 。</p>
-<p><strong>从 基于事件时间的 Temporal Join 的行为特征上不难看出：对于正在实时 Join 的两个流来说，如我们需要一张表总是 Join 其记录所代表的事件在发生的当时另一张表上当时的数据，此时就应该使用 “基于事件时间的 Temporal Join”，简单总结一下的话可以说是：当时对当时，这应该符合大多数流式的 Join 需求。</strong> </p>
-<h3 id="4-2-基于处理时间的-Temporal-Join"><a href="#4-2-基于处理时间的-Temporal-Join" class="headerlink" title="4.2. 基于处理时间的 Temporal Join"></a>4.2. 基于处理时间的 Temporal Join</h3><p>基于处理时间的 Temporal Join常常用在使用外部系统来丰富流的数据，典型的例子是：维表 Join。</p>
-<p><strong>从 基于处理时间的 Temporal Join 的行为特征上不难看出：对于正在实时 Join 的两个流来说，如我们需要一张表总是 Join 另一张表上当前的最新数据，此时就应该使用 “基于处理时间的 Temporal Join”，简单总结一下的话可以说是：当时对现在，维表 Join 通常是此类情形的典型代表（通常维表的变化是很缓慢的）</strong> </p>
+<p><strong>从 基于事件时间的 Temporal Join 的行为特征上不难看出：对于正在实时 Join 的两个流来说，如我们需要一张表总是 Join 其记录所代表的事件在发生的当时另一张表上当时的数据，此时就应该使用 “基于事件时间的 Temporal Join”，简单总结一下的话可以说是：当时对当时，这应该符合大多数流式的 Join 需求。</strong></p>
+<h3 id="4-2-基于处理时间的-Temporal-Join">4.2. 基于处理时间的 Temporal Join</h3>
+<p>基于处理时间的 Temporal Join常常用在使用外部系统来丰富流的数据，典型的例子是：维表 Join。</p>
+<p><strong>从 基于处理时间的 Temporal Join 的行为特征上不难看出：对于正在实时 Join 的两个流来说，如我们需要一张表总是 Join 另一张表上当前的最新数据，此时就应该使用 “基于处理时间的 Temporal Join”，简单总结一下的话可以说是：当时对现在，维表 Join 通常是此类情形的典型代表（通常维表的变化是很缓慢的）</strong></p>
 <hr>
 </div><div class="article-licensing box"><div class="licensing-title"><p>Flink：流式 Join 类型 / 分类 盘点</p><p><a href="https://laurence.enlightgram.com/flink/flink-streaming-join-types/">https://laurence.enlightgram.com/flink/flink-streaming-join-types/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2024-03-27</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Join/">Join</a><a class="link-muted mr-2" rel="tag" href="/tags/Flink/">Flink</a><a class="link-muted mr-2" rel="tag" href="/tags/%E6%97%B6%E6%80%81%E8%A1%A8/">时态表</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/java/maven-multi-jdk-best-practices/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Maven 项目 JDK 8、JDK 17 多版本 Java 编译依赖最佳实践</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/flink/flink-dimension-join-solutions/"><span class="level-item">Flink：维表 Join 难点和技术方案汇总</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");

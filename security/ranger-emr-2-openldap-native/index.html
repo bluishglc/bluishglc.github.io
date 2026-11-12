@@ -43,320 +43,368 @@
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Apache Ranger 与 AWS EMR 自动化安装与集成 (2)：OpenLDAP + EMR-Native Ranger</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Security/">Security</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2022-12-07T19:04:40.000Z" title="2022-12-07 11:04:40">2022-12-07</time></span><span class="level-item is-hidden-mobile">阅读用时：34 分钟 (约 5044 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>In the first article of this series, we got a full picture of emr and ranger integration solutions. From now on, we start to introduce concrete solutions one by one. This article is against “Scenario 1: OpenLDAP + EMR-Native Ranger”, we will introduce the artitecture of soltuion, give detailed installation step descriptions and verify installed environment. This article address is <a href="/security/ranger-emr-2-openldap-native/">https://laurence.enlightgram.com/security/ranger-emr-2-openldap-native/</a> , for reprint please indicate the source. This article was initally published at <a target="_blank" rel="noopener" href="https://dzone.com/articles/apache-ranger-aws-emr-automated-installation-2">DZone</a> .</p>
-<h2 id="1-Solution-Overview"><a href="#1-Solution-Overview" class="headerlink" title="1. Solution Overview"></a>1. Solution Overview</h2><h3 id="1-1-Architecture"><a href="#1-1-Architecture" class="headerlink" title="1.1 Architecture"></a>1.1 Architecture</h3><p><img src="/../../images/security/ranger-emr-2-openldap-native/1.jpeg" alt="在这里插入图片描述"></p>
+<h2 id="1-Solution-Overview">1. Solution Overview</h2>
+<h3 id="1-1-Architecture">1.1 Architecture</h3>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/1.jpeg" alt="在这里插入图片描述"></p>
 <p>In this solution, OpenLDAP plays authentication provider, all user accounts data store on it, Ranger plays authorization controller, because we select emr-native ranger solution which strongly depends on Kerberos, so a Kerberos KDC is required. in this solution, we recommend choosing cluster dedicated KDC created by EMR instead of external KDC, this can help us save the job of installing Kerberos. If you have an existing KDC, this solution also support.</p>
-<p>To unify user accounts data, OpenLDAP and Kerberos must be integrated together, there is a series of jobs to do, i.e., enable SASL&#x2F;GSSAPI, map 2 systems’ accounts, enable pass-through authentication and so on. For Ranger, it will sync accounts data from OpenLDAP so as to grant privileges against user accounts from OpenLDAP, meanwhile, emr cluster need install a series of ranger plugins , these plugins will check with ranger server to assure if current user has permission to perform an action. And emr cluster will also sync accounts data from OpenLDAP via SSSD so as a user can login nodes of emr cluster and submit jobs.</p>
-<h3 id="1-2-Authentication-in-Detail"><a href="#1-2-Authentication-in-Detail" class="headerlink" title="1.2 Authentication in Detail"></a>1.2 Authentication in Detail</h3><p>Let’s deep dive into authentication part. OpenLDAP and Kerberos are two mutually independent authentication mechanisms, how to integrate them together is the subject of authentication. There is another series of articles dedicatedly elaborate this topic, and this installer completely followed all operations of this series:</p>
-<p><a href="/security/openldap-kerberos-1-backend-database/">OpenLDAP and Kerberos Based Authentication Solution (1): Integrating Backend Database</a><br><a href="/security/openldap-kerberos-2-sssd/">OpenLDAP and Kerberos Based Authentication Solution (2): Synchronizing SSSD</a><br><a href="/security/openldap-kerberos-3-sasl-gssapi/">OpenLDAP and Kerberos Based Authentication Solution (3): Deeply Integrating with SASL&#x2F;GSSAPI</a> </p>
+<p>To unify user accounts data, OpenLDAP and Kerberos must be integrated together, there is a series of jobs to do, i.e., enable SASL/GSSAPI, map 2 systems’ accounts, enable pass-through authentication and so on. For Ranger, it will sync accounts data from OpenLDAP so as to grant privileges against user accounts from OpenLDAP, meanwhile, emr cluster need install a series of ranger plugins , these plugins will check with ranger server to assure if current user has permission to perform an action. And emr cluster will also sync accounts data from OpenLDAP via SSSD so as a user can login nodes of emr cluster and submit jobs.</p>
+<h3 id="1-2-Authentication-in-Detail">1.2 Authentication in Detail</h3>
+<p>Let’s deep dive into authentication part. OpenLDAP and Kerberos are two mutually independent authentication mechanisms, how to integrate them together is the subject of authentication. There is another series of articles dedicatedly elaborate this topic, and this installer completely followed all operations of this series:</p>
+<p><a href="/security/openldap-kerberos-1-backend-database/">OpenLDAP and Kerberos Based Authentication Solution (1): Integrating Backend Database</a><br>
+<a href="/security/openldap-kerberos-2-sssd/">OpenLDAP and Kerberos Based Authentication Solution (2): Synchronizing SSSD</a><br>
+<a href="/security/openldap-kerberos-3-sasl-gssapi/">OpenLDAP and Kerberos Based Authentication Solution (3): Deeply Integrating with SASL/GSSAPI</a></p>
 <p>Generally, the installer will finish following jobs:</p>
-<p><img src="/../../images/security/ranger-emr-2-openldap-native/2.jpeg" alt="在这里插入图片描述"></p>
-<p>① Install OpenLDAP;<br>② Install SSSD on all nodes of emr cluster;<br>③ Migrate Kerberos backend database to OpenLDAP, save accounts data of the two systems into a single record;<br>④ Install &amp; configure SASL&#x2F;GSSAPI to enable Kerberos accounts login OpenLDAP;<br>⑤ Configure OpenLDAP to map Kerberos accounts to OpenLDAP accounts;<br>⑥ Enable saslauthd, unify OpenLDAP and Kerberos accounts password;<br>⑦ Configure SSH, enable users login with OpenLDAP account;<br>⑧ Configure SSH, enable users login with Kerberos account via GSSAPI;</p>
-<h3 id="1-3-Authorization-in-Detail"><a href="#1-3-Authorization-in-Detail" class="headerlink" title="1.3 Authorization in Detail"></a>1.3 Authorization in Detail</h3><p>For authorization, Ranger is absolutely the leading role, if we deep dive into it, its architecture looks as following:</p>
-<p><img src="/../../images/security/ranger-emr-2-openldap-native/3.jpeg" alt="在这里插入图片描述"></p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/2.jpeg" alt="在这里插入图片描述"></p>
+<p>① Install OpenLDAP;<br>
+② Install SSSD on all nodes of emr cluster;<br>
+③ Migrate Kerberos backend database to OpenLDAP, save accounts data of the two systems into a single record;<br>
+④ Install &amp; configure SASL/GSSAPI to enable Kerberos accounts login OpenLDAP;<br>
+⑤ Configure OpenLDAP to map Kerberos accounts to OpenLDAP accounts;<br>
+⑥ Enable saslauthd, unify OpenLDAP and Kerberos accounts password;<br>
+⑦ Configure SSH, enable users login with OpenLDAP account;<br>
+⑧ Configure SSH, enable users login with Kerberos account via GSSAPI;</p>
+<h3 id="1-3-Authorization-in-Detail">1.3 Authorization in Detail</h3>
+<p>For authorization, Ranger is absolutely the leading role, if we deep dive into it, its architecture looks as following:</p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/3.jpeg" alt="在这里插入图片描述"></p>
 <p>The installer will finish following jobs:</p>
-<p>① Install MySQL as Policy DB for Ranger;<br>② Install Solr as Audit Store for Ranger;<br>③ Install Ranger Admin;<br>④ Install Ranger UserSync;<br>⑤ Install EMRFS(S3) Ranger Plugin；<br>⑥ Install Spark Ranger Plugin；<br>⑦ Install Hive Ranger Plugin；<br>⑧ Install Trino Ranger Plugin (NOT available yet at the time writing)</p>
-<h2 id="2-Installation-Integration"><a href="#2-Installation-Integration" class="headerlink" title="2. Installation &amp; Integration"></a>2. Installation &amp; Integration</h2><p>Generally, the installation &amp; integration process can be divided into 3 stages: 1. Prerequisites -&gt; 2. All-In-One Install -&gt; 3. Create EMR Cluster, the following diagram illustrates the progress in detail:</p>
-<p><img src="/../../images/security/ranger-emr-2-openldap-native/4.jpeg" alt="在这里插入图片描述"></p>
+<p>① Install MySQL as Policy DB for Ranger;<br>
+② Install Solr as Audit Store for Ranger;<br>
+③ Install Ranger Admin;<br>
+④ Install Ranger UserSync;<br>
+⑤ Install EMRFS(S3) Ranger Plugin；<br>
+⑥ Install Spark Ranger Plugin；<br>
+⑦ Install Hive Ranger Plugin；<br>
+⑧ Install Trino Ranger Plugin (NOT available yet at the time writing)</p>
+<h2 id="2-Installation-Integration">2. Installation &amp; Integration</h2>
+<p>Generally, the installation &amp; integration process can be divided into 3 stages: 1. Prerequisites -&gt; 2. All-In-One Install -&gt; 3. Create EMR Cluster, the following diagram illustrates the progress in detail:</p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/4.jpeg" alt="在这里插入图片描述"></p>
 <p>At stage 1, we need do some preparatory work; At stage 2, we start to install and integrate, here are 2 options at this stage: one is all-in-one installation driven by a command -line based workflow, the other is step-by-step installation. For most cases, all-in-one installation is always the best choice, however, sometimes, your installation workflow may be interrupted by unforeseen errors, if you want to continue installing from last failed step, please try step-by-step installation. Or sometimes, you want to re-try a step with different argument values to find the right one, step-by-step is also better choice; At stage 3, we need create an emr cluster by ourselves with output artifacts in stage 2, i.e., iam roles and emr security configuration.</p>
 <p>As a design principle, the installer does NOT include any actions to create an emr cluster, you should always create your cluster by yourself, because an emr cluster in practice could have any unpredictable settings, i.e., application-specific (hdfs, yarn, etc.) configuration, step scripts, bootstrap scripts and so on, it is unadvised to couple ranger’s installation with emr cluster’s creation.</p>
 <p>However, there is a little bit overlapping on execution sequence between stage 2 and 3. When creating an emr cluster basesd on emr-native ranger, it is required to provide a copy of security configuration and ranger-specific iam roles, they must be available before creating an emr cluster, and besides, during creating cluster, it also need interact with the ranger server (server address is assigned in security configuration); On the other hand, some operations in all-in-one installation need perform on all nodes of cluster or KDC, this requires an emr cluster must be ready. To solve this circular dependency, the installer output some artifacts first depended by emr cluster, then indicate users to create their own cluster with these artifacts, meanwhile, installation progress will be pending, and keep monitoring target cluster’s status, once it’s ready, installation progress will resume and continue to perform rest actions.</p>
 <p>Notes：</p>
 <ol>
-<li><p>The installer will treat local host as ranger server to install everything of Ranger, for non-ranger operations, i.e., installing OpenLDAP or migrating Kerberos DB, it will initiate remote operations via SSH. So, you can just stay on ranger server to execute command lines, no need to switch among multiple hosts.</p>
+<li>
+<p>The installer will treat local host as ranger server to install everything of Ranger, for non-ranger operations, i.e., installing OpenLDAP or migrating Kerberos DB, it will initiate remote operations via SSH. So, you can just stay on ranger server to execute command lines, no need to switch among multiple hosts.</p>
 </li>
-<li><p>For the sake of Kerberos, all host address must use FQDN, Both IP and hostname without domain name are unaccepted.</p>
+<li>
+<p>For the sake of Kerberos, all host address must use FQDN, Both IP and hostname without domain name are unaccepted.</p>
 </li>
 </ol>
-<h3 id="2-1-Prerequisites"><a href="#2-1-Prerequisites" class="headerlink" title="2.1 Prerequisites"></a>2.1 Prerequisites</h3><h4 id="2-1-1-Create-EC2-Instances-as-Ranger-and-OpenLDAP-Server"><a href="#2-1-1-Create-EC2-Instances-as-Ranger-and-OpenLDAP-Server" class="headerlink" title="2.1.1 Create EC2 Instances as Ranger and OpenLDAP Server"></a>2.1.1 Create EC2 Instances as Ranger and OpenLDAP Server</h4><p>First, we need prepare 2 EC2 instances, one as the server of Ranger, the other as the server of OpenLDAP. When creating instances, please select <code>Amazon Linux 2</code> image and guarantee network connections among instances and the cluster to be created are reachable.</p>
+<h3 id="2-1-Prerequisites">2.1 Prerequisites</h3>
+<h4 id="2-1-1-Create-EC2-Instances-as-Ranger-and-OpenLDAP-Server">2.1.1 Create EC2 Instances as Ranger and OpenLDAP Server</h4>
+<p>First, we need prepare 2 EC2 instances, one as the server of Ranger, the other as the server of OpenLDAP. When creating instances, please select <code>Amazon Linux 2</code> image and guarantee network connections among instances and the cluster to be created are reachable.</p>
 <p>As a best practice, it’s recommended to add ranger server into <code>ElasticMapReduce-master</code> security group, because Ranger is very close to emr cluster, it can be regarded as a non-emr-build-in master service. For OpenLDAP, we have to make sure its ports 389 is reachable from ranger and all nodes of emr cluster to be created, or to be simple, you also add OpenLDAP into <code>ElasticMapReduce-master</code> security group.</p>
-<h4 id="2-1-2-Download-Installer"><a href="#2-1-2-Download-Installer" class="headerlink" title="2.1.2 Download Installer"></a>2.1.2 Download Installer</h4><p>After EC2 instances are ready, pick the ranger server, login via ssh, run following commands to download installer package:</p>
+<h4 id="2-1-2-Download-Installer">2.1.2 Download Installer</h4>
+<p>After EC2 instances are ready, pick the ranger server, login via ssh, run following commands to download installer package:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> yum -y install git</span><br><span class="line">git <span class="built_in">clone</span> https://github.com/bluishglc/ranger-emr-cli-installer.git</span><br></pre></td></tr></table></figure>
-
-<h4 id="2-1-3-Upload-SSH-Key-File"><a href="#2-1-3-Upload-SSH-Key-File" class="headerlink" title="2.1.3 Upload SSH Key File"></a>2.1.3 Upload SSH Key File</h4><p>As mentioned before, the installer is based on local host (ranger server), to perform remote installing actions on OpenLDAP or emr cluster, SSH private key is required, so we should upload it to ranger server, and Make a note of the file path, it will be the value of variable <code>SSH_KEY</code> .</p>
-<h4 id="2-1-4-Export-Environment-Specific-Variables"><a href="#2-1-4-Export-Environment-Specific-Variables" class="headerlink" title="2.1.4 Export Environment-Specific Variables"></a>2.1.4 Export Environment-Specific Variables</h4><p>During installing, following environment-specific arguments will be passed more than once, it’s recommended to export them first, then all command lines just refer these variables instead of literals.</p>
+<h4 id="2-1-3-Upload-SSH-Key-File">2.1.3 Upload SSH Key File</h4>
+<p>As mentioned before, the installer is based on local host (ranger server), to perform remote installing actions on OpenLDAP or emr cluster, SSH private key is required, so we should upload it to ranger server, and Make a note of the file path, it will be the value of variable <code>SSH_KEY</code> .</p>
+<h4 id="2-1-4-Export-Environment-Specific-Variables">2.1.4 Export Environment-Specific Variables</h4>
+<p>During installing, following environment-specific arguments will be passed more than once, it’s recommended to export them first, then all command lines just refer these variables instead of literals.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> REGION=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> ACCESS_KEY_ID=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SECRET_ACCESS_KEY=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SSH_KEY=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> OPENLDAP_HOST=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br></pre></td></tr></table></figure>
-
 <p>The following is comments of above variables:</p>
 <ul>
-<li><p>REGION: Aws Region, i.e., cn-north-1, us-east-1 and so on.</p>
+<li>
+<p>REGION: Aws Region, i.e., cn-north-1, us-east-1 and so on.</p>
 </li>
-<li><p>ACCESS_KEY_ID: Aws access key id of your IAM account. Be sure your account has enough privileges, it’s better having admin permissions.</p>
+<li>
+<p>ACCESS_KEY_ID: Aws access key id of your IAM account. Be sure your account has enough privileges, it’s better having admin permissions.</p>
 </li>
-<li><p>SECRET_ACCESS_KEY: Aws secret access key of your IAM account.</p>
+<li>
+<p>SECRET_ACCESS_KEY: Aws secret access key of your IAM account.</p>
 </li>
-<li><p>SSH_KEY: Ssh private key file path on local host you just uploaded</p>
+<li>
+<p>SSH_KEY: Ssh private key file path on local host you just uploaded</p>
 </li>
-<li><p>OPENLDAP_HOST: FQDN of OpenLDAP server</p>
+<li>
+<p>OPENLDAP_HOST: FQDN of OpenLDAP server</p>
 </li>
 </ul>
 <p>Please carefully replace above variables’ value according to your environment, and remember to use FQDN as hostname, i.e., OPENLDAP_HOST. The following is a copy of example:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> REGION=<span class="string">&#x27;cn-north-1&#x27;</span></span><br><span class="line"><span class="built_in">export</span> ACCESS_KEY_ID=<span class="string">&#x27;&lt;change-to-your-aws-access-key-id&gt;&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SECRET_ACCESS_KEY=<span class="string">&#x27;&lt;change-to-your-aws-secret-access-key&gt;&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SSH_KEY=<span class="string">&#x27;/home/ec2-user/key.pem&#x27;</span></span><br><span class="line"><span class="built_in">export</span> OPENLDAP_HOST=<span class="string">&#x27;ip-10-0-14-0.cn-north-1.compute.internal&#x27;</span></span><br></pre></td></tr></table></figure>
-
-<h3 id="2-2-All-In-One-Installation"><a href="#2-2-All-In-One-Installation" class="headerlink" title="2.2 All-In-One Installation"></a>2.2 All-In-One Installation</h3><h4 id="2-2-1-Quick-Start"><a href="#2-2-1-Quick-Start" class="headerlink" title="2.2.1 Quick Start"></a>2.2.1 Quick Start</h4><p>Now, let’s start an all-in-one installation, execute this command line:</p>
+<h3 id="2-2-All-In-One-Installation">2.2 All-In-One Installation</h3>
+<h4 id="2-2-1-Quick-Start">2.2.1 Quick Start</h4>
+<p>Now, let’s start an all-in-one installation, execute this command line:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-root-cn <span class="string">&#x27;admin&#x27;</span> \</span><br><span class="line">    --openldap-root-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --openldap-user-dn-pattern <span class="string">&#x27;uid=&#123;0&#125;,ou=users,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-group-search-filter <span class="string">&#x27;(member=uid=&#123;0&#125;,ou=users,dc=example,dc=com)&#x27;</span> \</span><br><span class="line">    --openldap-user-object-class <span class="string">&#x27;inetOrgPerson&#x27;</span> \</span><br><span class="line">    --example-users <span class="string">&#x27;example-user-1,example-user-2&#x27;</span> \</span><br><span class="line">    --ranger-plugins <span class="string">&#x27;emr-native-emrfs,emr-native-spark,emr-native-hive&#x27;</span></span><br></pre></td></tr></table></figure>
-
 <p>For parameters specification of above command line, please refer to appendix. If everything goes well, the command line will execute step from 2.1 to 2.7 in workflow diagram, this may spend 10 minutes or more depending on the bandwidth of your network,then it will suspend and indicate user to create emr cluster with the 2 artifacts:</p>
-<p>Ⓐ An ec2 instance profile named <code>EMR_EC2_RangerRole</code><br>Ⓑ An emr security configuration named <code>Ranger@&lt;YOUR-RANGER-HOST-FQDN&gt;</code> </p>
+<p>Ⓐ An ec2 instance profile named <code>EMR_EC2_RangerRole</code><br>
+Ⓑ An emr security configuration named <code>Ranger@&lt;YOUR-RANGER-HOST-FQDN&gt;</code></p>
 <p>They are just created by command line in step 2.2 &amp; 2.4, and you can find them from emr web console when creating cluster. The following is a snapshot of command line for this moment:</p>
-<p><img src="/../../images/security/ranger-emr-2-openldap-native/5.jpeg" alt="在这里插入图片描述"></p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/5.jpeg" alt="在这里插入图片描述"></p>
 <p>Next, we should switch to emr web console to create a cluster, be sure to select ec2 instance profile and security configuration prompted in command line console, and for Kerberos KDC, please also fill and Make a note of “realm” and “KDC admin password”, they will be used in command line soon. The following is a snapshot of emr web console for this moment:</p>
-<p> <img src="/../../images/security/ranger-emr-2-openldap-native/6.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/6.jpeg" alt="请添加图片描述"></p>
 <p>Once the emr cluster starts to create, 5 cluster-related information items will be certain, they are:</p>
-<p>① Cluster id: get from summary tab on web console.<br>② Kerberos realm: entered by you at “Authentication and encryption” section, see above snapshot. Note that for region <code>us-east-1</code> , default realm is <code>EC2.INTERNAL</code> ; for other regions, default realm is <code>COMPUTE.INTERNAL</code><br>③ Kerberos kdc admin password: entered by you at “Authentication and encryption” section, see above snapshot.<br>④ Kerberos kdc host: get from hardware tab on web console, usually is master node.<br>⑤ Confirm if let Hue integrate with LDAP or not. if yes, after cluster is ready, the installer will update emr configuration with Hue specific setting, be careful that this action will overwrite emr existing configuration.</p>
-<p>Now, we need go back to command line terminal, enter “y” for cli prompt “Have you created the cluster? [y&#x2F;n]: “(you don’t need wart for the cluster to become completely ready), then the command line will ask you to enter above 4 information items one by one, because they are required for next phase of installation, then confirm by enter “y” again, the installation process will resume and if assigned emr cluster is not ready yet, the command line will keep monitoring until it goes into “WAITING” status, the following is a snapshot for this moment of the command line:<br> <img src="/../../images/security/ranger-emr-2-openldap-native/7.jpeg" alt="请添加图片描述"></p>
+<p>① Cluster id: get from summary tab on web console.<br>
+② Kerberos realm: entered by you at “Authentication and encryption” section, see above snapshot. Note that for region <code>us-east-1</code> , default realm is <code>EC2.INTERNAL</code> ; for other regions, default realm is <code>COMPUTE.INTERNAL</code><br>
+③ Kerberos kdc admin password: entered by you at “Authentication and encryption” section, see above snapshot.<br>
+④ Kerberos kdc host: get from hardware tab on web console, usually is master node.<br>
+⑤ Confirm if let Hue integrate with LDAP or not. if yes, after cluster is ready, the installer will update emr configuration with Hue specific setting, be careful that this action will overwrite emr existing configuration.</p>
+<p>Now, we need go back to command line terminal, enter “y” for cli prompt &quot;Have you created the cluster? [y/n]: &quot;(you don’t need wart for the cluster to become completely ready), then the command line will ask you to enter above 4 information items one by one, because they are required for next phase of installation, then confirm by enter “y” again, the installation process will resume and if assigned emr cluster is not ready yet, the command line will keep monitoring until it goes into “WAITING” status, the following is a snapshot for this moment of the command line:<br>
+<img src="../../images/security/ranger-emr-2-openldap-native/7.jpeg" alt="请添加图片描述"></p>
 <p>When cluster is ready (status is “WAITING”), the command line will continue to execute from steps 2.9 to 2.13 of workflow, and finally end with an “ALL DONE!!” message.</p>
-<h4 id="2-2-2-Customization"><a href="#2-2-2-Customization" class="headerlink" title="2.2.2 Customization"></a>2.2.2 Customization</h4><p>Now, all-in-one installation is done, next, we introudce more about customization. Generally, this installer follows the principle of “Convention over Configuration”, most parameters are preset by default values, an equivalent version with full parameter list of above command line is as following:</p>
+<h4 id="2-2-2-Customization">2.2.2 Customization</h4>
+<p>Now, all-in-one installation is done, next, we introudce more about customization. Generally, this installer follows the principle of “Convention over Configuration”, most parameters are preset by default values, an equivalent version with full parameter list of above command line is as following:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-root-cn <span class="string">&#x27;admin&#x27;</span> \</span><br><span class="line">    --openldap-root-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --openldap-user-dn-pattern <span class="string">&#x27;uid=&#123;0&#125;,ou=users,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-group-search-filter <span class="string">&#x27;(member=uid=&#123;0&#125;,ou=users,dc=example,dc=com)&#x27;</span> \</span><br><span class="line">    --openldap-user-object-class <span class="string">&#x27;inetOrgPerson&#x27;</span> \</span><br><span class="line">    --example-users <span class="string">&#x27;example-user-1,example-user-2&#x27;</span> \</span><br><span class="line">    --ranger-plugins <span class="string">&#x27;emr-native-emrfs,emr-native-spark,emr-native-hive&#x27;</span> \</span><br><span class="line">    --java-home <span class="string">&#x27;/usr/lib/jvm/java&#x27;</span> \</span><br><span class="line">    --skip-install-mysql <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --skip-migrate-kerberos-db <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --skip-install-solr <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --skip-install-openldap <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --skip-configure-hue <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --ranger-host $(hostname -f) \</span><br><span class="line">    --ranger-version <span class="string">&#x27;2.1.0&#x27;</span> \</span><br><span class="line">    --mysql-host $(hostname -f) \</span><br><span class="line">    --mysql-root-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --mysql-ranger-db-user-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --solr-host $(hostname -f) \</span><br><span class="line">    --ranger-bind-dn <span class="string">&#x27;cn=ranger,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ranger-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --hue-bind-dn <span class="string">&#x27;cn=hue,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --hue-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --sssd-bind-dn <span class="string">&#x27;cn=sssd,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --sssd-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --restart-interval 30</span><br></pre></td></tr></table></figure>
-
 <p>The full-parameters version give us a complete perspective of all custom options. In following scenarios, you may change some options’ value:</p>
 <ol>
-<li><p>If you want to change default organization name <code>dc=example,dc=com</code> or default password <code>Admin1234!</code> , please run full-parameters version, and replace them with your own values.</p>
+<li>
+<p>If you want to change default organization name <code>dc=example,dc=com</code> or default password <code>Admin1234!</code> , please run full-parameters version, and replace them with your own values.</p>
 </li>
-<li><p>If you need integrate with external facilities, i.e., a centralized OpenLDAP or an existing MySQL, Solr, please add corresponding <code>--skip-xxx-xxx</code> options and set it <code>true</code> .</p>
+<li>
+<p>If you need integrate with external facilities, i.e., a centralized OpenLDAP or an existing MySQL, Solr, please add corresponding <code>--skip-xxx-xxx</code> options and set it <code>true</code> .</p>
 </li>
-<li><p>If you have other pre-defined bind dn for hue, ranger and sssd, please add corresponding <code>--xxx-bind-dn</code> and <code>--xxx-bind-password</code> options to set them. Note that the bind dn for hue, ranger and sssd will be created automatically when installing OpenLDAP, but they are FIXED with naming pattern <code>cn=hue|ranger|sssd,ou=services,&lt;your-base-dn&gt;</code> not the given value of “–xxx-bind-dn” option, so if you assign other dn with “–xxx-bind-dn” option, you MUST create this dn by yourself in advance. The reason this install does NOT create the dn assigned by “–xxx-bind-dn” option is that a dn acutally is a tree path, to create it, we must create all nodes in the path, it is not cost-effective to implement such small but complicated function.</p>
+<li>
+<p>If you have other pre-defined bind dn for hue, ranger and sssd, please add corresponding <code>--xxx-bind-dn</code> and <code>--xxx-bind-password</code> options to set them. Note that the bind dn for hue, ranger and sssd will be created automatically when installing OpenLDAP, but they are FIXED with naming pattern <code>cn=hue|ranger|sssd,ou=services,&lt;your-base-dn&gt;</code> not the given value of “–xxx-bind-dn” option, so if you assign other dn with “–xxx-bind-dn” option, you MUST create this dn by yourself in advance. The reason this install does NOT create the dn assigned by “–xxx-bind-dn” option is that a dn acutally is a tree path, to create it, we must create all nodes in the path, it is not cost-effective to implement such small but complicated function.</p>
 </li>
-<li><p>By default, all-in-one installation will migrate cluster Kerberos database to OpenLDAP so as to better accounts management, but if you run an external Kerberos KDC, please be sure if you really need migrate an external KDC’s database to OpenLDAP, if not, please add <code>--skip-migrate-kerberos-db &#39;true&#39;</code> in command line to skip it.</p>
+<li>
+<p>By default, all-in-one installation will migrate cluster Kerberos database to OpenLDAP so as to better accounts management, but if you run an external Kerberos KDC, please be sure if you really need migrate an external KDC’s database to OpenLDAP, if not, please add <code>--skip-migrate-kerberos-db 'true'</code> in command line to skip it.</p>
 </li>
 </ol>
-<h3 id="2-3-Step-By-Step-Installation"><a href="#2-3-Step-By-Step-Installation" class="headerlink" title="2.3 Step-By-Step Installation"></a>2.3 Step-By-Step Installation</h3><p>As an alternative, you can also select step-by-step installation instead of all-in-one installation. we give the command line of each step, as for comments for each parameter, please refer to appendix.</p>
-<h4 id="2-3-1-Init-EC2"><a href="#2-3-1-Init-EC2" class="headerlink" title="2.3.1 Init EC2"></a>2.3.1 Init EC2</h4><p>This step will finish some fundamental jobs, i.e., install aws cli, jdk, and so on.</p>
+<h3 id="2-3-Step-By-Step-Installation">2.3 Step-By-Step Installation</h3>
+<p>As an alternative, you can also select step-by-step installation instead of all-in-one installation. we give the command line of each step, as for comments for each parameter, please refer to appendix.</p>
+<h4 id="2-3-1-Init-EC2">2.3.1 Init EC2</h4>
+<p>This step will finish some fundamental jobs, i.e., install aws cli, jdk, and so on.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh init-ec2 \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="2-3-2-Create-IAM-Roles"><a href="#2-3-2-Create-IAM-Roles" class="headerlink" title="2.3.2 Create IAM Roles"></a>2.3.2 Create IAM Roles</h4><p>This step will create 3 iam roles which are required for EMR.</p>
+<h4 id="2-3-2-Create-IAM-Roles">2.3.2 Create IAM Roles</h4>
+<p>This step will create 3 iam roles which are required for EMR.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh create-iam-roles \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="2-3-3-Create-Ranger-Secrets"><a href="#2-3-3-Create-Ranger-Secrets" class="headerlink" title="2.3.3 Create Ranger Secrets"></a>2.3.3 Create Ranger Secrets</h4><p>This step will create SSL&#x2F;TLS related keys, certificates and keystores for Ranger, because emr-native ranger requires SSL&#x2F;TLS connections to server. These artifacts will upload to aws secrets manager and referred by emr security configuration.</p>
+<h4 id="2-3-3-Create-Ranger-Secrets">2.3.3 Create Ranger Secrets</h4>
+<p>This step will create SSL/TLS related keys, certificates and keystores for Ranger, because emr-native ranger requires SSL/TLS connections to server. These artifacts will upload to aws secrets manager and referred by emr security configuration.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh create-ranger-secrets \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="2-3-4-Create-EMR-Security-Configuration"><a href="#2-3-4-Create-EMR-Security-Configuration" class="headerlink" title="2.3.4 Create EMR Security Configuration"></a>2.3.4 Create EMR Security Configuration</h4><p>This step will create a copy of emr security configuration, the configuration includes Kerberos and Ranger related information, when creating cluster, emr will read them and get corresponding resources, i.e., secrets, and also interact with the ranger server which address is assigned in the security configuration.</p>
+<h4 id="2-3-4-Create-EMR-Security-Configuration">2.3.4 Create EMR Security Configuration</h4>
+<p>This step will create a copy of emr security configuration, the configuration includes Kerberos and Ranger related information, when creating cluster, emr will read them and get corresponding resources, i.e., secrets, and also interact with the ranger server which address is assigned in the security configuration.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh create-emr-security-configuration \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="2-3-5-Install-OpenLDAP"><a href="#2-3-5-Install-OpenLDAP" class="headerlink" title="2.3.5 Install OpenLDAP"></a>2.3.5 Install OpenLDAP</h4><p>This step will install OpenLDAP on given OpenLDAP host, as mentioned above, although this action is performed on OpenLDAP server, you DON’T need to login OpenLDAP server, just run the command line on local host (the ranger server).</p>
+<h4 id="2-3-5-Install-OpenLDAP">2.3.5 Install OpenLDAP</h4>
+<p>This step will install OpenLDAP on given OpenLDAP host, as mentioned above, although this action is performed on OpenLDAP server, you DON’T need to login OpenLDAP server, just run the command line on local host (the ranger server).</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install-openldap \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-root-cn <span class="string">&#x27;admin&#x27;</span> \</span><br><span class="line">    --openldap-root-password <span class="string">&#x27;Admin1234!&#x27;</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="2-3-6-Install-Ranger"><a href="#2-3-6-Install-Ranger" class="headerlink" title="2.3.6 Install Ranger"></a>2.3.6 Install Ranger</h4><p>This step will install all server-side components of Ranger, including MySQL, Solr, Ranger Admin and Ranger UserSync.</p>
+<h4 id="2-3-6-Install-Ranger">2.3.6 Install Ranger</h4>
+<p>This step will install all server-side components of Ranger, including MySQL, Solr, Ranger Admin and Ranger UserSync.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install-ranger \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ranger-bind-dn <span class="string">&#x27;cn=ranger,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ranger-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --openldap-user-dn-pattern <span class="string">&#x27;uid=&#123;0&#125;,ou=users,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-group-search-filter <span class="string">&#x27;(member=uid=&#123;0&#125;,ou=users,dc=example,dc=com)&#x27;</span> \</span><br><span class="line">    --openldap-user-object-class <span class="string">&#x27;inetOrgPerson&#x27;</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="2-3-7-Install-Ranger-Plugins"><a href="#2-3-7-Install-Ranger-Plugins" class="headerlink" title="2.3.7 Install Ranger Plugins"></a>2.3.7 Install Ranger Plugins</h4><p>This step will install emrfs, spark and hive plugins from ranger server side. There is the other half job which install these plugins (actually they are EMR Secret Agent, EMR Record Server and so on) on agent side, however, it will be done automatically by emr when creating cluster.</p>
+<h4 id="2-3-7-Install-Ranger-Plugins">2.3.7 Install Ranger Plugins</h4>
+<p>This step will install emrfs, spark and hive plugins from ranger server side. There is the other half job which install these plugins (actually they are EMR Secret Agent, EMR Record Server and so on) on agent side, however, it will be done automatically by emr when creating cluster.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install-ranger-plugins \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span> \</span><br><span class="line">    --ranger-plugins <span class="string">&#x27;emr-native-emrfs,emr-native-spark,emr-native-hive&#x27;</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="2-3-8-Create-EMR-Cluster"><a href="#2-3-8-Create-EMR-Cluster" class="headerlink" title="2.3.8 Create EMR Cluster"></a>2.3.8 Create EMR Cluster</h4><p>For step-by-step installation, there is no interactive process for creating emr cluster, so just feel free to create cluster on emr web console. but we have to wait for the cluster is completely ready (in “WAITING” status), then export following environment-specific variables:</p>
+<h4 id="2-3-8-Create-EMR-Cluster">2.3.8 Create EMR Cluster</h4>
+<p>For step-by-step installation, there is no interactive process for creating emr cluster, so just feel free to create cluster on emr web console. but we have to wait for the cluster is completely ready (in “WAITING” status), then export following environment-specific variables:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> EMR_CLUSTER_ID=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> KERBEROS_REALM=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> KERBEROS_KDC_HOST=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br></pre></td></tr></table></figure>
-
 <p>The following is a copy of example:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> EMR_CLUSTER_ID=<span class="string">&#x27;j-8SRQM6X4ZVT8&#x27;</span></span><br><span class="line"><span class="built_in">export</span> KERBEROS_REALM=<span class="string">&#x27;COMPUTE.INTERNAL&#x27;</span></span><br><span class="line"><span class="built_in">export</span> KERBEROS_KDC_HOST=<span class="string">&#x27;ip-10-0-3-104.cn-north-1.compute.internal&#x27;</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="2-3-9-Migrate-Kerberos-DB"><a href="#2-3-9-Migrate-Kerberos-DB" class="headerlink" title="2.3.9 Migrate Kerberos DB"></a>2.3.9 Migrate Kerberos DB</h4><p>The default database of Kerberos is file-based, and store on KDC, this step will migrate all principals’ data to OpenLDAP. Please pay more attention to this step, if you run an external KDC and it is NOT dedicated for your emr cluster, you may skip this step unless you are sure you need migrate an external KDC to your OpenLDAP.</p>
+<h4 id="2-3-9-Migrate-Kerberos-DB">2.3.9 Migrate Kerberos DB</h4>
+<p>The default database of Kerberos is file-based, and store on KDC, this step will migrate all principals’ data to OpenLDAP. Please pay more attention to this step, if you run an external KDC and it is NOT dedicated for your emr cluster, you may skip this step unless you are sure you need migrate an external KDC to your OpenLDAP.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh migrate-kerberos-db \</span><br><span class="line">    --region <span class="variable">$REGION</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --kerberos-realm <span class="string">&quot;<span class="variable">$KERBEROS_REALM</span>&quot;</span> \</span><br><span class="line">    --kerberos-kdc-host <span class="string">&quot;<span class="variable">$KERBEROS_KDC_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-root-cn <span class="string">&#x27;admin&#x27;</span> \</span><br><span class="line">    --openldap-root-password <span class="string">&#x27;Admin1234!&#x27;</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="2-3-10-Enable-SASL-GSSAPI"><a href="#2-3-10-Enable-SASL-GSSAPI" class="headerlink" title="2.3.10 Enable SASL&#x2F;GSSAPI"></a>2.3.10 Enable SASL&#x2F;GSSAPI</h4><p>This step will enable SASL&#x2F;GSSAPI, this is a key action of OpenLDAP and Kerberos integration, it will perform remote actions on OpenLDAP, Kerberos KDC and each node of emr cluster, as before, you just need run it on local host.</p>
+<h4 id="2-3-10-Enable-SASL-GSSAPI">2.3.10 Enable SASL/GSSAPI</h4>
+<p>This step will enable SASL/GSSAPI, this is a key action of OpenLDAP and Kerberos integration, it will perform remote actions on OpenLDAP, Kerberos KDC and each node of emr cluster, as before, you just need run it on local host.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh enable-sasl-gssapi \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --kerberos-realm <span class="string">&quot;<span class="variable">$KERBEROS_REALM</span>&quot;</span> \</span><br><span class="line">    --kerberos-kdc-host <span class="string">&quot;<span class="variable">$KERBEROS_KDC_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-root-cn <span class="string">&#x27;admin&#x27;</span> \</span><br><span class="line">    --openldap-root-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --emr-cluster-id <span class="string">&quot;<span class="variable">$EMR_CLUSTER_ID</span>&quot;</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="2-3-11-Install-SSSD"><a href="#2-3-11-Install-SSSD" class="headerlink" title="2.3.11 Install SSSD"></a>2.3.11 Install SSSD</h4><p>This step will install and config SSSD on each node of emr cluster. The same to installing OpenLDAP, we should still keep in local host to run the command line, it will perform on remote nodes via SSH.</p>
+<h4 id="2-3-11-Install-SSSD">2.3.11 Install SSSD</h4>
+<p>This step will install and config SSSD on each node of emr cluster. The same to installing OpenLDAP, we should still keep in local host to run the command line, it will perform on remote nodes via SSH.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> ./ranger-emr-cli-installer/bin/setup.sh install-sssd \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --sssd-bind-dn <span class="string">&#x27;cn=sssd,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --sssd-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --emr-cluster-id <span class="string">&quot;<span class="variable">$EMR_CLUSTER_ID</span>&quot;</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="2-3-12-Configure-Hue"><a href="#2-3-12-Configure-Hue" class="headerlink" title="2.3.12 Configure Hue"></a>2.3.12 Configure Hue</h4><p>This step will update hue configuration of emr, as highlighted in all-in-one installation , if you have other customized emr configuration, please skip this step, but you can still manually merge generated json file for hue configuration by command line into your own json.</p>
+<h4 id="2-3-12-Configure-Hue">2.3.12 Configure Hue</h4>
+<p>This step will update hue configuration of emr, as highlighted in all-in-one installation , if you have other customized emr configuration, please skip this step, but you can still manually merge generated json file for hue configuration by command line into your own json.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh configure-hue \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --hue-bind-dn <span class="string">&#x27;cn=hue,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --hue-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --openldap-user-object-class <span class="string">&#x27;inetOrgPerson&#x27;</span> \</span><br><span class="line">    --emr-cluster-id <span class="string">&quot;<span class="variable">$EMR_CLUSTER_ID</span>&quot;</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="2-3-13-Create-Example-Users"><a href="#2-3-13-Create-Example-Users" class="headerlink" title="2.3.13 Create Example Users"></a>2.3.13 Create Example Users</h4><p>This step will create 2 example users in order to facilitate following verification.</p>
+<h4 id="2-3-13-Create-Example-Users">2.3.13 Create Example Users</h4>
+<p>This step will create 2 example users in order to facilitate following verification.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh add-example-users \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;openldap&#x27;</span> \</span><br><span class="line">    --kerberos-kdc-host <span class="string">&quot;<span class="variable">$KERBEROS_KDC_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-host <span class="string">&quot;<span class="variable">$OPENLDAP_HOST</span>&quot;</span> \</span><br><span class="line">    --openldap-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --openldap-root-cn <span class="string">&#x27;admin&#x27;</span> \</span><br><span class="line">    --openldap-root-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --example-users <span class="string">&#x27;example-user-1,example-user-2&#x27;</span></span><br></pre></td></tr></table></figure>
-
-<h2 id="3-Verification"><a href="#3-Verification" class="headerlink" title="3. Verification"></a>3. Verification</h2><p>After installation &amp; integration is completed, it’s time to check if ranger works or not. The verification jobs are divided into 3 parts which are against hive, emrfs(s3) and spark. First, let us login OpenLDAP via a client, i.e., LdapAdmin or Apache Directory Studio, then check out all DN, it should look as following:<br> <img src="/../../images/security/ranger-emr-2-openldap-native/8.jpeg" alt="请添加图片描述"></p>
-<p>Next, open ranger web console, the address is: <code>https://&lt;YOUR-RANGER-HOST&gt;:6182</code> , the default admin account&#x2F;password is: <code>admin/admin</code> . After login, we should open “Users&#x2F;Groups&#x2F;Roles” page first, check if example users on OpenLDAP are already synchronized to ranger as following:<br> <img src="/../../images/security/ranger-emr-2-openldap-native/9.jpeg" alt="请添加图片描述"></p>
-<h3 id="3-1-Hive-Access-Control-Verification"><a href="#3-1-Hive-Access-Control-Verification" class="headerlink" title="3.1 Hive Access Control Verification"></a>3.1 Hive Access Control Verification</h3><p>Usually, there are a set of pre-defined policies for hive plugin after installation, to eliminate interference, keep verification simple, let’s REMOVE them first:</p>
-<p> <img src="/../../images/security/ranger-emr-2-openldap-native/10.jpeg" alt="请添加图片描述"></p>
+<h2 id="3-Verification">3. Verification</h2>
+<p>After installation &amp; integration is completed, it’s time to check if ranger works or not. The verification jobs are divided into 3 parts which are against hive, emrfs(s3) and spark. First, let us login OpenLDAP via a client, i.e., LdapAdmin or Apache Directory Studio, then check out all DN, it should look as following:<br>
+<img src="../../images/security/ranger-emr-2-openldap-native/8.jpeg" alt="请添加图片描述"></p>
+<p>Next, open ranger web console, the address is: <code>https://&lt;YOUR-RANGER-HOST&gt;:6182</code> , the default admin account/password is: <code>admin/admin</code> . After login, we should open “Users/Groups/Roles” page first, check if example users on OpenLDAP are already synchronized to ranger as following:<br>
+<img src="../../images/security/ranger-emr-2-openldap-native/9.jpeg" alt="请添加图片描述"></p>
+<h3 id="3-1-Hive-Access-Control-Verification">3.1 Hive Access Control Verification</h3>
+<p>Usually, there are a set of pre-defined policies for hive plugin after installation, to eliminate interference, keep verification simple, let’s REMOVE them first:</p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/10.jpeg" alt="请添加图片描述"></p>
 <p>Any policy changes on ranger web console will sync to agent side (emr cluster nodes) within 30 seconds, we can run following commands on master node to check if local policy file is updated:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on master node of emr cluster</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> &#123;1..10&#125;; <span class="keyword">do</span></span><br><span class="line">    <span class="built_in">printf</span> <span class="string">&quot;\n%100s\n\n&quot;</span>|<span class="built_in">tr</span> <span class="string">&#x27; &#x27;</span> <span class="string">&#x27;=&#x27;</span></span><br><span class="line">    <span class="built_in">sudo</span> <span class="built_in">stat</span> /etc/hive/ranger_policy_cache/hiveServer2_hive.json</span><br><span class="line">    <span class="built_in">sleep</span> 3</span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
-
 <p>Once local policy file is up to date, removing-all-policies action become effective, then login Hue with OpenLDAP account “example-user-1” created by installer, open hive editor, enter following sql (remember to replace “ranger-test” with your own bucket) to create a test table (change ‘ranger-test’ to your own bucket name):</p>
 <figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- run in hue hive editor</span></span><br><span class="line"><span class="keyword">create table</span> ranger_test (</span><br><span class="line">  id <span class="type">bigint</span></span><br><span class="line">)</span><br><span class="line"><span class="type">row</span> format delimited</span><br><span class="line">stored <span class="keyword">as</span> textfile location <span class="string">&#x27;s3://ranger-test/&#x27;</span>;</span><br></pre></td></tr></table></figure>
-
 <p>then, run it and an error occurs:</p>
-<p> <img src="/../../images/security/ranger-emr-2-openldap-native/11.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/11.jpeg" alt="请添加图片描述"></p>
 <p>It shows example-user-1 is blocked by database-related permissions, this proves hive plugin is working, then we go back to ranger, add a hive policy named “all - database, table, column” as following:</p>
-<p> <img src="/../../images/security/ranger-emr-2-openldap-native/12.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/12.jpeg" alt="请添加图片描述"></p>
 <p>It grants example-user-1 all privileges on all databases, tables and columns, then check policy file again on master node with previous command line, once updated, go back to Hue, re-run that sql, we will get another error at this time:</p>
-<p> <img src="/../../images/security/ranger-emr-2-openldap-native/13.jpeg" alt="请添加图片描述"></p>
-<p>As shown, the sql is blocked when reading “s3:&#x2F;&#x2F;ranger-test”, actually, example-user-1 has no permissions to access any URL, including “s3:&#x2F;&#x2F;”. We need grant url-related permissions to this user, so go back to ranger again, add a hive policy named “all - url” as following:</p>
-<p> <img src="/../../images/security/ranger-emr-2-openldap-native/14.jpeg" alt="请添加图片描述"></p>
-<p>It grants example-user-1 all privileges on any url, including “s3:&#x2F;&#x2F;”, then check policy file again, and switch to Hue, run that sql third time, it will go well as following:</p>
-<p> <img src="/../../images/security/ranger-emr-2-openldap-native/15.jpeg" alt="请添加图片描述"></p>
-<p>At the end, to prepare for next EMRFS &#x2F; Spark verification, we need insert some example data into the table, and also double check if example-user-1 has full read &amp; write permissions on the table:</p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/13.jpeg" alt="请添加图片描述"></p>
+<p>As shown, the sql is blocked when reading “s3://ranger-test”, actually, example-user-1 has no permissions to access any URL, including “s3://”. We need grant url-related permissions to this user, so go back to ranger again, add a hive policy named “all - url” as following:</p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/14.jpeg" alt="请添加图片描述"></p>
+<p>It grants example-user-1 all privileges on any url, including “s3://”, then check policy file again, and switch to Hue, run that sql third time, it will go well as following:</p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/15.jpeg" alt="请添加图片描述"></p>
+<p>At the end, to prepare for next EMRFS / Spark verification, we need insert some example data into the table, and also double check if example-user-1 has full read &amp; write permissions on the table:</p>
 <figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">insert into</span> ranger_test(id) <span class="keyword">values</span>(<span class="number">1</span>);</span><br><span class="line"><span class="keyword">insert into</span> ranger_test(id) <span class="keyword">values</span>(<span class="number">2</span>);</span><br><span class="line"><span class="keyword">insert into</span> ranger_test(id) <span class="keyword">values</span>(<span class="number">3</span>);</span><br><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> ranger_test;</span><br></pre></td></tr></table></figure>
-
 <p>The execution result is:</p>
-<p> <img src="/../../images/security/ranger-emr-2-openldap-native/16.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/16.jpeg" alt="请添加图片描述"></p>
 <p>By now, hive access control verifications are passed.</p>
-<h3 id="3-2-EMRFS-S3-Access-Control-Verification"><a href="#3-2-EMRFS-S3-Access-Control-Verification" class="headerlink" title="3.2 EMRFS (S3) Access Control Verification"></a>3.2 EMRFS (S3) Access Control Verification</h3><p>Login Hue with account “example-user-1”, open scala editor, enter following spark codes:</p>
+<h3 id="3-2-EMRFS-S3-Access-Control-Verification">3.2 EMRFS (S3) Access Control Verification</h3>
+<p>Login Hue with account “example-user-1”, open scala editor, enter following spark codes:</p>
 <figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"># run in scala editor of hue</span><br><span class="line">spark.read.csv(<span class="string">&quot;s3://ranger-test/&quot;</span>).show;</span><br></pre></td></tr></table></figure>
-
 <p>This line of codes try to read files on S3, but it will run into following errors:</p>
-<p> <img src="/../../images/security/ranger-emr-2-openldap-native/17.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/17.jpeg" alt="请添加图片描述"></p>
 <p>It shows example-user-1 has no permission on s3 bucket “ranger-test”. This proves emrfs plugin is working, it successfully blocked unauthorized s3 access. Let’s login ranger, add an emrfs policy named “all - ranger-test” as following:</p>
-<p> <img src="/../../images/security/ranger-emr-2-openldap-native/18.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/18.jpeg" alt="请添加图片描述"></p>
 <p>It will grant example-user-1 all privileges on “ranger-test” bucket. Similar to checking hive policy file, we can also run following command to check if emrfs policy file is updated:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on master node of emr cluster</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> &#123;1..10&#125;; <span class="keyword">do</span></span><br><span class="line">    <span class="built_in">printf</span> <span class="string">&quot;\n%100s\n\n&quot;</span>|<span class="built_in">tr</span> <span class="string">&#x27; &#x27;</span> <span class="string">&#x27;=&#x27;</span></span><br><span class="line">    <span class="built_in">sudo</span> <span class="built_in">stat</span> /emr/secretagent/ranger_policy_cache/emrS3RangerPlugin_emrfs.json</span><br><span class="line">    <span class="built_in">sleep</span> 3</span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
-
 <p>After updated, go back to Hue, re-run previous spark codes, it will succeed as following:</p>
-<p> <img src="/../../images/security/ranger-emr-2-openldap-native/19.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/19.jpeg" alt="请添加图片描述"></p>
 <p>By now, emrfs access control verifications are passed.</p>
-<h3 id="3-3-Spark-Access-Control-Verification"><a href="#3-3-Spark-Access-Control-Verification" class="headerlink" title="3.3 Spark Access Control Verification"></a>3.3 Spark Access Control Verification</h3><p>Login Hue with account “example-user-1”, open scala editor, enter following spark codes:</p>
+<h3 id="3-3-Spark-Access-Control-Verification">3.3 Spark Access Control Verification</h3>
+<p>Login Hue with account “example-user-1”, open scala editor, enter following spark codes:</p>
 <figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"># run in scala editor of hue</span><br><span class="line">spark.sql(<span class="string">&quot;select * from ranger_test&quot;</span>).show</span><br></pre></td></tr></table></figure>
-
 <p>This line of codes try to ranger_test table via spark sql, but it will run into following errors:</p>
-<p> <img src="/../../images/security/ranger-emr-2-openldap-native/20.jpeg" alt="请添加图片描述"></p>
-<p>It shows current user has no permission on default database. This proves spark plugin is working, it successfully blocked unauthorized database&#x2F;tables access.</p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/20.jpeg" alt="请添加图片描述"></p>
+<p>It shows current user has no permission on default database. This proves spark plugin is working, it successfully blocked unauthorized database/tables access.</p>
 <p>Let’s login ranger, add a spark policy named “all - database, table, column” as following:</p>
-<p> <img src="/../../images/security/ranger-emr-2-openldap-native/21.jpeg" alt="请添加图片描述"></p>
-<p>It will grant example-user-1 all privileges on all databases&#x2F;tables&#x2F;columns. Similar to checking hive policy file, we can also run following command to check if spark policy file is updated:</p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/21.jpeg" alt="请添加图片描述"></p>
+<p>It will grant example-user-1 all privileges on all databases/tables/columns. Similar to checking hive policy file, we can also run following command to check if spark policy file is updated:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on master node of emr cluster</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> &#123;1..10&#125;; <span class="keyword">do</span></span><br><span class="line">    <span class="built_in">printf</span> <span class="string">&quot;\n%100s\n\n&quot;</span>|<span class="built_in">tr</span> <span class="string">&#x27; &#x27;</span> <span class="string">&#x27;=&#x27;</span></span><br><span class="line">    <span class="built_in">sudo</span> <span class="built_in">stat</span> /etc/emr-record-server/ranger_policy_cache/emrSparkRangerPlugin_spark.json </span><br><span class="line">    <span class="built_in">sleep</span> 3</span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
-
 <p>After updated, go back to Hue, re-run previous spark codes, it will succeed as following:</p>
-<p> <img src="/../../images/security/ranger-emr-2-openldap-native/22.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-2-openldap-native/22.jpeg" alt="请添加图片描述"></p>
 <p>By now, spark access control verifications are passed.</p>
-<h2 id="4-FAQ"><a href="#4-FAQ" class="headerlink" title="4. FAQ"></a>4. FAQ</h2><h3 id="4-1-How-to-Integrate-an-External-KDC"><a href="#4-1-How-to-Integrate-an-External-KDC" class="headerlink" title="4.1 How to Integrate an External KDC?"></a>4.1 How to Integrate an External KDC?</h3><p>Keep everything as usual, but when creating emr cluster, do NOT select the generated security configuration by cli instead of creating another one manually, copy all values from the generated security configuration except “Authentication” part. For “Authentication”, select “External KDC” and fill your own values, and when entering Kerberos KDC host in command line console or exporting KERBEROS_KDC_HOST, also use your external KDC host name. Last, be sure if you still need migrate an external Kerberos database to OpenLDAP, if no, skip it with <code>--skip-migrate-kerberos-db true</code> .</p>
-<h3 id="4-2-Can-I-Rerun-the-All-In-One-Installation-Command-Line"><a href="#4-2-Can-I-Rerun-the-All-In-One-Installation-Command-Line" class="headerlink" title="4.2 Can I Rerun the All-In-One Installation Command Line?"></a>4.2 Can I Rerun the All-In-One Installation Command Line?</h3><p>Yes! and you need NOT take any cleanup actions.</p>
-<h2 id="5-Appendix"><a href="#5-Appendix" class="headerlink" title="5. Appendix"></a>5. Appendix</h2><p>The following is parameter specification:</p>
+<h2 id="4-FAQ">4. FAQ</h2>
+<h3 id="4-1-How-to-Integrate-an-External-KDC">4.1 How to Integrate an External KDC?</h3>
+<p>Keep everything as usual, but when creating emr cluster, do NOT select the generated security configuration by cli instead of creating another one manually, copy all values from the generated security configuration except “Authentication” part. For “Authentication”, select “External KDC” and fill your own values, and when entering Kerberos KDC host in command line console or exporting KERBEROS_KDC_HOST, also use your external KDC host name. Last, be sure if you still need migrate an external Kerberos database to OpenLDAP, if no, skip it with <code>--skip-migrate-kerberos-db true</code> .</p>
+<h3 id="4-2-Can-I-Rerun-the-All-In-One-Installation-Command-Line">4.2 Can I Rerun the All-In-One Installation Command Line?</h3>
+<p>Yes! and you need NOT take any cleanup actions.</p>
+<h2 id="5-Appendix">5. Appendix</h2>
+<p>The following is parameter specification:</p>
 <table>
 <thead>
 <tr>
-<th align="left">Parameter</th>
-<th align="left">Comment</th>
+<th style="text-align:left">Parameter</th>
+<th style="text-align:left">Comment</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="left">–region</td>
-<td align="left">the aws region.</td>
+<tbody>
+<tr>
+<td style="text-align:left">–region</td>
+<td style="text-align:left">the aws region.</td>
 </tr>
 <tr>
-<td align="left">–access-key-id</td>
-<td align="left">the aws access key id of your IAM account.</td>
+<td style="text-align:left">–access-key-id</td>
+<td style="text-align:left">the aws access key id of your IAM account.</td>
 </tr>
 <tr>
-<td align="left">–secret-access-key</td>
-<td align="left">the aws secret access key of your IAM account.</td>
+<td style="text-align:left">–secret-access-key</td>
+<td style="text-align:left">the aws secret access key of your IAM account.</td>
 </tr>
 <tr>
-<td align="left">–ssh-key</td>
-<td align="left">the ssh private key file path.</td>
+<td style="text-align:left">–ssh-key</td>
+<td style="text-align:left">the ssh private key file path.</td>
 </tr>
 <tr>
-<td align="left">–solution</td>
-<td align="left">the solution name, accepted values ‘open-source’ or ‘emr-native’.</td>
+<td style="text-align:left">–solution</td>
+<td style="text-align:left">the solution name, accepted values ‘open-source’ or ‘emr-native’.</td>
 </tr>
 <tr>
-<td align="left">–auth-provider</td>
-<td align="left">the authentication provider, accepted values ‘ad’ or ‘openldap’.</td>
+<td style="text-align:left">–auth-provider</td>
+<td style="text-align:left">the authentication provider, accepted values ‘ad’ or ‘openldap’.</td>
 </tr>
 <tr>
-<td align="left">–openldap-host</td>
-<td align="left">the FQDN of openldap host.</td>
+<td style="text-align:left">–openldap-host</td>
+<td style="text-align:left">the FQDN of openldap host.</td>
 </tr>
 <tr>
-<td align="left">–openldap-base-dn</td>
-<td align="left">the base dn of openldap, for example: ‘dc&#x3D;example,dc&#x3D;com’, change it according to your env.</td>
+<td style="text-align:left">–openldap-base-dn</td>
+<td style="text-align:left">the base dn of openldap, for example: ‘dc=example,dc=com’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–openldap-root-cn</td>
-<td align="left">the cn of root account, for example: ‘admin’, change it according to your env.</td>
+<td style="text-align:left">–openldap-root-cn</td>
+<td style="text-align:left">the cn of root account, for example: ‘admin’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–openldap-root-password</td>
-<td align="left">the password of root account, for example: ‘Admin1234!’, change it according to your env.</td>
+<td style="text-align:left">–openldap-root-password</td>
+<td style="text-align:left">the password of root account, for example: ‘Admin1234!’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–ranger-bind-dn</td>
-<td align="left">the bind dn for ranger, for example: ‘cn&#x3D;ranger,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+<td style="text-align:left">–ranger-bind-dn</td>
+<td style="text-align:left">the bind dn for ranger, for example: ‘cn=ranger,ou=services,dc=example,dc=com’, this should be an existing dn on Windows AD / OpenLDAP, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–ranger-bind-password</td>
-<td align="left">the password of ranger bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+<td style="text-align:left">–ranger-bind-password</td>
+<td style="text-align:left">the password of ranger bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–openldap-user-dn-pattern</td>
-<td align="left">the dn pattern for ranger to search users on OpenLDAP, for example: ‘uid&#x3D;{0},ou&#x3D;users,dc&#x3D;example,dc&#x3D;com’, change it according to your env.</td>
+<td style="text-align:left">–openldap-user-dn-pattern</td>
+<td style="text-align:left">the dn pattern for ranger to search users on OpenLDAP, for example: ‘uid={0},ou=users,dc=example,dc=com’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–openldap-group-search-filter</td>
-<td align="left">the filter for ranger to search groups on OpenLDAP, for example: ‘(member&#x3D;uid&#x3D;{0},ou&#x3D;users,dc&#x3D;example,dc&#x3D;com)’, change it according to your env.</td>
+<td style="text-align:left">–openldap-group-search-filter</td>
+<td style="text-align:left">the filter for ranger to search groups on OpenLDAP, for example: ‘(member=uid={0},ou=users,dc=example,dc=com)’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–openldap-user-object-class</td>
-<td align="left">the user object class for ranger to search users, for example: ‘inetOrgPerson’, change it according to your env.</td>
+<td style="text-align:left">–openldap-user-object-class</td>
+<td style="text-align:left">the user object class for ranger to search users, for example: ‘inetOrgPerson’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–hue-bind-dn</td>
-<td align="left">the bind dn for hue, for example: ‘cn&#x3D;hue,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+<td style="text-align:left">–hue-bind-dn</td>
+<td style="text-align:left">the bind dn for hue, for example: ‘cn=hue,ou=services,dc=example,dc=com’, this should be an existing dn on Windows AD / OpenLDAP, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–hue-bind-password</td>
-<td align="left">the password of hue bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+<td style="text-align:left">–hue-bind-password</td>
+<td style="text-align:left">the password of hue bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–example-users</td>
-<td align="left">the example users to be created on OpenLDAP &amp; Kerberos so as to demo ranger’s feature, this parameter is optional, if omitted, no example users will be created.</td>
+<td style="text-align:left">–example-users</td>
+<td style="text-align:left">the example users to be created on OpenLDAP &amp; Kerberos so as to demo ranger’s feature, this parameter is optional, if omitted, no example users will be created.</td>
 </tr>
 <tr>
-<td align="left">–ranger-bind-dn</td>
-<td align="left">the bind dn for ranger, for example: ‘cn&#x3D;ranger,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+<td style="text-align:left">–ranger-bind-dn</td>
+<td style="text-align:left">the bind dn for ranger, for example: ‘cn=ranger,ou=services,dc=example,dc=com’, this should be an existing dn on Windows AD / OpenLDAP, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–ranger-bind-password</td>
-<td align="left">the password of bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+<td style="text-align:left">–ranger-bind-password</td>
+<td style="text-align:left">the password of bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–hue-bind-dn</td>
-<td align="left">the bind dn for hue, for example: ‘cn&#x3D;hue,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+<td style="text-align:left">–hue-bind-dn</td>
+<td style="text-align:left">the bind dn for hue, for example: ‘cn=hue,ou=services,dc=example,dc=com’, this should be an existing dn on Windows AD / OpenLDAP, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–hue-bind-password</td>
-<td align="left">the password of hue bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+<td style="text-align:left">–hue-bind-password</td>
+<td style="text-align:left">the password of hue bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–sssd-bind-dn</td>
-<td align="left">the bind dn for sssd, for example: ‘cn&#x3D;sssd,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+<td style="text-align:left">–sssd-bind-dn</td>
+<td style="text-align:left">the bind dn for sssd, for example: ‘cn=sssd,ou=services,dc=example,dc=com’, this should be an existing dn on Windows AD / OpenLDAP, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–sssd-bind-password</td>
-<td align="left">the password of sssd bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+<td style="text-align:left">–sssd-bind-password</td>
+<td style="text-align:left">the password of sssd bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–ranger-plugins</td>
-<td align="left">the ranger plugins to be installed, comma separated for multiple values. for example: ‘emr-native-emrfs,emr-native-spark,emr-native-hive’, change it according to your env.</td>
+<td style="text-align:left">–ranger-plugins</td>
+<td style="text-align:left">the ranger plugins to be installed, comma separated for multiple values. for example: ‘emr-native-emrfs,emr-native-spark,emr-native-hive’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–skip-configure-hue</td>
-<td align="left">skip to configure hue, accepted values ‘true’ or ‘false’, dafault value is ‘false’.</td>
+<td style="text-align:left">–skip-configure-hue</td>
+<td style="text-align:left">skip to configure hue, accepted values ‘true’ or ‘false’, dafault value is ‘false’.</td>
 </tr>
 <tr>
-<td align="left">–skip-migrate-kerberos-db</td>
-<td align="left">skip to migrate kerberos database, accepted values ‘true’ or ‘false’, dafault value is ‘false’.</td>
+<td style="text-align:left">–skip-migrate-kerberos-db</td>
+<td style="text-align:left">skip to migrate kerberos database, accepted values ‘true’ or ‘false’, dafault value is ‘false’.</td>
 </tr>
-</tbody></table>
+</tbody>
+</table>
 <p>Related Reading:</p>
 <table>
 <thead>
 <tr>
-<th align="left">Apache Ranger and AWS EMR Automated Installation Series</th>
+<th style="text-align:left">Apache Ranger and AWS EMR Automated Installation Series</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="left"><a href="/security/ranger-emr-1-overview/">Apache Ranger and AWS EMR Automated Installation Series (1): Solutions Overview</a></td>
+<tbody>
+<tr>
+<td style="text-align:left"><a href="/security/ranger-emr-1-overview/">Apache Ranger and AWS EMR Automated Installation Series (1): Solutions Overview</a></td>
 </tr>
 <tr>
-<td align="left"><a href="/security/ranger-emr-2-openldap-native/">Apache Ranger and AWS EMR Automated Installation Series (2): OpenLDAP + EMR-Native Ranger</a></td>
+<td style="text-align:left"><a href="/security/ranger-emr-2-openldap-native/">Apache Ranger and AWS EMR Automated Installation Series (2): OpenLDAP + EMR-Native Ranger</a></td>
 </tr>
 <tr>
-<td align="left"><a href="/security/ranger-emr-3-ad-native/">Apache Ranger and AWS EMR Automated Installation Series (3): Windows AD + EMR-Native Ranger</a></td>
+<td style="text-align:left"><a href="/security/ranger-emr-3-ad-native/">Apache Ranger and AWS EMR Automated Installation Series (3): Windows AD + EMR-Native Ranger</a></td>
 </tr>
 <tr>
-<td align="left"><a href="/security/ranger-emr-4-openldap-open-source/">Apache Ranger and AWS EMR Automated Installation Series (4): OpenLDAP + Open-Source Ranger</a></td>
+<td style="text-align:left"><a href="/security/ranger-emr-4-openldap-open-source/">Apache Ranger and AWS EMR Automated Installation Series (4): OpenLDAP + Open-Source Ranger</a></td>
 </tr>
 <tr>
-<td align="left"><a href="/security/ranger-emr-5-ad-open-source/">Apache Ranger and AWS EMR Automated Installation Series (5): Windows AD + Open-Source Ranger</a></td>
+<td style="text-align:left"><a href="/security/ranger-emr-5-ad-open-source/">Apache Ranger and AWS EMR Automated Installation Series (5): Windows AD + Open-Source Ranger</a></td>
 </tr>
-</tbody></table>
+</tbody>
+</table>
 </div><div class="article-licensing box"><div class="licensing-title"><p>Apache Ranger 与 AWS EMR 自动化安装与集成 (2)：OpenLDAP + EMR-Native Ranger</p><p><a href="https://laurence.enlightgram.com/security/ranger-emr-2-openldap-native/">https://laurence.enlightgram.com/security/ranger-emr-2-openldap-native/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2022-12-07</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/EMR/">EMR</a><a class="link-muted mr-2" rel="tag" href="/tags/Ranger/">Ranger</a><a class="link-muted mr-2" rel="tag" href="/tags/OpenLDAP/">OpenLDAP</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/design-pattern/decorator-pattern-recap/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">装饰器（Decorator）模式Recap</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/bigdata/tpc-c-h-ds-ssb-benchmarks/"><span class="level-item">TPC-C 、TPC-H、TPC-DS和SSB测试基准（Benchmark）介绍</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

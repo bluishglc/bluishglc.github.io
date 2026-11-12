@@ -43,54 +43,58 @@
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">在AWS Glue上使用JDBC连接Trino</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/AWS/">AWS</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2023-02-18T19:40:15.000Z" title="2023-02-18 11:40:15">2023-02-18</time></span><span class="level-item is-hidden-mobile">阅读用时：3 分钟 (约 448 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>呼应此前一篇文章 <a href="/spark/spark-jdbc-trino/">《在Spark上使用JDBC连接Trino》</a> ，继续在AWS Glue上测试JDBC连接Trino，同样，这是一个非常不典型的应用用场景，本文仅记录测试步骤和结果，不做评论。本文地址： <a href="/aws/glue-jdbc-trino/">https://laurence.enlightgram.com/aws/glue-jdbc-trino/</a> ，转载请注明出处！</p>
-<h2 id="1-测试环境"><a href="#1-测试环境" class="headerlink" title="1. 测试环境"></a>1. 测试环境</h2><table>
+<h2 id="1-测试环境">1. 测试环境</h2>
+<table>
 <thead>
 <tr>
-<th align="left">信息项</th>
-<th align="left">设定值</th>
+<th style="text-align:left">信息项</th>
+<th style="text-align:left">设定值</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="left">测试环境</td>
-<td align="left">AWS Glue 3.0 + Trino 398 ( over EMR 6.9.0 )</td>
+<tbody>
+<tr>
+<td style="text-align:left">测试环境</td>
+<td style="text-align:left">AWS Glue 3.0 + Trino 398 ( over EMR 6.9.0 )</td>
 </tr>
 <tr>
-<td align="left">Metastore</td>
-<td align="left">Glue Data Catalog</td>
+<td style="text-align:left">Metastore</td>
+<td style="text-align:left">Glue Data Catalog</td>
 </tr>
 <tr>
-<td align="left">Trino Server</td>
-<td align="left">10.0.129.105</td>
+<td style="text-align:left">Trino Server</td>
+<td style="text-align:left">10.0.129.105</td>
 </tr>
 <tr>
-<td align="left">Trino端口</td>
-<td align="left">8889 ( 区别于开源默认端口8080 )</td>
+<td style="text-align:left">Trino端口</td>
+<td style="text-align:left">8889 ( 区别于开源默认端口8080 )</td>
 </tr>
-</tbody></table>
-<h2 id="2-测试目标"><a href="#2-测试目标" class="headerlink" title="2. 测试目标"></a>2. 测试目标</h2><p>测试在Glue上使用JDBC读写Trino的可行性</p>
-<h2 id="3-操作步骤"><a href="#3-操作步骤" class="headerlink" title="3. 操作步骤"></a>3. 操作步骤</h2><p>① 创建Glue Connection</p>
+</tbody>
+</table>
+<h2 id="2-测试目标">2. 测试目标</h2>
+<p>测试在Glue上使用JDBC读写Trino的可行性</p>
+<h2 id="3-操作步骤">3. 操作步骤</h2>
+<p>① 创建Glue Connection</p>
 <p>选择JDBC 类 型的Connection，配置好JDBC URL和网络，Glue Connection最重要的作用是配置Glue Worker到目标数据源的网络联通性，所以务必要清楚Trino所在VPC，子网以及可确保联通的安全组：</p>
-<p> <img src="/../../images/aws/glue-jdbc-trino/1.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/aws/glue-jdbc-trino/1.png" alt="在这里插入图片描述"></p>
 <p>② 在Hive中创建数据表并插入测试数据：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 在Hive所在EMR主节点上执行</span></span><br><span class="line"><span class="built_in">cat</span> | hive &lt;&lt;<span class="string">EOF</span></span><br><span class="line"><span class="string">CREATE TABLE IF NOT EXISTS orders (</span></span><br><span class="line"><span class="string">  orderkey bigint,</span></span><br><span class="line"><span class="string">  orderstatus string,</span></span><br><span class="line"><span class="string">  totalprice double,</span></span><br><span class="line"><span class="string">  orderdate date</span></span><br><span class="line"><span class="string">);</span></span><br><span class="line"><span class="string">INSERT INTO orders VALUES (1, &#x27;DONE&#x27;, 2342, current_date());</span></span><br><span class="line"><span class="string">INSERT INTO orders VALUES (2, &#x27;DONE&#x27;, 892, current_date());</span></span><br><span class="line"><span class="string">INSERT INTO orders VALUES (3, &#x27;DONE&#x27;, 7843, current_date());</span></span><br><span class="line"><span class="string">SELECT * FROM orders;</span></span><br><span class="line"><span class="string">EOF</span></span><br></pre></td></tr></table></figure>
-
 <p>③ 将Trino JDBC Driver上传至S3</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 在Trino所在EMR主节点上执行</span></span><br><span class="line">aws s3 <span class="built_in">cp</span> /usr/lib/trino/trino-jdbc/trino-jdbc-398-amzn-0.jar s3://YOUR_BUCKET/trino-jdbc-398-amzn-0.jar</span><br></pre></td></tr></table></figure>
-
 <p>④ 创建Glue Job</p>
 <p>有两点区别于普通Glue Job:</p>
 <ol>
-<li><p>需attach上一步创建的connection</p>
+<li>
+<p>需attach上一步创建的connection</p>
 </li>
-<li><p>需指定trino jdbc driver路径 （即为第②步中上传的jar包路径）</p>
+<li>
+<p>需指定trino jdbc driver路径 （即为第②步中上传的jar包路径）</p>
 </li>
 </ol>
-<p> <img src="/../../images/aws/glue-jdbc-trino/2.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/aws/glue-jdbc-trino/2.png" alt="在这里插入图片描述"></p>
 <p>⑤ 编写测试代码</p>
 <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> sys</span><br><span class="line"><span class="keyword">from</span> awsglue.transforms <span class="keyword">import</span> *</span><br><span class="line"><span class="keyword">from</span> pyspark.context <span class="keyword">import</span> SparkContext</span><br><span class="line"><span class="keyword">from</span> awsglue.context <span class="keyword">import</span> GlueContext</span><br><span class="line"><span class="keyword">from</span> awsglue.job <span class="keyword">import</span> Job</span><br><span class="line"></span><br><span class="line">sc = SparkContext()</span><br><span class="line">glueContext = GlueContext(sc)</span><br><span class="line">job = Job(glueContext)</span><br><span class="line"><span class="comment"># Please update the values in the options to connect to your own data source</span></span><br><span class="line">options = &#123;</span><br><span class="line">    <span class="string">&quot;dbTable&quot;</span>:<span class="string">&quot;orders&quot;</span>,</span><br><span class="line">    <span class="string">&quot;url&quot;</span> : <span class="string">&quot;jdbc:trino://10.0.129.105:8889/hive/default&quot;</span>,</span><br><span class="line">    <span class="string">&quot;user&quot;</span>: <span class="string">&quot;hadoop&quot;</span>,</span><br><span class="line">    <span class="string">&quot;password&quot;</span>: <span class="string">&quot;&quot;</span>,</span><br><span class="line">    <span class="string">&quot;className&quot;</span> : <span class="string">&quot;io.trino.jdbc.TrinoDriver&quot;</span></span><br><span class="line">    &#125;</span><br><span class="line">datasource = glueContext.create_dynamic_frame_from_options(</span><br><span class="line">    connection_type = <span class="string">&quot;custom.jdbc&quot;</span>, </span><br><span class="line">    connection_options = options,</span><br><span class="line">    transformation_ctx = <span class="string">&quot;datasource&quot;</span>)</span><br><span class="line">datasource.show()</span><br><span class="line"></span><br><span class="line">job.commit()</span><br></pre></td></tr></table></figure>
-
 <p>⑥ 程序输出</p>
-<p> <img src="/../../images/aws/glue-jdbc-trino/3.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/aws/glue-jdbc-trino/3.png" alt="在这里插入图片描述"></p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>在AWS Glue上使用JDBC连接Trino</p><p><a href="https://laurence.enlightgram.com/aws/glue-jdbc-trino/">https://laurence.enlightgram.com/aws/glue-jdbc-trino/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2023-02-18</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Glue/">Glue</a><a class="link-muted mr-2" rel="tag" href="/tags/JDBC/">JDBC</a><a class="link-muted mr-2" rel="tag" href="/tags/Trino/">Trino</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/aws/glue-connector-and-connection/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Glue Connector 和 Connection 的关系与区别</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/spark/spark-jdbc-trino/"><span class="level-item">在Spark上使用JDBC连接Trino</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

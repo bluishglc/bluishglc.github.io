@@ -42,100 +42,123 @@
       window.addEventListener('hashchange', switchTab, false);
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
-</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">SSL/TLS工作原理的朴素理解和演绎</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Security/">Security</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2022-03-17T17:38:48.000Z" title="2022-03-17 10:38:48">2022-03-17</time></span><span class="level-item is-hidden-mobile">阅读用时：24 分钟 (约 3592 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>尽管在数年前学习过SSL&#x2F;TLS的工作原理，并做了笔记 <a href="/security/encryption-signature-certificate-ssl-https/">《和安全有关的那些事(非对称加密、数字摘要、数字签名、数字证书、SSL、HTTPS及其他)》</a> ，然而知识就是这样，长时间不用就会淡忘，现在又需要重新复习和梳理一下SSL&#x2F;TLS相关的知识了。</p>
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">SSL/TLS工作原理的朴素理解和演绎</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Security/">Security</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2022-03-17T17:38:48.000Z" title="2022-03-17 10:38:48">2022-03-17</time></span><span class="level-item is-hidden-mobile">阅读用时：24 分钟 (约 3592 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>尽管在数年前学习过SSL/TLS的工作原理，并做了笔记 <a href="/security/encryption-signature-certificate-ssl-https/">《和安全有关的那些事(非对称加密、数字摘要、数字签名、数字证书、SSL、HTTPS及其他)》</a> ，然而知识就是这样，长时间不用就会淡忘，现在又需要重新复习和梳理一下SSL/TLS相关的知识了。</p>
 <p>首先，明确一下，几年前，大家讨论的都是SSL，这个 TLS 其实是在SSL基础上发展起来的，可以简单认为是SSL的后续升级版本，或许过几年，SSL这个名词将不再被人提起。</p>
-<p>回归正题，SSL&#x2F;TLS工作原理涉及一系列密码学的知识，需要完全吃透要花不少时间，本文是一篇个人笔记，不求对于原理的描述有多么严谨，主要是想将SSL&#x2F;TLS的工作原理以一种朴素的方式表达清楚，也便于个人记忆。行文中如有不严禁之处，请多指正。</p>
+<p>回归正题，SSL/TLS工作原理涉及一系列密码学的知识，需要完全吃透要花不少时间，本文是一篇个人笔记，不求对于原理的描述有多么严谨，主要是想将SSL/TLS的工作原理以一种朴素的方式表达清楚，也便于个人记忆。行文中如有不严禁之处，请多指正。</p>
 <p>注：本文多处引用和摘抄网络上的相关文章，会在文末注明出处。虽然配图风格各不相同，但阐述的是一个完整体系，都是完美贴合逻辑脉络的，请忽略图片风格，聚焦在图片表达的逻辑上。</p>
-<h3 id="核心问题：如何安全地通信？"><a href="#核心问题：如何安全地通信？" class="headerlink" title="核心问题：如何安全地通信？"></a>核心问题：如何安全地通信？</h3><p>SSL&#x2F;TLS解决的核心问题就是：如何安全地通信？在典型的通信场景中，会涉及到消息请求方、消息接收方两个主要角色，对应到计算机领域，请求方往往是客户端（典型如 浏览器 ），接收方往往是服务器，为了更好地表述问题，我们会在文中交替使用这种称呼。此外，通信过程中会出现各种“不速之客”，例如：劫持者，中间人等，这些是安全通信需要防范的对象。</p>
-<h3 id="V1-朴素的想法"><a href="#V1-朴素的想法" class="headerlink" title="V1: 朴素的想法"></a>V1: 朴素的想法</h3><p>确保通信安全的最朴素想法就是：对信息 加密 ！加密需要使用到密钥（简单理解的话密钥就是一串非常长的随机字符串），通信双方都持有同一个密钥，发送方在发送消息前先使用密钥对信息加密，接收方收到消息后再使用密钥解密，进而就可以得到消息明文了。过程下图所述：</p>
-<p><img src="/../../images/security/ssl-tls-explained/1.jpeg" alt="在这里插入图片描述"></p>
-<p>实际上，现行的安全通信方式，包括SSL&#x2F;TLS， 在完成握手之后的常规通信中，用的就是这种最朴素的处理方式。请注意这里的限定条件：完成握手之后，我们会在后面详细解释握手时发生的事情。</p>
+<h3 id="核心问题：如何安全地通信？">核心问题：如何安全地通信？</h3>
+<p>SSL/TLS解决的核心问题就是：如何安全地通信？在典型的通信场景中，会涉及到消息请求方、消息接收方两个主要角色，对应到计算机领域，请求方往往是客户端（典型如 浏览器 ），接收方往往是服务器，为了更好地表述问题，我们会在文中交替使用这种称呼。此外，通信过程中会出现各种“不速之客”，例如：劫持者，中间人等，这些是安全通信需要防范的对象。</p>
+<h3 id="V1-朴素的想法">V1: 朴素的想法</h3>
+<p>确保通信安全的最朴素想法就是：对信息 加密 ！加密需要使用到密钥（简单理解的话密钥就是一串非常长的随机字符串），通信双方都持有同一个密钥，发送方在发送消息前先使用密钥对信息加密，接收方收到消息后再使用密钥解密，进而就可以得到消息明文了。过程下图所述：</p>
+<p><img src="../../images/security/ssl-tls-explained/1.jpeg" alt="在这里插入图片描述"></p>
+<p>实际上，现行的安全通信方式，包括SSL/TLS， 在完成握手之后的常规通信中，用的就是这种最朴素的处理方式。请注意这里的限定条件：完成握手之后，我们会在后面详细解释握手时发生的事情。</p>
 <p>但是这一做法有一个明显的安全漏洞：就是怎么才能把这个 密钥 安全地配发给通信双方呢？这个问题在密码学中有一个专门的叫法： <strong>“密钥配送问题”</strong> 。</p>
 <p>注意：密钥配送问题在密码学中仅指对称加密中的密钥配送，这一点要搞清楚，因为在后续的非对称加密中，还会涉及到 公钥 如何安全分发的问题，虽然性质上很类似，但那个问题不叫密钥配送问题，我们会在后文单独解释。</p>
 <p>解决密钥配送问题一般有如下几种方法，这里只简单逻辑一下，不深入展开，大家可以自行参考：<a target="_blank" rel="noopener" href="https://book.douban.com/reading/33467329/">https://book.douban.com/reading/33467329/</a> 或 《图解密码技术》一书。</p>
 <ul>
-<li><p>通过事先共享密钥来解决</p>
+<li>
+<p>通过事先共享密钥来解决</p>
 </li>
-<li><p>通过密钥分配中心来解决</p>
+<li>
+<p>通过密钥分配中心来解决</p>
 </li>
-<li><p>通过DH密钥交换来解决</p>
+<li>
+<p>通过DH密钥交换来解决</p>
 </li>
-<li><p>通过公钥密钥来解决</p>
+<li>
+<p>通过公钥密钥来解决</p>
 </li>
 </ul>
-<h3 id="V2-基于非对称加密-算法-的加强版"><a href="#V2-基于非对称加密-算法-的加强版" class="headerlink" title="V2: 基于非对称加密 算法 的加强版"></a>V2: 基于非对称加密 算法 的加强版</h3><p>V1版本使用的加密方法是众所周知的“对称加密”方式，其弱点也是众所周知的，即“密码配送问题”。后来，出现了“非对称加密”算法。非对称加密方式是这样的：它的密钥分为加密密钥和解密密钥两种。加密密钥是可以公开的，因此又被称为公钥(public key)。解密密钥不能公开，只能有自己保管，因此被称为 私钥 (private key)。一对公钥和私钥是一一对应的，一般称之为密钥对。如果使用非对称加密方式传递信息，则情况如下图所示：</p>
-<p><img src="/../../images/security/ssl-tls-explained/2.png" alt="在这里插入图片描述"></p>
+<h3 id="V2-基于非对称加密-算法-的加强版">V2: 基于非对称加密 算法 的加强版</h3>
+<p>V1版本使用的加密方法是众所周知的“对称加密”方式，其弱点也是众所周知的，即“密码配送问题”。后来，出现了“非对称加密”算法。非对称加密方式是这样的：它的密钥分为加密密钥和解密密钥两种。加密密钥是可以公开的，因此又被称为公钥(public key)。解密密钥不能公开，只能有自己保管，因此被称为 私钥 (private key)。一对公钥和私钥是一一对应的，一般称之为密钥对。如果使用非对称加密方式传递信息，则情况如下图所示：</p>
+<p><img src="../../images/security/ssl-tls-explained/2.png" alt="在这里插入图片描述"></p>
 <p>在这一版中，客户端使用的密钥是来自于 服务器 的公钥，客户端用服务器的公钥加密数据，到达服务器端之后，服务器使用自己私钥解密。</p>
 <p>由于非对称加密中的密钥对拥有这样一种性质：使用私钥加密的数据只能用对应公钥才能解密，使用公钥加密的数据只能使用对应私钥才能解密，除此之外，任何其他密钥都不可以用来解密，包括用公钥解密公钥加密过的数据和用私钥解密私钥加密过的数据都是不行的。</p>
 <p>这样的话，我们可以想象，服务器只需要保留好自己的私钥，公钥可以任意传播，谁都可以获取，但是拿到公钥的人只能对数据进行加密操作，唯一能解密数据的只有服务器，这样“密码配送”的问题就解决了，因为公钥加密的数据只有服务器端的私钥可以解密，而私钥只需服务器持有即可，不需要配送给任何人。</p>
 <p>基于V1和V2两个版本，我们先来比较一下对称密码(对称加密）和公钥密码（非对称加密）优缺点</p>
 <ul>
-<li><p>对称密码(对称加密）的优缺点：性能好，但存在密码配送问题</p>
+<li>
+<p>对称密码(对称加密）的优缺点：性能好，但存在密码配送问题</p>
 </li>
-<li><p>公钥密码（非对称加密）的优缺点：没有密码配送问题，但是性能差，处理速度远低于对称密码，难以抵御中间人的攻击</p>
+<li>
+<p>公钥密码（非对称加密）的优缺点：没有密码配送问题，但是性能差，处理速度远低于对称密码，难以抵御中间人的攻击</p>
 </li>
 </ul>
 <p>梳理如下表：</p>
 <table>
 <thead>
 <tr>
-<th align="center">加密方式</th>
-<th align="center">优点</th>
-<th align="center">缺点</th>
+<th style="text-align:center">加密方式</th>
+<th style="text-align:center">优点</th>
+<th style="text-align:center">缺点</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="center">对称加密</td>
-<td align="center">性能好</td>
-<td align="center">存在“密码配送问题”</td>
+<tbody>
+<tr>
+<td style="text-align:center">对称加密</td>
+<td style="text-align:center">性能好</td>
+<td style="text-align:center">存在“密码配送问题”</td>
 </tr>
 <tr>
-<td align="center">非对称加密</td>
-<td align="center">没有“密码配送问题”</td>
-<td align="center">性能差，有“中间人攻击问题”</td>
+<td style="text-align:center">非对称加密</td>
+<td style="text-align:center">没有“密码配送问题”</td>
+<td style="text-align:center">性能差，有“中间人攻击问题”</td>
 </tr>
-</tbody></table>
+</tbody>
+</table>
 <p>这里已经引出了V2版本的一个安全漏洞“ <strong>中间人攻击</strong> ”，也叫“ <strong>公钥认证问题</strong> ”， 这是同一个问题的两种表述方式。我们来看一下具体是怎样一种情况：</p>
-<p><img src="/../../images/security/ssl-tls-explained/3.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/security/ssl-tls-explained/3.png" alt="在这里插入图片描述"></p>
 <p>所谓中间人攻击是这样一种逻辑：当客户端向服务器请求公钥时，如果中间链路上有一个窃听者，它截获了服务器返回的公钥，我们把服务器的这个公钥称之为公钥A，然后窃听者将服务器的公钥A替换成了自己的公钥，我们把窃听者这个自己的公钥称之为公钥B，这样，客户端原本请求的是服务器公钥A，但实际拿到的是窃听者的公钥B，后续所有从客户端发送的消息，都可以在窃听者那里被解密，为了使会话持续，窃听者每次解密消息之后，还会使用服务器的公钥A对客户端的消息重新进行加密，再发给服务器，从而在客户端与服务器两者之间架设了无缝的监听通路。</p>
 <p>所以我们可以看到，这个安全漏洞还是出现在服务器向客户端派发公钥的过程中，虽然这一问题不是对称加密中的“密钥配送问题”，但性质上是非常类似的，都是关于“怎么把一个密钥安全地配送出去？”（对于客户端来说，这个问题也可以表述为：怎么认证他拿到的公钥是正确安全的呢？这就是所谓的“公钥认证问题”。）</p>
-<p><strong>我们用朴素的逻辑思考一下应该如何从根本上解决公钥认证（中间人攻击）问题？既然在没有建立安全通道的前提下传输密钥可能会被窃取，而建立安全通道又必须要先传输密钥，这就变成了一个鸡生蛋蛋生鸡的死锁问题。那么，索性不传递密钥是否可行呢？如果能把公钥固化到客户端（例如浏览器）里，就可以解决这个问题，但问题是每天都会各种各样的服务器上线和下线，固化到客户端的密钥是无法同步进行变更的，且任何的变更通信本身都是不可靠的。面对这种局面，我们的解题思路是: 设立一个“安全可靠的第三方服务器”，它有一对自己的公钥和私钥，把它的公钥固化到所有的客户端，各种应用服务器拿着自己的公钥到这台服务器上，用这台服务器的私钥来加密它们的公钥（加密后的公钥就被称为了证书），这样，客户端再请求与服务器通信时，从服务器那里拿到的不再是明码的公钥，而是经过了加密的公钥，而解密这个公钥使用的正是已经固化在了客户端的第三方服务器的公钥。这样，中间人没有从中插手的机会了，因为中间人没有这个第三方服务器的公钥，这个公钥从来没有在网络上传送过，所以没有给中间人在传输中去截获的任何机会，因为它固化到了客户端的软件里，这就完美地破解鸡生蛋蛋生鸡的问题，而这里所谓的“安全可靠的第三方服务器”其实就是常说的CA – 证书认证机构 （Certificate Authority）。</strong> </p>
-<p><strong>在这个场景中还有一个非常重要的地方，虽然CA参与解决了公钥认证的问题，但它不会也不需要出现在每次的通信中，实际上，客户端&#x2F;服务器与CA之间都只打过一次交到，客户端是一次性地固化了CA的公钥，服务器是一次性地拿到了经CA加密后的自己的公钥。所以，在客户端与服务器的通信中，不涉及任何与这个第三方安全服务器的交互！</strong> </p>
-<h3 id="V3-引入授信第三方，解决公钥认证（中间人攻击）问题"><a href="#V3-引入授信第三方，解决公钥认证（中间人攻击）问题" class="headerlink" title="V3: 引入授信第三方，解决公钥认证（中间人攻击）问题"></a>V3: 引入授信第三方，解决公钥认证（中间人攻击）问题</h3><p>进过V2版本的铺垫，以及对引入CA必要性的解释，我们看一下第三版的样子：</p>
-<p><img src="/../../images/security/ssl-tls-explained/4.png" alt="在这里插入图片描述"></p>
-<p>这已经是事实上的标准版本了，也就是大家所熟知的SSL&#x2F;TLS握手过程，它的前5步是关键的握手阶段，我们来解释一下：</p>
+<p><strong>我们用朴素的逻辑思考一下应该如何从根本上解决公钥认证（中间人攻击）问题？既然在没有建立安全通道的前提下传输密钥可能会被窃取，而建立安全通道又必须要先传输密钥，这就变成了一个鸡生蛋蛋生鸡的死锁问题。那么，索性不传递密钥是否可行呢？如果能把公钥固化到客户端（例如浏览器）里，就可以解决这个问题，但问题是每天都会各种各样的服务器上线和下线，固化到客户端的密钥是无法同步进行变更的，且任何的变更通信本身都是不可靠的。面对这种局面，我们的解题思路是: 设立一个“安全可靠的第三方服务器”，它有一对自己的公钥和私钥，把它的公钥固化到所有的客户端，各种应用服务器拿着自己的公钥到这台服务器上，用这台服务器的私钥来加密它们的公钥（加密后的公钥就被称为了证书），这样，客户端再请求与服务器通信时，从服务器那里拿到的不再是明码的公钥，而是经过了加密的公钥，而解密这个公钥使用的正是已经固化在了客户端的第三方服务器的公钥。这样，中间人没有从中插手的机会了，因为中间人没有这个第三方服务器的公钥，这个公钥从来没有在网络上传送过，所以没有给中间人在传输中去截获的任何机会，因为它固化到了客户端的软件里，这就完美地破解鸡生蛋蛋生鸡的问题，而这里所谓的“安全可靠的第三方服务器”其实就是常说的CA – 证书认证机构 （Certificate Authority）。</strong></p>
+<p><strong>在这个场景中还有一个非常重要的地方，虽然CA参与解决了公钥认证的问题，但它不会也不需要出现在每次的通信中，实际上，客户端/服务器与CA之间都只打过一次交到，客户端是一次性地固化了CA的公钥，服务器是一次性地拿到了经CA加密后的自己的公钥。所以，在客户端与服务器的通信中，不涉及任何与这个第三方安全服务器的交互！</strong></p>
+<h3 id="V3-引入授信第三方，解决公钥认证（中间人攻击）问题">V3: 引入授信第三方，解决公钥认证（中间人攻击）问题</h3>
+<p>进过V2版本的铺垫，以及对引入CA必要性的解释，我们看一下第三版的样子：</p>
+<p><img src="../../images/security/ssl-tls-explained/4.png" alt="在这里插入图片描述"></p>
+<p>这已经是事实上的标准版本了，也就是大家所熟知的SSL/TLS握手过程，它的前5步是关键的握手阶段，我们来解释一下：</p>
 <ol>
-<li><p>客户端向服务器发起一个安全连接的请求</p>
+<li>
+<p>客户端向服务器发起一个安全连接的请求</p>
 </li>
-<li><p>服务器返回经过CA认证的数字证书，证书里面包含了服务器的public key</p>
+<li>
+<p>服务器返回经过CA认证的数字证书，证书里面包含了服务器的public key</p>
 </li>
-<li><p>客户端拿到数字证书，用自己浏览器内置的CA证书解密得到服务器的public key</p>
+<li>
+<p>客户端拿到数字证书，用自己浏览器内置的CA证书解密得到服务器的public key</p>
 </li>
-<li><p>客户端用服务器的public key加密一个用于接下来的对称加密算法的密钥，传给web服务器，因为只有服务器有private key可以解密，所以不用担心中间人拦截这个加密的密钥</p>
+<li>
+<p>客户端用服务器的public key加密一个用于接下来的对称加密算法的密钥，传给web服务器，因为只有服务器有private key可以解密，所以不用担心中间人拦截这个加密的密钥</p>
 </li>
-<li><p>服务器拿到这个加密的密钥，解密获取密钥，再使用对称加密算法，和客户端完成接下来的网络通信</p>
+<li>
+<p>服务器拿到这个加密的密钥，解密获取密钥，再使用对称加密算法，和客户端完成接下来的网络通信</p>
 </li>
 </ol>
 <p>在这一版中，由于CA的引入，公钥认证（中间人攻击）问题已经不符存在。虽然在这个握手的过程中，根本没有出现客户端与服务器的通信（也不应该有任何通信，还是前面提到的，如果再和CA有任何密钥传输，那这一动作就又变成不可靠的安全漏洞了），但是CA起到了关键作用。这里详细解释一下：</p>
 <ol>
-<li><p>服务器端的CA证书是由CA机构签发的，它主要包含着服务器的密钥，但使用了CA的公钥进行了一次加密，这样的话，要获取服务器的公钥，得先用CA的公钥解密。</p>
+<li>
+<p>服务器端的CA证书是由CA机构签发的，它主要包含着服务器的密钥，但使用了CA的公钥进行了一次加密，这样的话，要获取服务器的公钥，得先用CA的公钥解密。</p>
 </li>
-<li><p>客户端也有CA签发的证书，证书里主要包含的是CA的公钥，如前所述，这是提前固化到客户端的，不存在客户端与CA的网络通信去获取这个证书。</p>
+<li>
+<p>客户端也有CA签发的证书，证书里主要包含的是CA的公钥，如前所述，这是提前固化到客户端的，不存在客户端与CA的网络通信去获取这个证书。</p>
 </li>
 </ol>
 <p>我们在再从数字证书的角度来梳理一下上述流程：对于服务器端，数字证书的核心内容是他自己的公钥，但是该公钥被CA的私钥加密了。对于客户端，数字证书的核心内容是CA的公钥。当客户端请求通信时，服务器会先将服务器端的CA证书发送给客户端，客户端会使用CA的分发（浏览器内置）的证书中取出CA的公钥解密服务器的证书，取到的是服务器端自己的公钥，然后客户端就可以使用服务器端的公钥来加密消息并向服务器通信了。</p>
-<p>此外，V3版还有一个改动没有提到，那就是：一但完成握手过程，后续的通信其实使用的是在握手时产生的临时对称密钥，而不是服务器的非对称密钥，因为对称密钥性能更好。这种综合使用伪随机数生成器、对称密码和公钥密码三种技术的密码系统就是所谓的 <strong>混合密码系统</strong> ，整个SSL&#x2F;TLS的工作模型其实也是混合密码系统的一种实现。总得来说，混合密码系统的工作机制是：</p>
+<p>此外，V3版还有一个改动没有提到，那就是：一但完成握手过程，后续的通信其实使用的是在握手时产生的临时对称密钥，而不是服务器的非对称密钥，因为对称密钥性能更好。这种综合使用伪随机数生成器、对称密码和公钥密码三种技术的密码系统就是所谓的 <strong>混合密码系统</strong> ，整个SSL/TLS的工作模型其实也是混合密码系统的一种实现。总得来说，混合密码系统的工作机制是：</p>
 <ol>
-<li><p>用对称密码加密</p>
+<li>
+<p>用对称密码加密</p>
 </li>
-<li><p>通过伪随机数生成器生成对称密码加密中使用的会话密钥</p>
+<li>
+<p>通过伪随机数生成器生成对称密码加密中使用的会话密钥</p>
 </li>
-<li><p>用公钥密码加密会话密码</p>
+<li>
+<p>用公钥密码加密会话密码</p>
 </li>
-<li><p>从混合密码系统外部赋予公钥密码加密时使用的密钥</p>
+<li>
+<p>从混合密码系统外部赋予公钥密码加密时使用的密钥</p>
 </li>
 </ol>
-<p>上述四点也恰恰是SSL&#x2F;TLS工作原理最核心的四个支柱。</p>
+<p>上述四点也恰恰是SSL/TLS工作原理最核心的四个支柱。</p>
 <hr>
 <p>参考文章：</p>
 <p><a target="_blank" rel="noopener" href="https://blog.csdn.net/qq_38289815/article/details/107591115">https://blog.csdn.net/qq_38289815/article/details/107591115</a></p>

@@ -43,32 +43,71 @@
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">一对一映射的三种方式以及对lazyload的特别关注</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Java/">Java</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2010-11-19T21:39:00.000Z" title="2010-11-19 13:39:00">2010-11-19</time></span><span class="level-item is-hidden-mobile">阅读用时：11 分钟 (约 1720 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>一对一映射几乎涉及了所有可以使用的映射方式：共享主键、外键和关联表。每一种方式都有相对特定的使用场合。而与此同时，one-to-one关系的 lazy loading总是一个让人非常疑惑的问题，下文在介绍每一种一对一映射方案的时候也会对lazy loding的问题做一个说明。</p>
-<p><strong>一.共享主键方式</strong> </p>
-<p>这是一对一方案所特有的一种映射方式，这种方式特别适合非空的并且具有一致生命周期（同生同灭）的一对一关系。以User,Address为例，我为 Address的主键再添加一个外键，来参照User,这样就是声明让Address做“受约束”端，也就是constrained&#x3D;”true”的那一端。关于constrained&#x3D;”true”我们会在后面作出解释。下面是表关系：<br> <img src="http://hi.csdn.net/attachment/201011/19/0_129014483066u6.gif"></p>
+<p><strong>一.共享主键方式</strong></p>
+<p>这是一对一方案所特有的一种映射方式，这种方式特别适合非空的并且具有一致生命周期（同生同灭）的一对一关系。以User,Address为例，我为 Address的主键再添加一个外键，来参照User,这样就是声明让Address做“受约束”端，也就是constrained=&quot;true&quot;的那一端。关于constrained=&quot;true&quot;我们会在后面作出解释。下面是表关系：<br>
+<img src="http://hi.csdn.net/attachment/201011/19/0_129014483066u6.gif" alt=""></p>
 <p>User端的映射较为简单：</p>
-<p>@OneToOne<br>@PrimaryKeyJoinColumn<br>private Address shippingAddress;</p>
-<p>Address端相对复杂，因为我们需要在配置中指明它的主键生成策略，这个策略是要参照User主键的。<br>@Entity @Table(name &#x3D; “ADDRESS”)<br>public class Address {<br>	@Id @GeneratedValue(generator &#x3D; “myForeignGenerator”)<br>	@org.hibernate.annotations.GenericGenerator(<br>		name &#x3D; “myForeignGenerator”,<br>		strategy &#x3D; “foreign”,<br>		parameters &#x3D; @Parameter(name &#x3D; “property”, value &#x3D; “user”) )<br>	@Column(name &#x3D; “ADDRESS_ID”)<br>	private Long id;<br>	…<br>	private User user;<br>}</p>
+<p>@OneToOne<br>
+@PrimaryKeyJoinColumn<br>
+private Address shippingAddress;</p>
+<p>Address端相对复杂，因为我们需要在配置中指明它的主键生成策略，这个策略是要参照User主键的。<br>
+@Entity @Table(name = “ADDRESS”)<br>
+public class Address {<br>
+@Id @GeneratedValue(generator = “myForeignGenerator”)<br>
+@org.hibernate.annotations.GenericGenerator(<br>
+name = “myForeignGenerator”,<br>
+strategy = “foreign”,<br>
+parameters = @Parameter(name = “property”, value = “user”) )<br>
+@Column(name = “ADDRESS_ID”)<br>
+private Long id;<br>
+…<br>
+private User user;<br>
+}</p>
 <p>下面来讨论一个使用共享主键方式的lazy loding问题。在上面的例子中，其实很容易知道Address的user字段是可以lazy loding的，而User和shippingAddress是不能的！为什么呢？因为外键在Address表上，当load一条Address记录时，它能从外键上确定有没有关联对象，从而能确定是生成代理对象还是一个null,反观 User，由于它没有外键参照到Address，这样，在加载User时，无法通过User本身的纪录来判定它有没有一个对应的Address，进而无法确定是生成一个代理还是一个null值，因此，hibernate必须hit数据库（往往是在加载时直接使用left join一起把address也查出来）.</p>
-<p>在基于xml配制的方式下，one-to-one有一个配制项：constrained&#x3D;”true”。JPWH一书566页曾提及：在共享主键方式的映射方式中，只有在one-to-one中标记了constrained&#x3D;”true”那个关联对象才是可以被lazy loading的。下面是Address的xml配置：</p>
+<p>在基于xml配制的方式下，one-to-one有一个配制项：constrained=“true”。JPWH一书566页曾提及：在共享主键方式的映射方式中，只有在one-to-one中标记了constrained=&quot;true&quot;那个关联对象才是可以被lazy loading的。下面是Address的xml配置：</p>
 <class name="Address" table="ADDRESS"> 
 	<id name="id" column="ADDRESS_ID"> 
 	<generator class="foreign"> <param name="property">user</param> </generator> </id>
 	...
 	<one-to-one name="user" class="User" constrained="true"/> 
 </class>
-
-<p>官方文件对constrained的解释是：<br> <img src="http://hi.csdn.net/attachment/201011/19/0_1290144815QRn6.gif"></p>
-<p>在解释这一配置项之前必须声明两个概念：关联方和被关联方。关联方是当前正在配置的类，被关联方是指当前被配置的字段所属的类（在Address的 user字段配置上，关联方就是Address,被关联方就是user）。那么，constrained&#x3D;“true”的解释就是：它指明在关联方表的主键上会同时有一个外键，这个外键指向被关联方表的主键。简单说，它指明外键是放在关联方上的。这样，对于关联方来说，当它加载时，它就可以通过外键列来确知被关联方存不存在，进而确保了在关联方加载时，被关联方能否被lazy loading。</p>
+<p>官方文件对constrained的解释是：<br>
+<img src="http://hi.csdn.net/attachment/201011/19/0_1290144815QRn6.gif" alt=""></p>
+<p>在解释这一配置项之前必须声明两个概念：关联方和被关联方。关联方是当前正在配置的类，被关联方是指当前被配置的字段所属的类（在Address的 user字段配置上，关联方就是Address,被关联方就是user）。那么，constrained=“true”的解释就是：它指明在关联方表的主键上会同时有一个外键，这个外键指向被关联方表的主键。简单说，它指明外键是放在关联方上的。这样，对于关联方来说，当它加载时，它就可以通过外键列来确知被关联方存不存在，进而确保了在关联方加载时，被关联方能否被lazy loading。</p>
 <p>实际上在注解方式下是没有也不需要这一选项的，映射了使用外键策略生成主键的对象（也就是主键同时做外键的表）应该自动具有了lazy lode另一端关联对象的能力。</p>
-<p><strong>二，外键映射方式</strong> </p>
-<p>这种方式是通过对外键列加unique约束来模拟一对一关联，这种映射方法较为简单，是被推荐的做一对一映射的最自然方式。还是以User,Address为例：在User端的注解配置是：<br>public class User {<br>…<br>@OneToOne<br>@JoinColumn(name&#x3D;”SHIPPING_ADDRESS_ID”,unique&#x3D;true)&#x2F;&#x2F;unique&#x3D;true确保了一对一关系<br>private Address shippingAddress;<br>…<br>}</p>
-<p> <img src="http://hi.csdn.net/attachment/201011/19/0_1290145148XVX4.gif"></p>
-<p>需要特别说明的是：从外键的角度来看，虽然从User到Address是一个加了unique约束的“多对一”的关系，但是在使用注解时，JPA规范还是要求使用@OneToOne。在hibernate的xml配置方式中，这里就不会写<one-to-one>,而是写成了：其实这种写法更能揭示配置的本质。<br>Address端的注解配置是：<br>public class Address {<br>…<br>@OneToOne(mappedBy &#x3D; “shippingAddress”)<br>private User user;<br>…<br>}<br>OK，那我们回过头来看lazy loading的问题。这与共享主键方式非常相似，外键所在的那一方，也就是many方，也就是有@JoinColumn的那一方，它可以lazy loading,而另一方则不能！（已经代码验证！）</p>
-<p><strong>三.关联表映射方式</strong> </p>
-<p>我们可以看到，由于关联表方式，关联双方都没有指向对方的外键，因些，在这种方式下，双方都不可能是lazy loading的。<br>下面是Desk的user字段映射配置。从实际代码执行中可以确定：fetch&#x3D;FetchType.LAZY是无效的。</p>
-<p>@OneToOne(fetch&#x3D;FetchType.LAZY)<br>@JoinTable(<br>name&#x3D;”Desk_Employee”,<br>joinColumns&#x3D;@JoinColumn(name&#x3D;”deskId”),&#x2F;&#x2F; You did’t specify this column as primary key, but it’s set primary key auto!<br>inverseJoinColumns&#x3D;@JoinColumn(name&#x3D;”employeeId”,unique&#x3D;true)&#x2F;&#x2F;unique&#x3D;true make sure one-to-one relationship.<br>) </p>
-<p><strong>总结</strong> </p>
-<p>最后对一对一三种映射方式做一个简单的总结：<br>1.共享主键方式适合那些关联双方不能为空，且永远不会发生变化的一对一关系。对象模型来看，大部分这类情形应该双方具有同等生命周期的组成关系。<br>2.外键关联加唯一约束的方式适合非空，但关连双方会发生成变化的一对一关系。这显然是聚集和一般的关联关系。<br>3.关联表方式无疑最为灵活，它适合会经常发生变化并且可以为空的一对一关系。典型的场景就是桌子和员工的分配问题。一张桌子总是对应一个员工，但并不总是一个特定的员工，有时候会发生调换，有时候可能没有人使用，而员工方面也是如此。另外一个例子是JPWH一书中提到的Item和Shipment之间的一对一关系。一个物品一旦售出，就会生成一个运送记录，用于追踪商品的运送过程。这个例子和桌子员工的情形有细微不同的地方在于，桌子和员工之间的关系还存在一种可变更的情况， 而Item和Shipment之间只是一个可选的一对一关系，也就是说只有Item售出才会生成一条Shipment，并不是所有Item一定会有一个对应的Shipment!实际上这正是JPWH一书在映射Item和Shipment时选择使用关联表的最主要原因，因为共享主键方式肯定不行，而外键关联方式则需要置外键列为空（因为如上面提及，这种一对一是可选的，而不是必然的），这样，只有关联表方式最为适合。</p>
+<p><strong>二，外键映射方式</strong></p>
+<p>这种方式是通过对外键列加unique约束来模拟一对一关联，这种映射方法较为简单，是被推荐的做一对一映射的最自然方式。还是以User,Address为例：在User端的注解配置是：<br>
+public class User {<br>
+…<br>
+@OneToOne<br>
+@JoinColumn(name=“SHIPPING_ADDRESS_ID”,unique=true)//unique=true确保了一对一关系<br>
+private Address shippingAddress;<br>
+…<br>
+}</p>
+<p><img src="http://hi.csdn.net/attachment/201011/19/0_1290145148XVX4.gif" alt=""></p>
+<p>需要特别说明的是：从外键的角度来看，虽然从User到Address是一个加了unique约束的“多对一”的关系，但是在使用注解时，JPA规范还是要求使用@OneToOne。在hibernate的xml配置方式中，这里就不会写<one-to-one>,而是写成了：其实这种写法更能揭示配置的本质。<br>
+Address端的注解配置是：<br>
+public class Address {<br>
+…<br>
+@OneToOne(mappedBy = “shippingAddress”)<br>
+private User user;<br>
+…<br>
+}<br>
+OK，那我们回过头来看lazy loading的问题。这与共享主键方式非常相似，外键所在的那一方，也就是many方，也就是有@JoinColumn的那一方，它可以lazy loading,而另一方则不能！（已经代码验证！）</p>
+<p><strong>三.关联表映射方式</strong></p>
+<p>我们可以看到，由于关联表方式，关联双方都没有指向对方的外键，因些，在这种方式下，双方都不可能是lazy loading的。<br>
+下面是Desk的user字段映射配置。从实际代码执行中可以确定：fetch=FetchType.LAZY是无效的。</p>
+<p>@OneToOne(fetch=FetchType.LAZY)<br>
+@JoinTable(<br>
+name=“Desk_Employee”,<br>
+joinColumns=@JoinColumn(name=“deskId”),// You did’t specify this column as primary key, but it’s set primary key auto!<br>
+inverseJoinColumns=@JoinColumn(name=“employeeId”,unique=true)//unique=true make sure one-to-one relationship.<br>
+)</p>
+<p><strong>总结</strong></p>
+<p>最后对一对一三种映射方式做一个简单的总结：<br>
+1.共享主键方式适合那些关联双方不能为空，且永远不会发生变化的一对一关系。对象模型来看，大部分这类情形应该双方具有同等生命周期的组成关系。<br>
+2.外键关联加唯一约束的方式适合非空，但关连双方会发生成变化的一对一关系。这显然是聚集和一般的关联关系。<br>
+3.关联表方式无疑最为灵活，它适合会经常发生变化并且可以为空的一对一关系。典型的场景就是桌子和员工的分配问题。一张桌子总是对应一个员工，但并不总是一个特定的员工，有时候会发生调换，有时候可能没有人使用，而员工方面也是如此。另外一个例子是JPWH一书中提到的Item和Shipment之间的一对一关系。一个物品一旦售出，就会生成一个运送记录，用于追踪商品的运送过程。这个例子和桌子员工的情形有细微不同的地方在于，桌子和员工之间的关系还存在一种可变更的情况， 而Item和Shipment之间只是一个可选的一对一关系，也就是说只有Item售出才会生成一条Shipment，并不是所有Item一定会有一个对应的Shipment!实际上这正是JPWH一书在映射Item和Shipment时选择使用关联表的最主要原因，因为共享主键方式肯定不行，而外键关联方式则需要置外键列为空（因为如上面提及，这种一对一是可选的，而不是必然的），这样，只有关联表方式最为适合。</p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>一对一映射的三种方式以及对lazyload的特别关注</p><p><a href="https://laurence.enlightgram.com/java/one-to-one-mapping-lazy-load/">https://laurence.enlightgram.com/java/one-to-one-mapping-lazy-load/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2010-11-19</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Hibernate/">Hibernate</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/spring/assembly-jar-spring-startup-error/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">使用assembly打出的独立可执行jar包启动时报错spring错误的解决方法</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/java/shared-pk-fk-join-table-semantics/"><span class="level-item">共享主键、外键、关联表在表达对象关联关系时的微妙语义差别</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

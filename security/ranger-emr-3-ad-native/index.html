@@ -43,343 +43,384 @@
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Apache Ranger 与 AWS EMR 自动化安装与集成 (3)：Windows AD + EMR-Native Ranger</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Security/">Security</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2022-12-17T23:11:59.000Z" title="2022-12-17 15:11:59">2022-12-17</time></span><span class="level-item is-hidden-mobile">阅读用时：36 分钟 (约 5433 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>In this article, we will introduce the solution against “Scenario 2: Windows AD + EMR-Native Ranger”. The same to previous article, we will introduce the soltuion artitecture, give detailed installation step descriptions and verify installed environment. This article address is <a href="/security/ranger-emr-3-ad-native/">https://laurence.enlightgram.com/security/ranger-emr-3-ad-native/</a> , for reprint please indicate the source. This article was initally published at <a target="_blank" rel="noopener" href="https://dzone.com/articles/apache-ranger-aws-emr-automated-installation-3">DZone</a> .</p>
-<h3 id="1-Solution-Overview"><a href="#1-Solution-Overview" class="headerlink" title="1. Solution Overview"></a>1. Solution Overview</h3><h4 id="1-1-Solution-Architecture"><a href="#1-1-Solution-Architecture" class="headerlink" title="1.1 Solution Architecture"></a>1.1 Solution Architecture</h4><p> <img src="/../../images/security/ranger-emr-3-ad-native/1.jpeg" alt="请添加图片描述"></p>
+<h3 id="1-Solution-Overview">1. Solution Overview</h3>
+<h4 id="1-1-Solution-Architecture">1.1 Solution Architecture</h4>
+<p><img src="../../images/security/ranger-emr-3-ad-native/1.jpeg" alt="请添加图片描述"></p>
 <p>In this solution, Windows AD plays authentication provider, all user accounts data store on it, Ranger plays authorization controller, because we select emr-native ranger solution which strongly depends on Kerberos, so a Kerberos KDC is required. in this solution, we recommend choosing cluster dedicated KDC created by EMR instead of external KDC, this can help us save the job of installing Kerberos. If you have an existing KDC, this solution also support.</p>
 <p>To unify user accounts data, Windows AD and Kerberos must be integrated together, the best integration way is one-way cross-realm trust (Windows AD realm trusts Kerberos KDC realm), this is also a build-in feature of EMR. For Ranger, it will sync accounts data from Windows AD so as to grant privileges against user accounts from Windows AD, meanwhile, emr cluster need install a series of ranger plugins, these plugins will check with ranger server to assure if current user has permission to perform an action. And emr cluster will also sync accounts data from Windows AD via SSSD so as a user can login nodes of emr cluster and submit jobs.</p>
-<h4 id="1-2-Authentication-in-Detail"><a href="#1-2-Authentication-in-Detail" class="headerlink" title="1.2 Authentication in Detail"></a>1.2 Authentication in Detail</h4><p>Let’s deep dive into authentication part. Generally, we will finish following jobs, some are done by the installer, some are emr build-in feature, no manual operations.</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/2.jpeg" alt="请添加图片描述"></p>
-<p>① Install Windows AD;<br>② Install SSSD on all nodes of emr cluster (If enable cross-realm trust, no manual operations);<br>③ Enable cross-realm trust (some jobs will be done by as.ps1 file when installing Windows AD, some jobs are will be done when emr cluster creating if cross-realm trust enabled.)<br>④ Configure SSH, enable users login with Windows AD account (If enable cross-realm trust, no manual operations);<br>⑤ Configure SSH, enable users login with Kerberos account via GSSAPI (If enable cross-realm trust, no manual operations);</p>
-<h4 id="1-3-Authorization-in-Detail"><a href="#1-3-Authorization-in-Detail" class="headerlink" title="1.3 Authorization in Detail"></a>1.3 Authorization in Detail</h4><p>For authorization, Ranger is absolutely the leading role, if we deep dive into it, its architecture looks as following:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/3.jpeg" alt="请添加图片描述"></p>
+<h4 id="1-2-Authentication-in-Detail">1.2 Authentication in Detail</h4>
+<p>Let’s deep dive into authentication part. Generally, we will finish following jobs, some are done by the installer, some are emr build-in feature, no manual operations.</p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/2.jpeg" alt="请添加图片描述"></p>
+<p>① Install Windows AD;<br>
+② Install SSSD on all nodes of emr cluster (If enable cross-realm trust, no manual operations);<br>
+③ Enable cross-realm trust (some jobs will be done by as.ps1 file when installing Windows AD, some jobs are will be done when emr cluster creating if cross-realm trust enabled.)<br>
+④ Configure SSH, enable users login with Windows AD account (If enable cross-realm trust, no manual operations);<br>
+⑤ Configure SSH, enable users login with Kerberos account via GSSAPI (If enable cross-realm trust, no manual operations);</p>
+<h4 id="1-3-Authorization-in-Detail">1.3 Authorization in Detail</h4>
+<p>For authorization, Ranger is absolutely the leading role, if we deep dive into it, its architecture looks as following:</p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/3.jpeg" alt="请添加图片描述"></p>
 <p>The installer will finish following jobs:</p>
-<p>① Install MySQL as Policy DB for Ranger;<br>② Install Solr as Audit Store for Ranger;<br>③ Install Ranger Admin;<br>④ Install Ranger UserSync;<br>⑤ Install EMRFS(S3) Ranger Plugin；<br>⑥ Install Spark Ranger Plugin；<br>⑦ Install Hive Ranger Plugin；<br>⑧ Install Trino Ranger Plugin (NOT available yet at the time writing)</p>
-<h3 id="2-Installation-Integration"><a href="#2-Installation-Integration" class="headerlink" title="2. Installation &amp; Integration"></a>2. Installation &amp; Integration</h3><p>Generally, the installation &amp; integration process can be divided into 3 stages: 1. Prerequisites -&gt; 2. All-In-One Install -&gt; 3. Create EMR Cluster, the following diagram illustrates the progress in detail:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/4.jpeg" alt="请添加图片描述"></p>
+<p>① Install MySQL as Policy DB for Ranger;<br>
+② Install Solr as Audit Store for Ranger;<br>
+③ Install Ranger Admin;<br>
+④ Install Ranger UserSync;<br>
+⑤ Install EMRFS(S3) Ranger Plugin；<br>
+⑥ Install Spark Ranger Plugin；<br>
+⑦ Install Hive Ranger Plugin；<br>
+⑧ Install Trino Ranger Plugin (NOT available yet at the time writing)</p>
+<h3 id="2-Installation-Integration">2. Installation &amp; Integration</h3>
+<p>Generally, the installation &amp; integration process can be divided into 3 stages: 1. Prerequisites -&gt; 2. All-In-One Install -&gt; 3. Create EMR Cluster, the following diagram illustrates the progress in detail:</p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/4.jpeg" alt="请添加图片描述"></p>
 <p>At stage 1, we need do some preparatory work; At stage 2, we start to install and integrate, here are 2 options at this stage: one is all-in-one installation driven by a command -line based workflow, the other is step-by-step installation. For most cases, all-in-one installation is always the best choice, however, sometimes, your installation workflow may be interrupted by unforeseen errors, if you want to continue installing from last failed step, please try step-by-step installation. Or sometimes, you want to re-try a step with different argument values to find the right one, step-by-step is also better choice; At stage 3, we need create an emr cluster by ourselves with output artifacts in stage 2, i.e., iam roles and emr security configuration.</p>
 <p>As a design principle, the installer does NOT include any actions to create an emr cluster, you should always create your cluster by yourself, because an emr cluster in practice could have any unpredictable complex settings, i.e., application-specific (hdfs, yarn, etc.) configuration, step scripts, bootstrap scripts and so on, it is unadvised to couple ranger’s installation with emr cluster’s creation.</p>
 <p>However, there is a little bit overlapping on execution sequence between stage 2 and 3. When creating an emr cluster based on emr-native ranger, it is required to provide a copy of security configuration and ranger-specific iam roles, they must be available before creating an emr cluster, and besides, during creating cluster, it also need interact with the ranger server (server address is assigned in security configuration); On the other hand, some operations in all-in-one installation need perform on all nodes of cluster or KDC, this requires an emr cluster must be ready. To solve this circular dependency, the installer output some artifacts first depended by emr cluster, then indicate users to create their own cluster with these artifacts, meanwhile, installation progress will be pending, and keep monitoring target cluster’s status, once it’s ready, installation progress will resume and continue to perform rest actions.</p>
 <p>Notes：</p>
 <ol>
-<li><p>The installer will treat local host as ranger server to install everything of Ranger, for non-ranger operations, it will initiate remote operations via SSH. So, you can just stay on ranger server to execute command lines, no need to switch among multiple hosts.</p>
+<li>
+<p>The installer will treat local host as ranger server to install everything of Ranger, for non-ranger operations, it will initiate remote operations via SSH. So, you can just stay on ranger server to execute command lines, no need to switch among multiple hosts.</p>
 </li>
-<li><p>For the sake of Kerberos, all host address must use FQDN, Both IP and hostname without domain name are unaccepted.</p>
+<li>
+<p>For the sake of Kerberos, all host address must use FQDN, Both IP and hostname without domain name are unaccepted.</p>
 </li>
 </ol>
-<h4 id="2-1-Prerequisites"><a href="#2-1-Prerequisites" class="headerlink" title="2.1 Prerequisites"></a>2.1 Prerequisites</h4><h5 id="2-1-1-VPC-Constraints"><a href="#2-1-1-VPC-Constraints" class="headerlink" title="2.1.1 VPC Constraints"></a>2.1.1 VPC Constraints</h5><p>To enable cross-realm trust, a series of constraints are imposed on VPC, before installing, please ensure the hostname of ec2 instance is no more than 15 characters. This is a limitation from Windows AD, however, as aws assigns DNS hostnames based on IPv4 address, this limitation propagates to VPC. If the CIDR of VPC can constraint IPv4 address is no more than 9 characters, the assigned DNS hostnames can be limited within 15 characters. With the limitation, a recommended CIDR setting of VPC is <code>10.0.0.0/16</code> .</p>
+<h4 id="2-1-Prerequisites">2.1 Prerequisites</h4>
+<h5 id="2-1-1-VPC-Constraints">2.1.1 VPC Constraints</h5>
+<p>To enable cross-realm trust, a series of constraints are imposed on VPC, before installing, please ensure the hostname of ec2 instance is no more than 15 characters. This is a limitation from Windows AD, however, as aws assigns DNS hostnames based on IPv4 address, this limitation propagates to VPC. If the CIDR of VPC can constraint IPv4 address is no more than 9 characters, the assigned DNS hostnames can be limited within 15 characters. With the limitation, a recommended CIDR setting of VPC is <code>10.0.0.0/16</code> .</p>
 <p>Although we can change default hostname after ec2 instances available, however, the hostname will be used when the computers join the Windows AD directory, this happened during emr cluster creating, a post modifications on hostname does NOT work(Technically, a possible workaround is to put modifying hostname actions into bootstrap scripts, but we didn’t try it, for changing hostname, please refer to <a target="_blank" rel="noopener" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/set-hostname.html">https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/set-hostname.html</a> .</p>
-<p>for other cautions, please refer to emr official doc: <a target="_blank" rel="noopener" href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-kerberos-cross-realm.html#emr-kerberos-ad-network">https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-kerberos-cross-realm.html#emr-kerberos-ad-network</a> </p>
-<h5 id="2-1-2-Create-Windows-AD-Server"><a href="#2-1-2-Create-Windows-AD-Server" class="headerlink" title="2.1.2 Create Windows AD Server"></a>2.1.2 Create Windows AD Server</h5><p>In this section, we will create a Windows AD server with powershell scripts. First, create an ec2 instance with <code>Windows Server 2019 Base</code> image (2016 is also tested and supported), then login with Administrator account, download the Windows AD installation scripts file from <a target="_blank" rel="noopener" href="https://github.com/bluishglc/ranger-emr-cli-installer/releases/download/v2.0/ad.ps1">https://github.com/bluishglc/ranger-emr-cli-installer/releases/download/v2.0/ad.ps1</a> , save to desktop.</p>
+<p>for other cautions, please refer to emr official doc: <a target="_blank" rel="noopener" href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-kerberos-cross-realm.html#emr-kerberos-ad-network">https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-kerberos-cross-realm.html#emr-kerberos-ad-network</a></p>
+<h5 id="2-1-2-Create-Windows-AD-Server">2.1.2 Create Windows AD Server</h5>
+<p>In this section, we will create a Windows AD server with powershell scripts. First, create an ec2 instance with <code>Windows Server 2019 Base</code> image (2016 is also tested and supported), then login with Administrator account, download the Windows AD installation scripts file from <a target="_blank" rel="noopener" href="https://github.com/bluishglc/ranger-emr-cli-installer/releases/download/v2.0/ad.ps1">https://github.com/bluishglc/ranger-emr-cli-installer/releases/download/v2.0/ad.ps1</a> , save to desktop.</p>
 <p>Next, press “Win + R” to open a run dialog, copy following command line and replace parameter values with your own settings:</p>
 <figure class="highlight batch"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Powershell.exe -NoExit -ExecutionPolicy Bypass -File <span class="variable">%USERPROFILE%</span>\Desktop\ad.ps1 -DomainName &lt;<span class="built_in">replace</span>-with-your-domain&gt; -Password &lt;<span class="built_in">replace</span>-with-your-password&gt; -TrustedRealm &lt;<span class="built_in">replace</span>-with-your-realm&gt;</span><br></pre></td></tr></table></figure>
-
 <p>The ad.ps1 has pre-defined default parameter values: the domain name is <code>example.com</code> , password is <code>Admin1234!</code> , trusted realm is <code>COMPUTE.INTERNAL</code> . As a quick-start, you can just right-click the <code>ad.ps1</code> file and select <code>Run with PowerShell</code> to execute it. (Note that you can NOT run this powershell scripts by right-click “Run with PowerShell” on us-east-1, because its default trusted realm is <code>EC2.INTERNAL</code> , so you should set <code>-TrustedRealm EC2.INTERNAL</code> explicitly via above command line.)</p>
 <p>After scripts executed, the compute will ask for restarting, this is forced by Windows. We should wait for the computer to restart then re-login as Administrator so as subsequent commands in the scripts file go on executing. Be sure to RE-LOGIN, otherwise a part of scripts have no chance to execute.</p>
-<p>After re-login, we can open “Active Directory Users and Computers” from Start Menu -&gt; Windows Administrative Tools -&gt; Active Directory Users and Computers or enter <code>dsa.msc</code> from “Run” dialog to check created AD, if everything goes well, we can get a following AD directory:<br> <img src="/../../images/security/ranger-emr-3-ad-native/5.jpeg" alt="请添加图片描述"></p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/6.jpeg" alt="请添加图片描述"></p>
+<p>After re-login, we can open “Active Directory Users and Computers” from Start Menu -&gt; Windows Administrative Tools -&gt; Active Directory Users and Computers or enter <code>dsa.msc</code> from “Run” dialog to check created AD, if everything goes well, we can get a following AD directory:<br>
+<img src="../../images/security/ranger-emr-3-ad-native/5.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/6.jpeg" alt="请添加图片描述"></p>
 <p>Next, we need check DNS setting, invalid DNS setting will result in installation failure. A common error when running scripts is “Ranger Server can’t solve DNS of Cluster Nodes”, this problem is usually caused by incorrect DNS forwarder setting. We can open “DNS Manager” from Start Menu -&gt; Windows Administrative Tools -&gt; DNS or enter <code>dnsmgmt.msc</code> from “Run” dialog, then open tab “Forwarders”. Normally，there is a record which IP address should be <code>10.0.0.2</code> :</p>
-<p><img src="/../../images/security/ranger-emr-3-ad-native/7.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/7.jpeg" alt="请添加图片描述"></p>
 <p><code>10.0.0.2</code> is the default DNS server address for <code>10.0.0.0/16</code> network in VPC, according to VPC document: <a target="_blank" rel="noopener" href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-dns.html">https://docs.aws.amazon.com/vpc/latest/userguide/vpc-dns.html</a> , it says:</p>
 <blockquote>
-<p>The Amazon DNS server does not reside within a specific subnet or Availability Zone in a VPC. It’s located at the address 169.254.169.253 (and the reserved IP address at the base of the VPC IPv4 network range, plus two) and fd00:ec2::253. For example, the Amazon DNS Server on a 10.0.0.0&#x2F;16 network is located at 10.0.0.2. For VPCs with multiple IPv4 CIDR blocks, the DNS server IP address is located in the primary CIDR block.</p>
+<p>The Amazon DNS server does not reside within a specific subnet or Availability Zone in a VPC. It’s located at the address 169.254.169.253 (and the reserved IP address at the base of the VPC IPv4 network range, plus two) and fd00:ec2::253. For example, the Amazon DNS Server on a 10.0.0.0/16 network is located at 10.0.0.2. For VPCs with multiple IPv4 CIDR blocks, the DNS server IP address is located in the primary CIDR block.</p>
 </blockquote>
-<p>The forwarder’s IP address usually comes from “Domain name servers” of your VPC’s “DHCP Options Set”, its default value is <code>AmazonProvidedDNS</code> . If you changed it, when creating Windows AD, the forwarder’s IP will become your changed value. It is probably happened when re-install Windows AD in a VPC, if you didn’t recover “Domain name servers” to <code>AmazonProvidedDNS</code> before re-install, the forwarder’s IP is always the address of previous Windows AD server, it may NOT exist anymore, that’s why ranger server or cluster nodes can’t solve DNS. So, we can simply change forwarder IP to default value, i.e., 10.0.0.2 in 10.0.0.0&#x2F;16 network.</p>
+<p>The forwarder’s IP address usually comes from “Domain name servers” of your VPC’s “DHCP Options Set”, its default value is <code>AmazonProvidedDNS</code> . If you changed it, when creating Windows AD, the forwarder’s IP will become your changed value. It is probably happened when re-install Windows AD in a VPC, if you didn’t recover “Domain name servers” to <code>AmazonProvidedDNS</code> before re-install, the forwarder’s IP is always the address of previous Windows AD server, it may NOT exist anymore, that’s why ranger server or cluster nodes can’t solve DNS. So, we can simply change forwarder IP to default value, i.e., 10.0.0.2 in 10.0.0.0/16 network.</p>
 <p>The other DNS related configuration is IPv4 DNS setting, usually, its default setting is OK, just attach it here as reference(in cn-north-1 region):</p>
-<p><img src="/../../images/security/ranger-emr-3-ad-native/8.jpeg" alt="请添加图片描述"></p>
-<h5 id="2-1-3-Create-DHCP-Options-Set-and-Attach-To-VPC"><a href="#2-1-3-Create-DHCP-Options-Set-and-Attach-To-VPC" class="headerlink" title="2.1.3 Create DHCP Options Set and Attach To VPC"></a>2.1.3 Create DHCP Options Set and Attach To VPC</h5><p>A cross-realm trust requires that the KDCs can reach one another over the network and resolve each other’s domain names. So it is required to set the Windows AD as DNS server in “DHCP Options Sets” of VPC. The following command line will complete this job ( <strong>run following scripts on a Linux host which has installed aws cli</strong> ):</p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/8.jpeg" alt="请添加图片描述"></p>
+<h5 id="2-1-3-Create-DHCP-Options-Set-and-Attach-To-VPC">2.1.3 Create DHCP Options Set and Attach To VPC</h5>
+<p>A cross-realm trust requires that the KDCs can reach one another over the network and resolve each other’s domain names. So it is required to set the Windows AD as DNS server in “DHCP Options Sets” of VPC. The following command line will complete this job ( <strong>run following scripts on a Linux host which has installed aws cli</strong> ):</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on a host which has installed aws cli</span></span><br><span class="line"><span class="built_in">export</span> REGION=<span class="string">&#x27;&lt;change-to-your-region&gt;&#x27;</span></span><br><span class="line"><span class="built_in">export</span> VPC_ID=<span class="string">&#x27;&lt;change-to-your-vpc-id&gt;&#x27;</span></span><br><span class="line"><span class="built_in">export</span> DNS_IP=<span class="string">&#x27;&lt;change-to-your-dns-ip&gt;&#x27;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># solve domain name based on region</span></span><br><span class="line"><span class="keyword">if</span> [ <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> = <span class="string">&quot;us-east-1&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">    <span class="built_in">export</span> DOMAIN_NAME=<span class="string">&quot;ec2.internal&quot;</span></span><br><span class="line"><span class="keyword">else</span></span><br><span class="line">    <span class="built_in">export</span> DOMAIN_NAME=<span class="string">&quot;<span class="variable">$REGION</span>.compute.internal&quot;</span></span><br><span class="line"><span class="keyword">fi</span></span><br><span class="line">                </span><br><span class="line"><span class="comment"># create dhcp options and return id</span></span><br><span class="line">dhcpOptionsId=$(aws ec2 create-dhcp-options \</span><br><span class="line">    --region <span class="variable">$REGION</span> \</span><br><span class="line">    --dhcp-configurations <span class="string">&#x27;&#123;&quot;Key&quot;:&quot;domain-name&quot;,&quot;Values&quot;:[&quot;&#x27;</span><span class="string">&quot;<span class="variable">$DOMAIN_NAME</span>&quot;</span><span class="string">&#x27;&quot;]&#125;&#x27;</span> <span class="string">&#x27;&#123;&quot;Key&quot;:&quot;domain-name-servers&quot;,&quot;Values&quot;:[&quot;&#x27;</span><span class="string">&quot;<span class="variable">$DNS_IP</span>&quot;</span><span class="string">&#x27;&quot;]&#125;&#x27;</span> \</span><br><span class="line">    --tag-specifications <span class="string">&quot;ResourceType=dhcp-options,Tags=[&#123;Key=Name,Value=WIN_DNS&#125;]&quot;</span> \</span><br><span class="line">    --no-cli-pager \</span><br><span class="line">    --query <span class="string">&#x27;DhcpOptions.DhcpOptionsId&#x27;</span> \</span><br><span class="line">    --output text)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># attach the dhcp options to target vpc</span></span><br><span class="line">aws ec2 associate-dhcp-options \</span><br><span class="line">    --dhcp-options-id <span class="variable">$dhcpOptionsId</span> \</span><br><span class="line">    --vpc-id <span class="variable">$VPC_ID</span></span><br></pre></td></tr></table></figure>
-
 <p>The following is a snapshort of created DHCP options from aws web console:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/9.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/9.jpeg" alt="请添加图片描述"></p>
 <p>The “Domain name” - <code>cn-north-1.compute.internal</code> will be the “domain name” part of long hostname (FQDN). Usually, for <code>us-east-1</code> region, please specify <code>ec2.internal</code> ; for other regions, specify <code>&lt;region&gt;.compute.internal</code> . Note that do NOT set the domain name of Windows AD to it, i.e., <code>example.com</code> in our example, they are 2 different things, otherwise the cross-realm trust will fail. The “Domain name server” - <code>10.0.7.240</code> is the private IP of the Windows AD server. And the following is a snapshot of VPC which has attached this DHCP options set:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/10.jpeg" alt="请添加图片描述"></p>
-<h5 id="2-1-4-Create-EC2-Instances-as-Ranger-Server"><a href="#2-1-4-Create-EC2-Instances-as-Ranger-Server" class="headerlink" title="2.1.4 Create EC2 Instances as Ranger Server"></a>2.1.4 Create EC2 Instances as Ranger Server</h5><p>Next, we need prepare an EC2 instance as the server of Ranger, please select <code>Amazon Linux 2</code> image and guarantee network connections among instances and the cluster to be created are reachable.</p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/10.jpeg" alt="请添加图片描述"></p>
+<h5 id="2-1-4-Create-EC2-Instances-as-Ranger-Server">2.1.4 Create EC2 Instances as Ranger Server</h5>
+<p>Next, we need prepare an EC2 instance as the server of Ranger, please select <code>Amazon Linux 2</code> image and guarantee network connections among instances and the cluster to be created are reachable.</p>
 <p>As a best practice, it’s recommended to add ranger server into <code>ElasticMapReduce-master</code> security group, because Ranger is very close to emr cluster, it can be regarded as a non-emr-build-in master service. For Windows AD, we have to make sure its ports 389 is reachable from ranger and all nodes of emr cluster to be created, or to be simple, you also add Windows AD into <code>ElasticMapReduce-master</code> security group.</p>
-<h5 id="2-1-5-Download-Installer"><a href="#2-1-5-Download-Installer" class="headerlink" title="2.1.5 Download Installer"></a>2.1.5 Download Installer</h5><p>After EC2 instances are ready, pick the ranger server, login via ssh, run following commands to download installer package:</p>
+<h5 id="2-1-5-Download-Installer">2.1.5 Download Installer</h5>
+<p>After EC2 instances are ready, pick the ranger server, login via ssh, run following commands to download installer package:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> yum -y install git</span><br><span class="line">git <span class="built_in">clone</span> https://github.com/bluishglc/ranger-emr-cli-installer.git</span><br></pre></td></tr></table></figure>
-
-<h5 id="2-1-6-Upload-SSH-Key-File"><a href="#2-1-6-Upload-SSH-Key-File" class="headerlink" title="2.1.6 Upload SSH Key File"></a>2.1.6 Upload SSH Key File</h5><p>As mentioned before, the installer is based on local host (ranger server), to perform remote installing actions on emr cluster, SSH private key is required, so we should upload it to ranger server, and keep the file path, it will be the value of variable <code>SSH_KEY</code> .</p>
-<h5 id="2-1-7-Export-Environment-Specific-Variables"><a href="#2-1-7-Export-Environment-Specific-Variables" class="headerlink" title="2.1.7 Export Environment-Specific Variables"></a>2.1.7 Export Environment-Specific Variables</h5><p>During installing, following environment-specific arguments will be passed more than once, it’s recommended to export them first, then all command lines just refer these variables instead of literals.</p>
+<h5 id="2-1-6-Upload-SSH-Key-File">2.1.6 Upload SSH Key File</h5>
+<p>As mentioned before, the installer is based on local host (ranger server), to perform remote installing actions on emr cluster, SSH private key is required, so we should upload it to ranger server, and keep the file path, it will be the value of variable <code>SSH_KEY</code> .</p>
+<h5 id="2-1-7-Export-Environment-Specific-Variables">2.1.7 Export Environment-Specific Variables</h5>
+<p>During installing, following environment-specific arguments will be passed more than once, it’s recommended to export them first, then all command lines just refer these variables instead of literals.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> REGION=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> ACCESS_KEY_ID=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SECRET_ACCESS_KEY=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SSH_KEY=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br><span class="line"><span class="built_in">export</span> AD_HOST=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br></pre></td></tr></table></figure>
-
 <p>The following is comments of above variables:</p>
 <ul>
-<li><p>REGION: Aws Region, i.e., cn-north-1, us-east-1 and so on.</p>
+<li>
+<p>REGION: Aws Region, i.e., cn-north-1, us-east-1 and so on.</p>
 </li>
-<li><p>ACCESS_KEY_ID: Aws access key id of your IAM account. Be sure your account has enough privileges, it’s better having admin permissions.</p>
+<li>
+<p>ACCESS_KEY_ID: Aws access key id of your IAM account. Be sure your account has enough privileges, it’s better having admin permissions.</p>
 </li>
-<li><p>SECRET_ACCESS_KEY: Aws secret access key of your IAM account.</p>
+<li>
+<p>SECRET_ACCESS_KEY: Aws secret access key of your IAM account.</p>
 </li>
-<li><p>SSH_KEY: Ssh private key file path on local host you just uploaded</p>
+<li>
+<p>SSH_KEY: Ssh private key file path on local host you just uploaded</p>
 </li>
-<li><p>AD_HOST: FQDN of AD server</p>
+<li>
+<p>AD_HOST: FQDN of AD server</p>
 </li>
-<li><p>VPC_ID: The id of VPC</p>
+<li>
+<p>VPC_ID: The id of VPC</p>
 </li>
 </ul>
 <p>Please carefully replace above variables’ value according to your environment and remember to use FQDN as hostname. The following is a copy of example:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> REGION=<span class="string">&#x27;cn-north-1&#x27;</span></span><br><span class="line"><span class="built_in">export</span> ACCESS_KEY_ID=<span class="string">&#x27;&lt;change-to-your-access-key-id&gt;&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SECRET_ACCESS_KEY=<span class="string">&#x27;&lt;change-to-your-secret-access-key&gt;&#x27;</span></span><br><span class="line"><span class="built_in">export</span> SSH_KEY=<span class="string">&#x27;/home/ec2-user/key.pem&#x27;</span></span><br><span class="line"><span class="built_in">export</span> AD_HOST=<span class="string">&#x27;example.com&#x27;</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="2-2-All-In-One-Installation"><a href="#2-2-All-In-One-Installation" class="headerlink" title="2.2 All-In-One Installation"></a>2.2 All-In-One Installation</h4><h5 id="2-2-1-Quick-Start"><a href="#2-2-1-Quick-Start" class="headerlink" title="2.2.1 Quick Start"></a>2.2.1 Quick Start</h5><p>Now, let’s start an all-in-one installation, execute this command line:</p>
+<h4 id="2-2-All-In-One-Installation">2.2 All-In-One Installation</h4>
+<h5 id="2-2-1-Quick-Start">2.2.1 Quick Start</h5>
+<p>Now, let’s start an all-in-one installation, execute this command line:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;ad&#x27;</span> \</span><br><span class="line">    --ad-host <span class="string">&quot;<span class="variable">$AD_HOST</span>&quot;</span> \</span><br><span class="line">    --ad-domain <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --ad-base-dn <span class="string">&#x27;cn=users,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ad-user-object-class <span class="string">&#x27;person&#x27;</span> \</span><br><span class="line">    --enable-cross-realm-trust <span class="string">&#x27;true&#x27;</span> \</span><br><span class="line">    --trusting-realm <span class="string">&#x27;EXAMPLE.COM&#x27;</span> \</span><br><span class="line">    --trusting-domain <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --trusting-host <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --ranger-plugins <span class="string">&#x27;emr-native-emrfs,emr-native-spark,emr-native-hive&#x27;</span></span><br></pre></td></tr></table></figure>
-
 <p>For parameters specification of above command line, please refer to appendix. If everything goes well, the command line will execute step from 2.1 to 2.6 in workflow diagram, this may spend 10 minutes or more depending on the bandwidth of your network, then it will suspend and indicate user to create emr cluster with the 2 artifacts:</p>
-<p>Ⓐ An ec2 instance profile named <code>EMR_EC2_RangerRole</code><br>Ⓑ An emr security configuration named <code>Ranger@&lt;YOUR-RANGER-HOST-FQDN&gt;</code> </p>
+<p>Ⓐ An ec2 instance profile named <code>EMR_EC2_RangerRole</code><br>
+Ⓑ An emr security configuration named <code>Ranger@&lt;YOUR-RANGER-HOST-FQDN&gt;</code></p>
 <p>They are just created by command line in step 2.2 &amp; 2.4, and you can find them from emr web console when creating cluster. The following is a snapshot of command line for this moment:</p>
 <p>![请添加图片描述](<a target="_blank" rel="noopener" href="https://img-blog.csdnimg.cn/e4ee7e37ef574f04a3ab79ca60fda1a7.jpeg">https://img-blog.csdnimg.cn/e4ee7e37ef574f04a3ab79ca60fda1a7.jpeg</a></p>
 <p>Next, we should switch to emr web console to create a cluster, be sure to select ec2 instance profile and security configuration prompted in command line console. As for Kerberos &amp; Cross-Realm Trust, please fill and make a note of following items:</p>
 <ul>
-<li><p>Realm: the realm of Kerberos, note that for region <code>us-east-1</code> , default realm is <code>EC2.INTERNAL</code> ; for other regions, default realm is <code>COMPUTE.INTERNAL</code> ; you can assign other realm name, but <strong>be sure the entered realm name and the trusted realm name passed to <code>ad.ps1</code> as parameter are the same value</strong> .</p>
+<li>
+<p>Realm: the realm of Kerberos, note that for region <code>us-east-1</code> , default realm is <code>EC2.INTERNAL</code> ; for other regions, default realm is <code>COMPUTE.INTERNAL</code> ; you can assign other realm name, but <strong>be sure the entered realm name and the trusted realm name passed to <code>ad.ps1</code> as parameter are the same value</strong> .</p>
 </li>
-<li><p>KDC admin password: the password of kadmin.</p>
+<li>
+<p>KDC admin password: the password of kadmin.</p>
 </li>
-<li><p>Active Directory domain join user: this is an AD account with enough privileges which can add cluster nodes into windows domain, this is a required action to enable cross-realm trust, emr relies on this account to finish this job. If the Windows AD is installed by <code>ad.ps1</code> , an account named <code>domain-admin</code> will be automatically created for this purpose, so we fill “domain-admin” here, you can also assign other account, but be sure it is existing and has enough privileges.</p>
+<li>
+<p>Active Directory domain join user: this is an AD account with enough privileges which can add cluster nodes into windows domain, this is a required action to enable cross-realm trust, emr relies on this account to finish this job. If the Windows AD is installed by <code>ad.ps1</code> , an account named <code>domain-admin</code> will be automatically created for this purpose, so we fill “domain-admin” here, you can also assign other account, but be sure it is existing and has enough privileges.</p>
 </li>
-<li><p>Active Directory domain join password: the password of “Active Directory domain join user”</p>
+<li>
+<p>Active Directory domain join password: the password of “Active Directory domain join user”</p>
 </li>
 </ul>
 <p>The following is a snapshot of emr web console for this moment:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/11.jpeg" alt="请添加图片描述"></p>
-<p>Once the emr cluster starts to create, the cluster id will be certain, we need copy the id, then go back to command line terminal, enter “y” for cli prompt “Have you created the cluster? [y&#x2F;n]: “(you don’t need wart for the cluster to become completely ready), then the command line will ask you to:</p>
-<p>① Enter the cluster id.<br>② Confirm if let Hue integrate with LDAP or not. if yes, after cluster is ready, the installer will update emr configuration with Hue specific setting, be careful that this action will overwrite emr existing configuration.</p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/11.jpeg" alt="请添加图片描述"></p>
+<p>Once the emr cluster starts to create, the cluster id will be certain, we need copy the id, then go back to command line terminal, enter “y” for cli prompt &quot;Have you created the cluster? [y/n]: &quot;(you don’t need wart for the cluster to become completely ready), then the command line will ask you to:</p>
+<p>① Enter the cluster id.<br>
+② Confirm if let Hue integrate with LDAP or not. if yes, after cluster is ready, the installer will update emr configuration with Hue specific setting, be careful that this action will overwrite emr existing configuration.</p>
 <p>Finally, enter “y” to confirm all inputs, the installation process will resume and if assigned emr cluster is not ready yet, the command line will keep monitoring until it goes into “WAITING” status, the following is a snapshot for this moment of the command line:</p>
 <p>![image_1gag7jt4n1jvkb0qi311sht7kd32.png-55.1kB][15]</p>
 <p>When cluster is ready (status is “WAITING”), the command line will continue to execute step 2.8 of workflow, and end with an “ALL DONE!!” message.</p>
-<h5 id="2-2-2-Customization"><a href="#2-2-2-Customization" class="headerlink" title="2.2.2 Customization"></a>2.2.2 Customization</h5><p>Now, all-in-one installation is done, next, we introduce more about customization. Generally, this installer follows the principle of “Convention over Configuration”, most parameters are preset by default values, an equivalent version with full parameter list of above command line is as following:</p>
+<h5 id="2-2-2-Customization">2.2.2 Customization</h5>
+<p>Now, all-in-one installation is done, next, we introduce more about customization. Generally, this installer follows the principle of “Convention over Configuration”, most parameters are preset by default values, an equivalent version with full parameter list of above command line is as following:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span> \</span><br><span class="line">    --ssh-key <span class="string">&quot;<span class="variable">$SSH_KEY</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;ad&#x27;</span> \</span><br><span class="line">    --ad-host <span class="string">&quot;<span class="variable">$AD_HOST</span>&quot;</span> \</span><br><span class="line">    --ad-domain <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --ad-base-dn <span class="string">&#x27;cn=users,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ad-user-object-class <span class="string">&#x27;person&#x27;</span> \</span><br><span class="line">    --enable-cross-realm-trust <span class="string">&#x27;true&#x27;</span> \</span><br><span class="line">    --trusting-realm <span class="string">&#x27;EXAMPLE.COM&#x27;</span> \</span><br><span class="line">    --trusting-domain <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --trusting-host <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --ranger-plugins <span class="string">&#x27;emr-native-emrfs,emr-native-spark,emr-native-hive&#x27;</span> \</span><br><span class="line">    --java-home <span class="string">&#x27;/usr/lib/jvm/java&#x27;</span> \</span><br><span class="line">    --skip-install-mysql <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --skip-install-solr <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --skip-configure-hue <span class="string">&#x27;false&#x27;</span> \</span><br><span class="line">    --ranger-host $(hostname -f) \</span><br><span class="line">    --ranger-version <span class="string">&#x27;2.1.0&#x27;</span> \</span><br><span class="line">    --mysql-host $(hostname -f) \</span><br><span class="line">    --mysql-root-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --mysql-ranger-db-user-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --solr-host $(hostname -f) \</span><br><span class="line">    --ranger-bind-dn <span class="string">&#x27;cn=ranger,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ranger-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --hue-bind-dn <span class="string">&#x27;cn=hue,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --hue-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --sssd-bind-dn <span class="string">&#x27;cn=sssd,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --sssd-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --restart-interval 30</span><br></pre></td></tr></table></figure>
-
 <p>The full-parameters version gives us a complete perspective of all custom options. In following scenarios, you may change some options’ value:</p>
 <ol>
-<li><p>If you want to change default organization name <code>dc=example,dc=com</code> or default password <code>Admin1234!</code> , please run full-parameters version, and replace them with your own values.</p>
+<li>
+<p>If you want to change default organization name <code>dc=example,dc=com</code> or default password <code>Admin1234!</code> , please run full-parameters version, and replace them with your own values.</p>
 </li>
-<li><p>If you need integrate with external facilities, i.e., an existing MySQL, Solr, please add corresponding <code>--skip-xxx-xxx</code> options and set it <code>true</code> .</p>
+<li>
+<p>If you need integrate with external facilities, i.e., an existing MySQL, Solr, please add corresponding <code>--skip-xxx-xxx</code> options and set it <code>true</code> .</p>
 </li>
-<li><p>If you have other pre-defined bind dn for hue, ranger and sssd, please add corresponding <code>--xxx-bind-dn</code> and <code>--xxx-bind-password</code> options to set them. Note that the bind dn for hue, ranger and sssd will be created automatically when installing Windows AD, but they are FIXED with naming pattern <code>cn=hue|ranger|sssd,ou=services,&lt;your-base-dn&gt;</code> not the given value of “–xxx-bind-dn” option, so if you assign other dn with “–xxx-bind-dn” option, you MUST create this dn by yourself in advance. The reason this install does NOT create the dn assigned by “–xxx-bind-dn” option is that a dn actually is a tree path, to create it, we must create all nodes in the path, it is not cost-effective to implement such small but complicated function.</p>
+<li>
+<p>If you have other pre-defined bind dn for hue, ranger and sssd, please add corresponding <code>--xxx-bind-dn</code> and <code>--xxx-bind-password</code> options to set them. Note that the bind dn for hue, ranger and sssd will be created automatically when installing Windows AD, but they are FIXED with naming pattern <code>cn=hue|ranger|sssd,ou=services,&lt;your-base-dn&gt;</code> not the given value of “–xxx-bind-dn” option, so if you assign other dn with “–xxx-bind-dn” option, you MUST create this dn by yourself in advance. The reason this install does NOT create the dn assigned by “–xxx-bind-dn” option is that a dn actually is a tree path, to create it, we must create all nodes in the path, it is not cost-effective to implement such small but complicated function.</p>
 </li>
-<li><p>All-in-one installation will update emr configuration for Hue so as users can login Hue with Windows AD accounts, if you have other customized emr configuration, please append <code>--skip-configure-hue &#39;true&#39;</code> in command line to skip updating configuration, then manually append hue configuration into your json, otherwise your pre-defined configuration will be overwritten.</p>
+<li>
+<p>All-in-one installation will update emr configuration for Hue so as users can login Hue with Windows AD accounts, if you have other customized emr configuration, please append <code>--skip-configure-hue 'true'</code> in command line to skip updating configuration, then manually append hue configuration into your json, otherwise your pre-defined configuration will be overwritten.</p>
 </li>
 </ol>
-<h4 id="2-3-Step-By-Step-Installation"><a href="#2-3-Step-By-Step-Installation" class="headerlink" title="2.3 Step-By-Step Installation"></a>2.3 Step-By-Step Installation</h4><p>As an alternative, you can also select step-by-step installation instead of all-in-one installation. we give the command line of each step, as for comments for each parameter, please refer to appendix.</p>
-<h5 id="2-3-1-Init-EC2"><a href="#2-3-1-Init-EC2" class="headerlink" title="2.3.1 Init EC2"></a>2.3.1 Init EC2</h5><p>This step will finish some fundamental jobs, i.e., install aws cli, jdk, and so on.</p>
+<h4 id="2-3-Step-By-Step-Installation">2.3 Step-By-Step Installation</h4>
+<p>As an alternative, you can also select step-by-step installation instead of all-in-one installation. we give the command line of each step, as for comments for each parameter, please refer to appendix.</p>
+<h5 id="2-3-1-Init-EC2">2.3.1 Init EC2</h5>
+<p>This step will finish some fundamental jobs, i.e., install aws cli, jdk, and so on.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh init-ec2 \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --access-key-id <span class="string">&quot;<span class="variable">$ACCESS_KEY_ID</span>&quot;</span> \</span><br><span class="line">    --secret-access-key <span class="string">&quot;<span class="variable">$SECRET_ACCESS_KEY</span>&quot;</span></span><br></pre></td></tr></table></figure>
-
-<h5 id="2-3-2-Create-IAM-Roles"><a href="#2-3-2-Create-IAM-Roles" class="headerlink" title="2.3.2 Create IAM Roles"></a>2.3.2 Create IAM Roles</h5><p>This step will create 3 iam roles which are required for EMR.</p>
+<h5 id="2-3-2-Create-IAM-Roles">2.3.2 Create IAM Roles</h5>
+<p>This step will create 3 iam roles which are required for EMR.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh create-iam-roles \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span></span><br></pre></td></tr></table></figure>
-
-<h5 id="2-3-3-Create-Ranger-Secrets"><a href="#2-3-3-Create-Ranger-Secrets" class="headerlink" title="2.3.3 Create Ranger Secrets"></a>2.3.3 Create Ranger Secrets</h5><p>This step will create SSL&#x2F;TLS related keys, certificates and keystores for Ranger, because emr-native ranger requires SSL&#x2F;TLS connections to server. These artifacts will upload to aws secrets manager and referred by emr security configuration.</p>
+<h5 id="2-3-3-Create-Ranger-Secrets">2.3.3 Create Ranger Secrets</h5>
+<p>This step will create SSL/TLS related keys, certificates and keystores for Ranger, because emr-native ranger requires SSL/TLS connections to server. These artifacts will upload to aws secrets manager and referred by emr security configuration.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh create-ranger-secrets \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span></span><br></pre></td></tr></table></figure>
-
-<h5 id="2-3-4-Create-EMR-Security-Configuration"><a href="#2-3-4-Create-EMR-Security-Configuration" class="headerlink" title="2.3.4 Create EMR Security Configuration"></a>2.3.4 Create EMR Security Configuration</h5><p>This step will create a copy of emr security configuration, the configuration includes Kerberos and Ranger related information, when creating cluster, emr will read them and get corresponding resources, i.e., secrets, and also interact with the ranger server which address is assigned in the security configuration.</p>
+<h5 id="2-3-4-Create-EMR-Security-Configuration">2.3.4 Create EMR Security Configuration</h5>
+<p>This step will create a copy of emr security configuration, the configuration includes Kerberos and Ranger related information, when creating cluster, emr will read them and get corresponding resources, i.e., secrets, and also interact with the ranger server which address is assigned in the security configuration.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh create-emr-security-configuration \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;ad&#x27;</span> \</span><br><span class="line">    --trusting-realm <span class="string">&#x27;EXAMPLE.COM&#x27;</span> \</span><br><span class="line">    --trusting-domain <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --trusting-host <span class="string">&#x27;example.com&#x27;</span></span><br></pre></td></tr></table></figure>
-
-<h5 id="2-3-5-Install-Ranger"><a href="#2-3-5-Install-Ranger" class="headerlink" title="2.3.5 Install Ranger"></a>2.3.5 Install Ranger</h5><p>This step will install all server-side components of Ranger, including MySQL, Solr, Ranger Admin and Ranger UserSync.</p>
+<h5 id="2-3-5-Install-Ranger">2.3.5 Install Ranger</h5>
+<p>This step will install all server-side components of Ranger, including MySQL, Solr, Ranger Admin and Ranger UserSync.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install-ranger \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;ad&#x27;</span> \</span><br><span class="line">    --ad-domain <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --ad-host <span class="string">&quot;<span class="variable">$AD_HOST</span>&quot;</span> \</span><br><span class="line">    --ad-base-dn <span class="string">&#x27;cn=users,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ad-user-object-class <span class="string">&#x27;person&#x27;</span> \</span><br><span class="line">    --ranger-bind-dn <span class="string">&#x27;cn=ranger,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ranger-bind-password <span class="string">&#x27;Admin1234!&#x27;</span></span><br></pre></td></tr></table></figure>
-
-<h5 id="2-3-6-Install-Ranger-Plugins"><a href="#2-3-6-Install-Ranger-Plugins" class="headerlink" title="2.3.6 Install Ranger Plugins"></a>2.3.6 Install Ranger Plugins</h5><p>This step will install emrfs, spark and hive plugins from ranger server side. There is the other half job which install these plugins (actually they are EMR Secret Agent, EMR Record Server and so on) on agent side, however, it will be done automatically by emr when creating cluster.</p>
+<h5 id="2-3-6-Install-Ranger-Plugins">2.3.6 Install Ranger Plugins</h5>
+<p>This step will install emrfs, spark and hive plugins from ranger server side. There is the other half job which install these plugins (actually they are EMR Secret Agent, EMR Record Server and so on) on agent side, however, it will be done automatically by emr when creating cluster.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh install-ranger-plugins \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --solution <span class="string">&#x27;emr-native&#x27;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;ad&#x27;</span> \</span><br><span class="line">    --ranger-plugins <span class="string">&#x27;emr-native-emrfs,emr-native-spark,emr-native-hive&#x27;</span></span><br></pre></td></tr></table></figure>
-
-<h5 id="2-3-7-Create-EMR-Cluster"><a href="#2-3-7-Create-EMR-Cluster" class="headerlink" title="2.3.7 Create EMR Cluster"></a>2.3.7 Create EMR Cluster</h5><p>For step-by-step installation, there is no interactive process for creating emr cluster, so just feel free to create cluster on emr web console. but we have to wait for the cluster is completely ready (in “WAITING” status), then export emr cluster id:</p>
+<h5 id="2-3-7-Create-EMR-Cluster">2.3.7 Create EMR Cluster</h5>
+<p>For step-by-step installation, there is no interactive process for creating emr cluster, so just feel free to create cluster on emr web console. but we have to wait for the cluster is completely ready (in “WAITING” status), then export emr cluster id:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> EMR_CLUSTER_ID=<span class="string">&#x27;TO_BE_REPLACED&#x27;</span></span><br></pre></td></tr></table></figure>
-
 <p>The following is a copy of example:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> EMR_CLUSTER_ID=<span class="string">&#x27;	j-1UU8LVVVCBZY0&#x27;</span></span><br></pre></td></tr></table></figure>
-
-<h5 id="2-3-8-Update-Hue-Configuration"><a href="#2-3-8-Update-Hue-Configuration" class="headerlink" title="2.3.8 Update Hue Configuration"></a>2.3.8 Update Hue Configuration</h5><p>This step will update hue configuration of emr, as highlighted in all-in-one installation, if you have other customized emr configuration, please skip this step, but you can still manually merge generated json file for hue configuration by command line into your own json.</p>
+<h5 id="2-3-8-Update-Hue-Configuration">2.3.8 Update Hue Configuration</h5>
+<p>This step will update hue configuration of emr, as highlighted in all-in-one installation, if you have other customized emr configuration, please skip this step, but you can still manually merge generated json file for hue configuration by command line into your own json.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> sh ./ranger-emr-cli-installer/bin/setup.sh update-hue-configuration \</span><br><span class="line">    --region <span class="string">&quot;<span class="variable">$REGION</span>&quot;</span> \</span><br><span class="line">    --auth-provider <span class="string">&#x27;ad&#x27;</span> \</span><br><span class="line">    --ad-host <span class="string">&quot;<span class="variable">$AD_HOST</span>&quot;</span> \</span><br><span class="line">    --ad-domain <span class="string">&#x27;example.com&#x27;</span> \</span><br><span class="line">    --ad-base-dn <span class="string">&#x27;dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --ad-user-object-class <span class="string">&#x27;person&#x27;</span> \</span><br><span class="line">    --hue-bind-dn <span class="string">&#x27;cn=hue,ou=services,dc=example,dc=com&#x27;</span> \</span><br><span class="line">    --hue-bind-password <span class="string">&#x27;Admin1234!&#x27;</span> \</span><br><span class="line">    --emr-cluster-id <span class="string">&quot;<span class="variable">$EMR_CLUSTER_ID</span>&quot;</span></span><br></pre></td></tr></table></figure>
-
-<h3 id="3-Verification"><a href="#3-Verification" class="headerlink" title="3. Verification"></a>3. Verification</h3><p>After installation &amp; integration is completed, it’s time to check if ranger works or not. The verification jobs are divided into 3 parts which are against hive, emrfs(s3) and spark.</p>
-<p>First, let us open ranger web console, the address is: <code>https://&lt;YOUR-RANGER-HOST&gt;:6182</code> , the default admin account&#x2F;password is: <code>admin/admin</code> . After login, we should open “Users&#x2F;Groups&#x2F;Roles” page first, check if example users on Windows AD are already synchronized to ranger as following:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/12.jpeg" alt="请添加图片描述"></p>
-<h4 id="3-1-Hive-Access-Control-Verification"><a href="#3-1-Hive-Access-Control-Verification" class="headerlink" title="3.1 Hive Access Control Verification"></a>3.1 Hive Access Control Verification</h4><p>Usually, there are a set of pre-defined policies for hive plugin after installation, to eliminate interference, keep verification simple, let’s REMOVE them first:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/13.jpeg" alt="请添加图片描述"></p>
+<h3 id="3-Verification">3. Verification</h3>
+<p>After installation &amp; integration is completed, it’s time to check if ranger works or not. The verification jobs are divided into 3 parts which are against hive, emrfs(s3) and spark.</p>
+<p>First, let us open ranger web console, the address is: <code>https://&lt;YOUR-RANGER-HOST&gt;:6182</code> , the default admin account/password is: <code>admin/admin</code> . After login, we should open “Users/Groups/Roles” page first, check if example users on Windows AD are already synchronized to ranger as following:</p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/12.jpeg" alt="请添加图片描述"></p>
+<h4 id="3-1-Hive-Access-Control-Verification">3.1 Hive Access Control Verification</h4>
+<p>Usually, there are a set of pre-defined policies for hive plugin after installation, to eliminate interference, keep verification simple, let’s REMOVE them first:</p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/13.jpeg" alt="请添加图片描述"></p>
 <p>Any policy changes on ranger web console will sync to agent side (emr cluster nodes) within 30 seconds, we can run following commands on master node to check if local policy file is updated:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on master node of emr cluster</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> &#123;1..10&#125;; <span class="keyword">do</span></span><br><span class="line">    <span class="built_in">printf</span> <span class="string">&quot;\n%100s\n\n&quot;</span>|<span class="built_in">tr</span> <span class="string">&#x27; &#x27;</span> <span class="string">&#x27;=&#x27;</span></span><br><span class="line">    <span class="built_in">sudo</span> <span class="built_in">stat</span> /etc/hive/ranger_policy_cache/hiveServer2_hive.json</span><br><span class="line">    <span class="built_in">sleep</span> 3</span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
-
 <p>Once local policy file is up to date, removing-all-policies action become effective, then login Hue with Windows AD account “example-user-1” created by installer, open hive editor, enter following sql (remember to replace “ranger-test” with your own bucket) to create a test table (change ‘ranger-test’ to your own bucket name):</p>
 <figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- run in hue hive editor</span></span><br><span class="line"><span class="keyword">create table</span> ranger_test (</span><br><span class="line">  id <span class="type">bigint</span></span><br><span class="line">)</span><br><span class="line"><span class="type">row</span> format delimited</span><br><span class="line">stored <span class="keyword">as</span> textfile location <span class="string">&#x27;s3://ranger-test/&#x27;</span>;</span><br></pre></td></tr></table></figure>
-
 <p>then, run it and an error occurs:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/14.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/14.jpeg" alt="请添加图片描述"></p>
 <p>It shows example-user-1 is blocked by database-related permissions, this proves hive plugin is working, then we go back to ranger, add a hive policy named “all - database, table, column” as following:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/15.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/15.jpeg" alt="请添加图片描述"></p>
 <p>It grants example-user-1 all privileges on all databases, tables and columns, then check policy file again on master node with previous command line, once updated, go back to Hue, re-run that sql, we will get another error at this time:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/16.jpeg" alt="请添加图片描述"></p>
-<p>As shown, the sql is blocked when reading “s3:&#x2F;&#x2F;ranger-test”, actually, example-user-1 has no permissions to access any URL, including “s3:&#x2F;&#x2F;”. We need grant url-related permissions to this user, so go back to ranger again, add a hive policy named “all - url” as following:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/17.jpeg" alt="请添加图片描述"></p>
-<p>It grants example-user-1 all privileges on any url, including “s3:&#x2F;&#x2F;”, then check policy file again, and switch to Hue, run that sql third time, it will go well as following:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/18.jpeg" alt="请添加图片描述"></p>
-<p>At the end, to prepare for next EMRFS &#x2F; Spark verification, we need insert some example data into the table, and also double check if example-user-1 has full read &amp; write permissions on the table:</p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/16.jpeg" alt="请添加图片描述"></p>
+<p>As shown, the sql is blocked when reading “s3://ranger-test”, actually, example-user-1 has no permissions to access any URL, including “s3://”. We need grant url-related permissions to this user, so go back to ranger again, add a hive policy named “all - url” as following:</p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/17.jpeg" alt="请添加图片描述"></p>
+<p>It grants example-user-1 all privileges on any url, including “s3://”, then check policy file again, and switch to Hue, run that sql third time, it will go well as following:</p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/18.jpeg" alt="请添加图片描述"></p>
+<p>At the end, to prepare for next EMRFS / Spark verification, we need insert some example data into the table, and also double check if example-user-1 has full read &amp; write permissions on the table:</p>
 <figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">insert into</span> ranger_test(id) <span class="keyword">values</span>(<span class="number">1</span>);</span><br><span class="line"><span class="keyword">insert into</span> ranger_test(id) <span class="keyword">values</span>(<span class="number">2</span>);</span><br><span class="line"><span class="keyword">insert into</span> ranger_test(id) <span class="keyword">values</span>(<span class="number">3</span>);</span><br><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> ranger_test;</span><br></pre></td></tr></table></figure>
-
 <p>The execution result is:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/19.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/19.jpeg" alt="请添加图片描述"></p>
 <p>By now, hive access control verifications are passed.</p>
-<h4 id="3-2-EMRFS-S3-Access-Control-Verification"><a href="#3-2-EMRFS-S3-Access-Control-Verification" class="headerlink" title="3.2 EMRFS (S3) Access Control Verification"></a>3.2 EMRFS (S3) Access Control Verification</h4><p>Login Hue with account “example-user-1”, open scala editor, enter following spark codes:</p>
+<h4 id="3-2-EMRFS-S3-Access-Control-Verification">3.2 EMRFS (S3) Access Control Verification</h4>
+<p>Login Hue with account “example-user-1”, open scala editor, enter following spark codes:</p>
 <figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"># run in scala editor of hue</span><br><span class="line">spark.read.csv(<span class="string">&quot;s3://ranger-test/&quot;</span>).show;</span><br></pre></td></tr></table></figure>
-
 <p>This line of codes try to read files on S3, but it will run into following errors:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/20.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/20.jpeg" alt="请添加图片描述"></p>
 <p>It shows example-user-1 has no permission on s3 bucket “ranger-test”. This proves emrfs plugin is working, it successfully blocked unauthorized s3 access. Let’s login ranger, add an emrfs policy named “all - ranger-test” as following:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/21.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/21.jpeg" alt="请添加图片描述"></p>
 <p>It will grant example-user-1 all privileges on “ranger-test” bucket. Similar to checking hive policy file, we can also run following command to check if emrfs policy file is updated:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on master node of emr cluster</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> &#123;1..10&#125;; <span class="keyword">do</span></span><br><span class="line">    <span class="built_in">printf</span> <span class="string">&quot;\n%100s\n\n&quot;</span>|<span class="built_in">tr</span> <span class="string">&#x27; &#x27;</span> <span class="string">&#x27;=&#x27;</span></span><br><span class="line">    <span class="built_in">sudo</span> <span class="built_in">stat</span> /emr/secretagent/ranger_policy_cache/emrS3RangerPlugin_emrfs.json</span><br><span class="line">    <span class="built_in">sleep</span> 3</span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
-
 <p>After updated, go back to Hue, re-run previous spark codes, it will succeed as following:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/22.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/22.jpeg" alt="请添加图片描述"></p>
 <p>By now, emrfs access control verifications are passed.</p>
-<h4 id="3-3-Spark-Access-Control-Verification"><a href="#3-3-Spark-Access-Control-Verification" class="headerlink" title="3.3 Spark Access Control Verification"></a>3.3 Spark Access Control Verification</h4><p>Login Hue with account “example-user-1”, open scala editor, enter following spark codes:</p>
+<h4 id="3-3-Spark-Access-Control-Verification">3.3 Spark Access Control Verification</h4>
+<p>Login Hue with account “example-user-1”, open scala editor, enter following spark codes:</p>
 <figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"># run in scala editor of hue</span><br><span class="line">spark.sql(<span class="string">&quot;select * from ranger_test&quot;</span>).show</span><br></pre></td></tr></table></figure>
-
 <p>This line of codes try to ranger_test table via spark sql, but it will run into following errors:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/23.jpeg" alt="请添加图片描述"></p>
-<p>It shows current user has no permission on default database. This proves spark plugin is working, it successfully blocked unauthorized database&#x2F;tables access.</p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/23.jpeg" alt="请添加图片描述"></p>
+<p>It shows current user has no permission on default database. This proves spark plugin is working, it successfully blocked unauthorized database/tables access.</p>
 <p>Let’s login ranger, add a spark policy named “all - database, table, column” as following:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/24.jpeg" alt="请添加图片描述"></p>
-<p>It will grant example-user-1 all privileges on all databases&#x2F;tables&#x2F;columns. Similar to checking hive policy file, we can also run following command to check if spark policy file is updated:</p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/24.jpeg" alt="请添加图片描述"></p>
+<p>It will grant example-user-1 all privileges on all databases/tables/columns. Similar to checking hive policy file, we can also run following command to check if spark policy file is updated:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># run on master node of emr cluster</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> &#123;1..10&#125;; <span class="keyword">do</span></span><br><span class="line">    <span class="built_in">printf</span> <span class="string">&quot;\n%100s\n\n&quot;</span>|<span class="built_in">tr</span> <span class="string">&#x27; &#x27;</span> <span class="string">&#x27;=&#x27;</span></span><br><span class="line">    <span class="built_in">sudo</span> <span class="built_in">stat</span> /etc/emr-record-server/ranger_policy_cache/emrSparkRangerPlugin_spark.json </span><br><span class="line">    <span class="built_in">sleep</span> 3</span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
-
 <p>After updated, go back to Hue, re-run previous spark codes, it will succeed as following:</p>
-<p> <img src="/../../images/security/ranger-emr-3-ad-native/25.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/security/ranger-emr-3-ad-native/25.jpeg" alt="请添加图片描述"></p>
 <p>By now, spark access control verifications are passed.</p>
-<h3 id="4-Appendix"><a href="#4-Appendix" class="headerlink" title="4. Appendix"></a>4. Appendix</h3><p>The following is parameter specification:</p>
+<h3 id="4-Appendix">4. Appendix</h3>
+<p>The following is parameter specification:</p>
 <table>
 <thead>
 <tr>
-<th align="left">Parameter</th>
-<th align="left">Comment</th>
+<th style="text-align:left">Parameter</th>
+<th style="text-align:left">Comment</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="left">–region</td>
-<td align="left">the aws region.</td>
+<tbody>
+<tr>
+<td style="text-align:left">–region</td>
+<td style="text-align:left">the aws region.</td>
 </tr>
 <tr>
-<td align="left">–access-key-id</td>
-<td align="left">the aws access key id of your IAM account.</td>
+<td style="text-align:left">–access-key-id</td>
+<td style="text-align:left">the aws access key id of your IAM account.</td>
 </tr>
 <tr>
-<td align="left">–secret-access-key</td>
-<td align="left">the aws secret access key of your IAM account.</td>
+<td style="text-align:left">–secret-access-key</td>
+<td style="text-align:left">the aws secret access key of your IAM account.</td>
 </tr>
 <tr>
-<td align="left">–ssh-key</td>
-<td align="left">the ssh private key file path.</td>
+<td style="text-align:left">–ssh-key</td>
+<td style="text-align:left">the ssh private key file path.</td>
 </tr>
 <tr>
-<td align="left">–solution</td>
-<td align="left">the solution name, accepted values ‘open-source’ or ‘emr-native’.</td>
+<td style="text-align:left">–solution</td>
+<td style="text-align:left">the solution name, accepted values ‘open-source’ or ‘emr-native’.</td>
 </tr>
 <tr>
-<td align="left">–auth-provider</td>
-<td align="left">the authentication provider, accepted values ‘ad’ or ‘openldap’.</td>
+<td style="text-align:left">–auth-provider</td>
+<td style="text-align:left">the authentication provider, accepted values ‘ad’ or ‘openldap’.</td>
 </tr>
 <tr>
-<td align="left">–openldap-host</td>
-<td align="left">the FQDN of openldap host.</td>
+<td style="text-align:left">–openldap-host</td>
+<td style="text-align:left">the FQDN of openldap host.</td>
 </tr>
 <tr>
-<td align="left">–openldap-base-dn</td>
-<td align="left">the base dn of openldap, for example: ‘dc&#x3D;example,dc&#x3D;com’, change it according to your env.</td>
+<td style="text-align:left">–openldap-base-dn</td>
+<td style="text-align:left">the base dn of openldap, for example: ‘dc=example,dc=com’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–openldap-root-cn</td>
-<td align="left">the cn of root account, for example: ‘admin’, change it according to your env.</td>
+<td style="text-align:left">–openldap-root-cn</td>
+<td style="text-align:left">the cn of root account, for example: ‘admin’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–openldap-root-password</td>
-<td align="left">the password of root account, for example: ‘Admin1234!’, change it according to your env.</td>
+<td style="text-align:left">–openldap-root-password</td>
+<td style="text-align:left">the password of root account, for example: ‘Admin1234!’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–ranger-bind-dn</td>
-<td align="left">the bind dn for ranger, for example: ‘cn&#x3D;ranger,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+<td style="text-align:left">–ranger-bind-dn</td>
+<td style="text-align:left">the bind dn for ranger, for example: ‘cn=ranger,ou=services,dc=example,dc=com’, this should be an existing dn on Windows AD / OpenLDAP, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–ranger-bind-password</td>
-<td align="left">the password of ranger bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+<td style="text-align:left">–ranger-bind-password</td>
+<td style="text-align:left">the password of ranger bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–openldap-user-dn-pattern</td>
-<td align="left">the dn pattern for ranger to search users on OpenLDAP, for example: ‘uid&#x3D;{0},ou&#x3D;users,dc&#x3D;example,dc&#x3D;com’, change it according to your env.</td>
+<td style="text-align:left">–openldap-user-dn-pattern</td>
+<td style="text-align:left">the dn pattern for ranger to search users on OpenLDAP, for example: ‘uid={0},ou=users,dc=example,dc=com’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–openldap-group-search-filter</td>
-<td align="left">the filter for ranger to search groups on OpenLDAP, for example: ‘(member&#x3D;uid&#x3D;{0},ou&#x3D;users,dc&#x3D;example,dc&#x3D;com)’, change it according to your env.</td>
+<td style="text-align:left">–openldap-group-search-filter</td>
+<td style="text-align:left">the filter for ranger to search groups on OpenLDAP, for example: ‘(member=uid={0},ou=users,dc=example,dc=com)’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–openldap-user-object-class</td>
-<td align="left">the user object class for ranger to search users, for example: ‘inetOrgPerson’, change it according to your env.</td>
+<td style="text-align:left">–openldap-user-object-class</td>
+<td style="text-align:left">the user object class for ranger to search users, for example: ‘inetOrgPerson’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–hue-bind-dn</td>
-<td align="left">the bind dn for hue, for example: ‘cn&#x3D;hue,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+<td style="text-align:left">–hue-bind-dn</td>
+<td style="text-align:left">the bind dn for hue, for example: ‘cn=hue,ou=services,dc=example,dc=com’, this should be an existing dn on Windows AD / OpenLDAP, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–hue-bind-password</td>
-<td align="left">the password of hue bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+<td style="text-align:left">–hue-bind-password</td>
+<td style="text-align:left">the password of hue bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–example-users</td>
-<td align="left">the example users to be created on OpenLDAP &amp; Kerberos so as to demo ranger’s feature, this parameter is optional, if omitted, no example users will be created.</td>
+<td style="text-align:left">–example-users</td>
+<td style="text-align:left">the example users to be created on OpenLDAP &amp; Kerberos so as to demo ranger’s feature, this parameter is optional, if omitted, no example users will be created.</td>
 </tr>
 <tr>
-<td align="left">–ranger-bind-dn</td>
-<td align="left">the bind dn for ranger, for example: ‘cn&#x3D;ranger,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+<td style="text-align:left">–ranger-bind-dn</td>
+<td style="text-align:left">the bind dn for ranger, for example: ‘cn=ranger,ou=services,dc=example,dc=com’, this should be an existing dn on Windows AD / OpenLDAP, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–ranger-bind-password</td>
-<td align="left">the password of bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+<td style="text-align:left">–ranger-bind-password</td>
+<td style="text-align:left">the password of bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–hue-bind-dn</td>
-<td align="left">the bind dn for hue, for example: ‘cn&#x3D;hue,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+<td style="text-align:left">–hue-bind-dn</td>
+<td style="text-align:left">the bind dn for hue, for example: ‘cn=hue,ou=services,dc=example,dc=com’, this should be an existing dn on Windows AD / OpenLDAP, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–hue-bind-password</td>
-<td align="left">the password of hue bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+<td style="text-align:left">–hue-bind-password</td>
+<td style="text-align:left">the password of hue bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–sssd-bind-dn</td>
-<td align="left">the bind dn for sssd, for example: ‘cn&#x3D;sssd,ou&#x3D;services,dc&#x3D;example,dc&#x3D;com’, this should be an existing dn on Windows AD &#x2F; OpenLDAP, change it according to your env.</td>
+<td style="text-align:left">–sssd-bind-dn</td>
+<td style="text-align:left">the bind dn for sssd, for example: ‘cn=sssd,ou=services,dc=example,dc=com’, this should be an existing dn on Windows AD / OpenLDAP, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–sssd-bind-password</td>
-<td align="left">the password of sssd bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
+<td style="text-align:left">–sssd-bind-password</td>
+<td style="text-align:left">the password of sssd bind dn, for example: ‘Admin1234!’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–ranger-plugins</td>
-<td align="left">the ranger plugins to be installed, comma separated for multiple values. for example: ‘emr-native-emrfs,emr-native-spark,emr-native-hive’, change it according to your env.</td>
+<td style="text-align:left">–ranger-plugins</td>
+<td style="text-align:left">the ranger plugins to be installed, comma separated for multiple values. for example: ‘emr-native-emrfs,emr-native-spark,emr-native-hive’, change it according to your env.</td>
 </tr>
 <tr>
-<td align="left">–skip-configure-hue</td>
-<td align="left">skip to configure hue, accepted values ‘true’ or ‘false’, dafault value is ‘false’.</td>
+<td style="text-align:left">–skip-configure-hue</td>
+<td style="text-align:left">skip to configure hue, accepted values ‘true’ or ‘false’, dafault value is ‘false’.</td>
 </tr>
 <tr>
-<td align="left">–skip-migrate-kerberos-db</td>
-<td align="left">skip to migrate kerberos database, accepted values ‘true’ or ‘false’, dafault value is ‘false’.</td>
+<td style="text-align:left">–skip-migrate-kerberos-db</td>
+<td style="text-align:left">skip to migrate kerberos database, accepted values ‘true’ or ‘false’, dafault value is ‘false’.</td>
 </tr>
-</tbody></table>
+</tbody>
+</table>
 <p>Related Reading:</p>
 <table>
 <thead>
 <tr>
-<th align="left">Apache Ranger and AWS EMR Automated Installation Series</th>
+<th style="text-align:left">Apache Ranger and AWS EMR Automated Installation Series</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="left"><a href="/security/ranger-emr-1-overview/">Apache Ranger and AWS EMR Automated Installation Series (1): Solutions Overview</a></td>
+<tbody>
+<tr>
+<td style="text-align:left"><a href="/security/ranger-emr-1-overview/">Apache Ranger and AWS EMR Automated Installation Series (1): Solutions Overview</a></td>
 </tr>
 <tr>
-<td align="left"><a href="/security/ranger-emr-2-openldap-native/">Apache Ranger and AWS EMR Automated Installation Series (2): OpenLDAP + EMR-Native Ranger</a></td>
+<td style="text-align:left"><a href="/security/ranger-emr-2-openldap-native/">Apache Ranger and AWS EMR Automated Installation Series (2): OpenLDAP + EMR-Native Ranger</a></td>
 </tr>
 <tr>
-<td align="left"><a href="/security/ranger-emr-3-ad-native/">Apache Ranger and AWS EMR Automated Installation Series (3): Windows AD + EMR-Native Ranger</a></td>
+<td style="text-align:left"><a href="/security/ranger-emr-3-ad-native/">Apache Ranger and AWS EMR Automated Installation Series (3): Windows AD + EMR-Native Ranger</a></td>
 </tr>
 <tr>
-<td align="left"><a href="/security/ranger-emr-4-openldap-open-source/">Apache Ranger and AWS EMR Automated Installation Series (4): OpenLDAP + Open-Source Ranger</a></td>
+<td style="text-align:left"><a href="/security/ranger-emr-4-openldap-open-source/">Apache Ranger and AWS EMR Automated Installation Series (4): OpenLDAP + Open-Source Ranger</a></td>
 </tr>
 <tr>
-<td align="left"><a href="/security/ranger-emr-5-ad-open-source/">Apache Ranger and AWS EMR Automated Installation Series (5): Windows AD + Open-Source Ranger</a></td>
+<td style="text-align:left"><a href="/security/ranger-emr-5-ad-open-source/">Apache Ranger and AWS EMR Automated Installation Series (5): Windows AD + Open-Source Ranger</a></td>
 </tr>
-</tbody></table>
+</tbody>
+</table>
 </div><div class="article-licensing box"><div class="licensing-title"><p>Apache Ranger 与 AWS EMR 自动化安装与集成 (3)：Windows AD + EMR-Native Ranger</p><p><a href="https://laurence.enlightgram.com/security/ranger-emr-3-ad-native/">https://laurence.enlightgram.com/security/ranger-emr-3-ad-native/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2022-12-17</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/AD/">AD</a><a class="link-muted mr-2" rel="tag" href="/tags/EMR/">EMR</a><a class="link-muted mr-2" rel="tag" href="/tags/Ranger/">Ranger</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/hadoop/hiveserver2-and-metastore/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">HiveServer2 和 HiveMetastore 梳理</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/python/jupyter-soft-unicode-error/"><span class="level-item">启动Jupyter报错：ImportError: cannot import name ‘soft_unicode‘ from ‘markupsafe‘</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

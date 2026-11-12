@@ -42,85 +42,92 @@
       window.addEventListener('hashchange', switchTab, false);
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
-</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">《Spark Structured Streaming》 官方文档解读</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Spark/">Spark</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2018-05-24T00:33:16.000Z" title="2018-05-23 17:33:16">2018-05-23</time></span><span class="level-item is-hidden-mobile">阅读用时：16 分钟 (约 2330 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>本文原文出处: http:&#x2F;&#x2F; blog .csdn.net&#x2F;bluishglc&#x2F;article&#x2F;details&#x2F;80423323 严禁任何形式的转载，否则将委托CSDN官方维护权益！</p>
-<h3 id="模型思想"><a href="#模型思想" class="headerlink" title="模型思想"></a>模型思想</h3><p>从Spark 2.0开始，Spark Streaming 引入了一套新的流计算编程模型：Structured Streaming，开发这套API的主要动因是自Spark 2.0之后，以RDD为核心的API逐步升级到Dataset&#x2F;DataFrame上，而另一方面，以RDD为基础的编程模型对开发人员的要求较高，需要有足够的编程背景才能胜任Spark Streaming的编程工作，而新引入的Structured Streaming模型是把数据流当作一个没有边界的数据表来对待，这样开发人员可以在流上使用Spark SQL进行流处理，这大大降低了流计算的编程门槛。</p>
-<p> <img src="/../../images/spark/spark-structured-streaming-guide/2.png" alt="此处输入图片的描述"></p>
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">《Spark Structured Streaming》 官方文档解读</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Spark/">Spark</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2018-05-24T00:33:16.000Z" title="2018-05-23 17:33:16">2018-05-23</time></span><span class="level-item is-hidden-mobile">阅读用时：16 分钟 (约 2330 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>本文原文出处: http:// blog .csdn.net/bluishglc/article/details/80423323 严禁任何形式的转载，否则将委托CSDN官方维护权益！</p>
+<h3 id="模型思想">模型思想</h3>
+<p>从Spark 2.0开始，Spark Streaming 引入了一套新的流计算编程模型：Structured Streaming，开发这套API的主要动因是自Spark 2.0之后，以RDD为核心的API逐步升级到Dataset/DataFrame上，而另一方面，以RDD为基础的编程模型对开发人员的要求较高，需要有足够的编程背景才能胜任Spark Streaming的编程工作，而新引入的Structured Streaming模型是把数据流当作一个没有边界的数据表来对待，这样开发人员可以在流上使用Spark SQL进行流处理，这大大降低了流计算的编程门槛。</p>
+<p><img src="../../images/spark/spark-structured-streaming-guide/2.png" alt="此处输入图片的描述"></p>
 <p>上图非常直观地解释了Structured Streaming模型的设计思想，基本无需多言。另一方面，当具备了这样一张“表”后，流的运作方式是就是在这张表上进行“查询”，并将查询的结果写到另一张结果表上，这种变换与DStream经过某个transform之后形成一个新的DStream是很 类 似的。我们来看一下Spark Streaming官方文档上给出的一个word count的示例：</p>
-<p> <img src="/../../images/spark/spark-structured-streaming-guide/3.png" alt="此处输入图片的描述"></p>
+<p><img src="../../images/spark/spark-structured-streaming-guide/3.png" alt="此处输入图片的描述"></p>
 <p>这个图直观地展示了Structured Streaming的运作方式，每次流入的文本会作为一行新数据加入到unbounded table上，然后在这个表上执行word count查询后，把统计出的word count写到结果表中并输出。</p>
-<h3 id="窗口操作"><a href="#窗口操作" class="headerlink" title="窗口操作"></a>窗口操作</h3><p>Structured Streaming同样支持窗口操作，同样是基于unbounded table模型来实现的，较之于DStream的窗口操作，新的API显得更加实用和强大，一个显著的改进是新的窗口运算可以基于”事件时间”(Event Time )进行计算而不在是数据进入到流上的时间（当然，这并不是说DStream不能基于事件时间进行计算，只是实现起来稍显麻烦），所谓”事件时间”是指数据所代表的事件发生时的时间，这显然更加具有实用性。同样以word count为例，下图展示了以10分钟作为window size，5分钟为slide的窗口计算过程：</p>
-<p> <img src="/../../images/spark/spark-structured-streaming-guide/4.png" alt="此处输入图片的描述"></p>
+<h3 id="窗口操作">窗口操作</h3>
+<p>Structured Streaming同样支持窗口操作，同样是基于unbounded table模型来实现的，较之于DStream的窗口操作，新的API显得更加实用和强大，一个显著的改进是新的窗口运算可以基于&quot;事件时间&quot;(Event Time )进行计算而不在是数据进入到流上的时间（当然，这并不是说DStream不能基于事件时间进行计算，只是实现起来稍显麻烦），所谓&quot;事件时间&quot;是指数据所代表的事件发生时的时间，这显然更加具有实用性。同样以word count为例，下图展示了以10分钟作为window size，5分钟为slide的窗口计算过程：</p>
+<p><img src="../../images/spark/spark-structured-streaming-guide/4.png" alt="此处输入图片的描述"></p>
 <p>这个图形象地展示了以每行文本的时间戳为准，以10分钟为窗口尺度，统计了12:00 - 12:10, 12:05 - 12:15, 12:10 - 12:20三个时间窗口上word count值，而对应的实现代码及其地简洁：</p>
 <figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> spark.implicits._</span><br><span class="line"></span><br><span class="line"><span class="keyword">val</span> words = ... <span class="comment">// streaming DataFrame of schema &#123; timestamp: Timestamp, word: String &#125;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// Group the data by window and word and compute the count of each group</span></span><br><span class="line"><span class="keyword">val</span> windowedCounts = words.groupBy(</span><br><span class="line">  window($<span class="string">&quot;timestamp&quot;</span>, <span class="string">&quot;10 minutes&quot;</span>, <span class="string">&quot;5 minutes&quot;</span>),</span><br><span class="line">  $<span class="string">&quot;word&quot;</span></span><br><span class="line">).count()</span><br></pre></td></tr></table></figure>
-
-<h3 id="应对数据延迟就绪"><a href="#应对数据延迟就绪" class="headerlink" title="应对数据延迟就绪"></a>应对数据延迟就绪</h3><p>除此之外，新的API对数据延时到达也给出了一套简洁的解决方案。在很多流计算系统中，数据延迟到达的情况很常见，并且很多时候是不可控的，因为很多时候是外围系统自身问题造成的。首先，Structured Streaming可以保证一条旧的数据进入到流上时，Structured Streaming依然可以基于这些“迟到”的数据重新计算并更新计算结果，但是这样会一个问题，即需要在流上维持一个很大时间跨度的数据集，这会消耗很大的资源，同时，流计算关注的是近期数据，更新一个很早之前的状态往往已经不再具有很大的业务价值，因此Structured Streaming引入了一种叫watermarking的机制来应对这个问题。watermarking实际上就是数据的事件时间与在其流上能找到的最大事件时间的最大差值（Time-To-Live, TTL），如果这个差值超过了设定的阈值，就意味着数据太陈旧了，时效性超出了流计算应该关注的区间，不再参与计算。 <strong>watermarking的定义或者说计算方法是非常有道理和有实际意义的，我们说当一组有新有旧（迟到）的数据进入到流上时，我们如何判定怎样的数据才算是太过“陈旧”的数据而不再给予关注？时间差值可以直接给出，10分钟也好，15分钟也罢，但是进行参照计算的“最新时间”怎么定呢？这里有两个可选时间：窗口的截止时间和窗口中最晚&#x2F;最新的事件时间，显然后者是更加准确的，因为后者反映的是目标系统最后时刻的状态而不是当前数据流的最新状态！</strong> </p>
+<h3 id="应对数据延迟就绪">应对数据延迟就绪</h3>
+<p>除此之外，新的API对数据延时到达也给出了一套简洁的解决方案。在很多流计算系统中，数据延迟到达的情况很常见，并且很多时候是不可控的，因为很多时候是外围系统自身问题造成的。首先，Structured Streaming可以保证一条旧的数据进入到流上时，Structured Streaming依然可以基于这些“迟到”的数据重新计算并更新计算结果，但是这样会一个问题，即需要在流上维持一个很大时间跨度的数据集，这会消耗很大的资源，同时，流计算关注的是近期数据，更新一个很早之前的状态往往已经不再具有很大的业务价值，因此Structured Streaming引入了一种叫watermarking的机制来应对这个问题。watermarking实际上就是数据的事件时间与在其流上能找到的最大事件时间的最大差值（Time-To-Live, TTL），如果这个差值超过了设定的阈值，就意味着数据太陈旧了，时效性超出了流计算应该关注的区间，不再参与计算。 <strong>watermarking的定义或者说计算方法是非常有道理和有实际意义的，我们说当一组有新有旧（迟到）的数据进入到流上时，我们如何判定怎样的数据才算是太过“陈旧”的数据而不再给予关注？时间差值可以直接给出，10分钟也好，15分钟也罢，但是进行参照计算的“最新时间”怎么定呢？这里有两个可选时间：窗口的截止时间和窗口中最晚/最新的事件时间，显然后者是更加准确的，因为后者反映的是目标系统最后时刻的状态而不是当前数据流的最新状态！</strong></p>
 <p>我们官方文档展示的例子：</p>
-<p> <img src="/../../images/spark/spark-structured-streaming-guide/5.png" alt="此处输入图片的描述"></p>
-<p>在这个图中，watermark设定为10分钟，我们先看一个延迟到达但没有超过watermark的例子：(12:09, cat) ，这个数据会最先进入12:05 - 12:15这个窗口(虽然正常情况下它在12：00-12：10这个窗口开启时就应该已经就绪了，显然它是一个迟到的数据)，watermark设定为10分钟话意味着 有效的 事件时间可以推后到12：14 - 10m &#x3D; 12:04,因为12：14是这个窗口中接收到的最晚的时间，代表目标系统最后时刻的状态，由于12:09在12:04之后，因此被视为了“虽然迟到但尚且可以接收”的数据而被更新到了结果表中，也就是(12：00 - 12：10, cat, 1)。</p>
-<p>另一个超出watermark的例子是(12:04, dog)，这个数据最早进入的窗口是12:15 - 12:25，窗口中最晚的事件时间是12：17，watermark为10分钟意味着有效的事件时间可以推后到12:07，而(12:04, dog)比这个值还要早，说明它”太旧了”，所以不会被更新到结果表中了。</p>
-<p>同样的，在编程层面实现这些要求也是很简单的，整个Structured Streaming和Dataset&#x2F;DataFrame都是声明性的：</p>
+<p><img src="../../images/spark/spark-structured-streaming-guide/5.png" alt="此处输入图片的描述"></p>
+<p>在这个图中，watermark设定为10分钟，我们先看一个延迟到达但没有超过watermark的例子：(12:09, cat) ，这个数据会最先进入12:05 - 12:15这个窗口(虽然正常情况下它在12：00-12：10这个窗口开启时就应该已经就绪了，显然它是一个迟到的数据)，watermark设定为10分钟话意味着 有效的 事件时间可以推后到12：14 - 10m = 12:04,因为12：14是这个窗口中接收到的最晚的时间，代表目标系统最后时刻的状态，由于12:09在12:04之后，因此被视为了“虽然迟到但尚且可以接收”的数据而被更新到了结果表中，也就是(12：00 - 12：10, cat, 1)。</p>
+<p>另一个超出watermark的例子是(12:04, dog)，这个数据最早进入的窗口是12:15 - 12:25，窗口中最晚的事件时间是12：17，watermark为10分钟意味着有效的事件时间可以推后到12:07，而(12:04, dog)比这个值还要早，说明它&quot;太旧了&quot;，所以不会被更新到结果表中了。</p>
+<p>同样的，在编程层面实现这些要求也是很简单的，整个Structured Streaming和Dataset/DataFrame都是声明性的：</p>
 <figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> spark.implicits._</span><br><span class="line"></span><br><span class="line"><span class="keyword">val</span> words = ... <span class="comment">// streaming DataFrame of schema &#123; timestamp: Timestamp, word: String &#125;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// Group the data by window and word and compute the count of each group</span></span><br><span class="line"><span class="keyword">val</span> windowedCounts = words</span><br><span class="line">    .withWatermark(<span class="string">&quot;timestamp&quot;</span>, <span class="string">&quot;10 minutes&quot;</span>)</span><br><span class="line">    .groupBy(</span><br><span class="line">        window($<span class="string">&quot;timestamp&quot;</span>, <span class="string">&quot;10 minutes&quot;</span>, <span class="string">&quot;5 minutes&quot;</span>),</span><br><span class="line">        $<span class="string">&quot;word&quot;</span>)</span><br><span class="line">    .count()</span><br></pre></td></tr></table></figure>
-
 <p>对于基于watermarking的窗口计算的最后一个问题就是Update模式和Append模式了，两种模式的区别是：Update模式总是倾向于“尽可能早”的将处理结果更新到sink，当出现迟到数据时，早期的某个计算结果将会被更新。如果用于接收处理结果的sink不支持更新操作，则只能选择Append模式，Append模式就是推迟计算结果的输出到一个相对较晚的时刻，确保结果是稳定的，不会再被更新，比如：12:00 - 12:10窗口的处理结果会等到watermark更新到12：11之后才会写入到sink。</p>
-<h3 id="补充：关于Output-Mode"><a href="#补充：关于Output-Mode" class="headerlink" title="补充：关于Output Mode"></a>补充：关于Output Mode</h3><p>Structured Streaming有三种输出模式：Append， Complete和Update , 它们的区别如下：</p>
+<h3 id="补充：关于Output-Mode">补充：关于Output Mode</h3>
+<p>Structured Streaming有三种输出模式：Append， Complete和Update , 它们的区别如下：</p>
 <ul>
-<li><p>Append模式：顾名思义，既然是Append，那就意味着它每次都是 <strong>添加新的行</strong> ，那么也就是说：它适用且只适用于那些 <strong>一旦产生计算结果便永远不会去修改</strong> 的情形， 所以它能保证每一行数据只被数据一次</p>
+<li>
+<p>Append模式：顾名思义，既然是Append，那就意味着它每次都是 <strong>添加新的行</strong> ，那么也就是说：它适用且只适用于那些 <strong>一旦产生计算结果便永远不会去修改</strong> 的情形， 所以它能保证每一行数据只被数据一次</p>
 </li>
-<li><p>Complete模式：整张结果表在每次触发时都会全量输出！这显然是是要支撑那些针对数据全集进行的计算，例如：聚合</p>
+<li>
+<p>Complete模式：整张结果表在每次触发时都会全量输出！这显然是是要支撑那些针对数据全集进行的计算，例如：聚合</p>
 </li>
-<li><p>Update模式：某种意义上是和Append模式针锋相对的一个种模式，它只输出上次trigger之后，发生了“更新”的数据的，这包含新生的数据和行发生了变化的行。对于数据库类型的sink来说，这是一种理想的模式。</p>
+<li>
+<p>Update模式：某种意义上是和Append模式针锋相对的一个种模式，它只输出上次trigger之后，发生了“更新&quot;的数据的，这包含新生的数据和行发生了变化的行。对于数据库类型的sink来说，这是一种理想的模式。</p>
 </li>
 </ul>
 <p>Structured Streaming的三种输出模式和处理数据操作类型以及Sink有密切的关系，并不是在任何情形下都可以随意使用任意一的模式，对此官方文档中给出一个表格：</p>
 <table>
 <thead>
 <tr>
-<th align="center">查询类型</th>
-<th align="center"></th>
-<th align="center">支持的模式</th>
-<th align="center">说明</th>
+<th style="text-align:center">查询类型</th>
+<th style="text-align:center"></th>
+<th style="text-align:center">支持的模式</th>
+<th style="text-align:center">说明</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="center">带聚合的查询</td>
-<td align="center">使用watermark，基于事件时间的聚合</td>
-<td align="center">Append</td>
-<td align="center">在此种情形下，append模式的工作方式是：超出了watermark 的聚合状态会被丢弃，但是由于是append模式，Spark必须保证聚合结果是“稳定”之后的一个最终值，所以聚合结果的输出将会被推迟到watermark关闭之后的那个时刻而不是以当前时间为终止时间的那个窗口时间。</td>
+<tbody>
+<tr>
+<td style="text-align:center">带聚合的查询</td>
+<td style="text-align:center">使用watermark，基于事件时间的聚合</td>
+<td style="text-align:center">Append</td>
+<td style="text-align:center">在此种情形下，append模式的工作方式是：超出了watermark 的聚合状态会被丢弃，但是由于是append模式，Spark必须保证聚合结果是“稳定”之后的一个最终值，所以聚合结果的输出将会被推迟到watermark关闭之后的那个时刻而不是以当前时间为终止时间的那个窗口时间。</td>
 </tr>
 <tr>
-<td align="center"></td>
-<td align="center"></td>
-<td align="center">Update</td>
-<td align="center">在此种情形下，update模式同样会丢弃超出了watermark 的聚合状态，并总是在第一次时间输出更新了的行！如果存在迟到数据，某一个行可能在update模式下输出多次，直到超出了watermark的规定时间</td>
+<td style="text-align:center"></td>
+<td style="text-align:center"></td>
+<td style="text-align:center">Update</td>
+<td style="text-align:center">在此种情形下，update模式同样会丢弃超出了watermark 的聚合状态，并总是在第一次时间输出更新了的行！如果存在迟到数据，某一个行可能在update模式下输出多次，直到超出了watermark的规定时间</td>
 </tr>
 <tr>
-<td align="center"></td>
-<td align="center"></td>
-<td align="center">Complete</td>
-<td align="center">在此种情形下，Complete不会舍弃任何聚合状态</td>
+<td style="text-align:center"></td>
+<td style="text-align:center"></td>
+<td style="text-align:center">Complete</td>
+<td style="text-align:center">在此种情形下，Complete不会舍弃任何聚合状态</td>
 </tr>
 <tr>
-<td align="center"></td>
-<td align="center">其他聚合运算</td>
-<td align="center">Update,Complete</td>
-<td align="center">既然没有了wartermark，那意味着我们设置一个无限长时间的warkmark,也就是说我们认为数据的有可能会无限期地延时到达，所以也就不可能有一个“确定以及稳定”的聚合状态，所以就不能以append模式输出，只能是要么每次触发时更新结果，要么每次输出全集！</td>
+<td style="text-align:center"></td>
+<td style="text-align:center">其他聚合运算</td>
+<td style="text-align:center">Update,Complete</td>
+<td style="text-align:center">既然没有了wartermark，那意味着我们设置一个无限长时间的warkmark,也就是说我们认为数据的有可能会无限期地延时到达，所以也就不可能有一个“确定以及稳定”的聚合状态，所以就不能以append模式输出，只能是要么每次触发时更新结果，要么每次输出全集！</td>
 </tr>
 <tr>
-<td align="center">带mapGroupsWithState的查询</td>
-<td align="center"></td>
-<td align="center">Update</td>
-<td align="center"></td>
+<td style="text-align:center">带mapGroupsWithState的查询</td>
+<td style="text-align:center"></td>
+<td style="text-align:center">Update</td>
+<td style="text-align:center"></td>
 </tr>
 <tr>
-<td align="center">带flatMapGroupsWithState的查询</td>
-<td align="center">Append操作模式</td>
-<td align="center">Append</td>
-<td align="center">在flatMapGroupsWithState之后允许聚合操作</td>
+<td style="text-align:center">带flatMapGroupsWithState的查询</td>
+<td style="text-align:center">Append操作模式</td>
+<td style="text-align:center">Append</td>
+<td style="text-align:center">在flatMapGroupsWithState之后允许聚合操作</td>
 </tr>
-</tbody></table>
+</tbody>
+</table>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">||Update操作模式	|Update	|在flatMapGroupsWithState之后不允许聚合操作</span><br></pre></td></tr></table></figure>
-
-<p>带 joins查询 || Append ||<br>其他查询 ||Append, Update ||</p>
+<p>带 joins查询 || Append ||<br>
+其他查询 ||Append, Update ||</p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>《Spark Structured Streaming》 官方文档解读</p><p><a href="https://laurence.enlightgram.com/spark/spark-structured-streaming-guide/">https://laurence.enlightgram.com/spark/spark-structured-streaming-guide/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2018-05-23</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Spark/">Spark</a><a class="link-muted mr-2" rel="tag" href="/tags/%E6%B5%81%E8%AE%A1%E7%AE%97/">流计算</a><a class="link-muted mr-2" rel="tag" href="/tags/Structured-Streaming/">Structured Streaming</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/flink/flink-first-look/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Flink初探</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/scala/scala-case-function-literals/"><span class="level-item">应该广泛使用case语句简化函数字面量的实现</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

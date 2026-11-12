@@ -42,88 +42,97 @@
       window.addEventListener('hashchange', switchTab, false);
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
-</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">使用 iperf 和 iftop 测试网络带宽</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Linux/">Linux</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2023-12-10T00:29:46.000Z" title="2023-12-09 16:29:46">2023-12-09</time></span><span class="level-item is-hidden-mobile">阅读用时：18 分钟 (约 2758 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>有时候，我们需要确切地知道服务器在当前网络环境下所能达到的上行和下行的网络带宽是多少，这对于测试上传或下载作业是否最大化利用了带宽非常重要。我们以位于AWS VPC 环境中的 EC2 为例，介绍一下如何实测出 EC2 节点所能达到的最大带宽。我们以 m5.4xlarge 这一机型为例，根据 AWS 官方文档的介绍：<a target="_blank" rel="noopener" href="https://aws/">https://aws</a>. amazon .com&#x2F;ec2&#x2F;instance-types&#x2F;m5&#x2F;，该型实例可以达到的最高带宽是 10 Gbps，我们将使用两台 m5.4xlarge，通过 iperf 来实测一下两台服务器之间的最大上传和下载速率。</p>
-<h2 id="1-内网双机互测"><a href="#1-内网双机互测" class="headerlink" title="1. 内网双机互测"></a>1. 内网双机互测</h2><p>如果你在内网中拥有两台机器，那么，最准确的测试方法是：一台作为服务器，另一台做为客户端向其发送数据包，这样检测出的结果是最准确的，这能屏蔽掉 外网 上下行带宽的影响，这也是 iperf 的工作方式。</p>
-<h3 id="1-1-安装-iperf"><a href="#1-1-安装-iperf" class="headerlink" title="1.1. 安装 iperf"></a>1.1. 安装 iperf</h3><p>iperf 可以通过 yum 安装，但前提是 yum 已经安转了 epel 的 repo, 安装前，先使用命令：</p>
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">使用 iperf 和 iftop 测试网络带宽</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Linux/">Linux</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2023-12-10T00:29:46.000Z" title="2023-12-09 16:29:46">2023-12-09</time></span><span class="level-item is-hidden-mobile">阅读用时：18 分钟 (约 2758 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>有时候，我们需要确切地知道服务器在当前网络环境下所能达到的上行和下行的网络带宽是多少，这对于测试上传或下载作业是否最大化利用了带宽非常重要。我们以位于AWS VPC 环境中的 EC2 为例，介绍一下如何实测出 EC2 节点所能达到的最大带宽。我们以 m5.4xlarge 这一机型为例，根据 AWS 官方文档的介绍：<a target="_blank" rel="noopener" href="https://aws">https://aws</a>. amazon .com/ec2/instance-types/m5/，该型实例可以达到的最高带宽是 10 Gbps，我们将使用两台 m5.4xlarge，通过 iperf 来实测一下两台服务器之间的最大上传和下载速率。</p>
+<h2 id="1-内网双机互测">1. 内网双机互测</h2>
+<p>如果你在内网中拥有两台机器，那么，最准确的测试方法是：一台作为服务器，另一台做为客户端向其发送数据包，这样检测出的结果是最准确的，这能屏蔽掉 外网 上下行带宽的影响，这也是 iperf 的工作方式。</p>
+<h3 id="1-1-安装-iperf">1.1. 安装 iperf</h3>
+<p>iperf 可以通过 yum 安装，但前提是 yum 已经安转了 epel 的 repo, 安装前，先使用命令：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum repolist</span><br></pre></td></tr></table></figure>
-
 <p>确认一下当前 OS 是否已经安装过了 epel repo，如果没有，可以使用如下命令先安装 epel repo:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># for centos 7</span></span><br><span class="line">wget https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm</span><br><span class="line"><span class="comment"># for centos 6</span></span><br><span class="line">wget https://dl.fedoraproject.org/pub/archive/epel/6/x86_64/epel-release-6-8.noarch.rpm</span><br><span class="line"><span class="built_in">sudo</span> yum -y install ./epel-release-*.noarch.rpm</span><br></pre></td></tr></table></figure>
-
 <p>然后就可以使用 yum 安装 iperf 了：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> yum -y install iperf</span><br></pre></td></tr></table></figure>
-
-<h3 id="1-2-启动-iperf-服务器端"><a href="#1-2-启动-iperf-服务器端" class="headerlink" title="1.2. 启动 iperf 服务器端"></a>1.2. 启动 iperf 服务器端</h3><p>iperf 使用的是 C&#x2F;S 架构，通过客户端向服务器发送大量的数据包来实测网速，所以需要在一台服务台上启动 server 进程（默认端口 5001），在另一台服务器作为客户端发送数据。启动 server 的命令是：</p>
+<h3 id="1-2-启动-iperf-服务器端">1.2. 启动 iperf 服务器端</h3>
+<p>iperf 使用的是 C/S 架构，通过客户端向服务器发送大量的数据包来实测网速，所以需要在一台服务台上启动 server 进程（默认端口 5001），在另一台服务器作为客户端发送数据。启动 server 的命令是：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">iperf -s</span><br></pre></td></tr></table></figure>
-
-<h3 id="1-3-在-iperf-客户端上测速"><a href="#1-3-在-iperf-客户端上测速" class="headerlink" title="1.3. 在 iperf 客户端上测速"></a>1.3. 在 iperf 客户端上测速</h3><p>服务器段启动后，登录另一台服务器，使用如下三组命令向服务器发送数据包，查看测速报告。其中， -P 参数用于指定线程数，这对于测出最大网速非常必要：</p>
+<h3 id="1-3-在-iperf-客户端上测速">1.3. 在 iperf 客户端上测速</h3>
+<p>服务器段启动后，登录另一台服务器，使用如下三组命令向服务器发送数据包，查看测速报告。其中， -P 参数用于指定线程数，这对于测出最大网速非常必要：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">iperf -c &lt;服务器IP&gt;</span><br><span class="line">iperf -c &lt;服务器IP&gt; -P 2</span><br><span class="line">iperf -c &lt;服务器IP&gt; -P 3</span><br></pre></td></tr></table></figure>
-
 <p>命令执行结果如下：</p>
-<p> <img src="/../../images/linux/iperf-iftop-bandwidth-test/2.png" alt="image-20231209145734185"></p>
+<p><img src="../../images/linux/iperf-iftop-bandwidth-test/2.png" alt="image-20231209145734185"></p>
 <p>从上述三轮测速报告中，我们可以得出如下结论：</p>
 <ol>
-<li><p>首轮测速结果是 4.97 Gbps，这是最大网速吗？显然不是！</p>
+<li>
+<p>首轮测速结果是 4.97 Gbps，这是最大网速吗？显然不是！</p>
 </li>
-<li><p>将并发线程调整为 2 后重测，得到了 9.92 Gbps，这是上轮测速的 2 倍，那这是这是最大网速了吗？不确定，再加线程看趋势！</p>
+<li>
+<p>将并发线程调整为 2 后重测，得到了 9.92 Gbps，这是上轮测速的 2 倍，那这是这是最大网速了吗？不确定，再加线程看趋势！</p>
 </li>
-<li><p>将并发线程调整为 2 后重测，得到了 9.93 Gbps，这说明，9.9+ Gbps 已经是这台服务器在这个网络中的带宽极值了。</p>
+<li>
+<p>将并发线程调整为 2 后重测，得到了 9.93 Gbps，这说明，9.9+ Gbps 已经是这台服务器在这个网络中的带宽极值了。</p>
 </li>
 </ol>
 <p>上述结论和 AWS 官方文档给出的数据是一致的：m5.4xlarge 机型的带宽极值就是 10 Gbps 了 （每秒传输 1280M 字节数据）</p>
 <p>上述测试的是单向网络传输，也就是从客户端向服务器端发送数据，在实际的网络环境中，通信都是双向的，为了测试双向的通信带宽，iperf 允许我们让客户端同时作为服务器接收来自服务器端的数据，这样模拟的就是在上传过程中伴随下载的网络带宽表现。做法就是加一个 -d 参数表示双向传输，然后还要给客户端一个监听端口接收数据（用 -L 来设置）。同样执行如下三组命令：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">iperf -c &lt;服务器IP&gt; -d -L 5002</span><br><span class="line">iperf -c &lt;服务器IP&gt; -d -L 5002 -P 2</span><br><span class="line">iperf -c &lt;服务器IP&gt; -d -L 5002 -P 3</span><br></pre></td></tr></table></figure>
-
 <p>命令执行结果如下：</p>
-<p> <img src="/../../images/linux/iperf-iftop-bandwidth-test/3.png" alt="image-20231209161731557"></p>
+<p><img src="../../images/linux/iperf-iftop-bandwidth-test/3.png" alt="image-20231209161731557"></p>
 <p>从上述三轮测速报告中，我们可以得出如下结论：</p>
 <ol>
-<li><p>在双工模式下，网络带宽基本是对半分配了</p>
+<li>
+<p>在双工模式下，网络带宽基本是对半分配了</p>
 </li>
-<li><p>上传和下载速率加在一起等入总带宽</p>
+<li>
+<p>上传和下载速率加在一起等入总带宽</p>
 </li>
 </ol>
-<h2 id="2-本机自检"><a href="#2-本机自检" class="headerlink" title="2. 本机自检"></a>2. 本机自检</h2><p>如果你不具备双机互为服务器&#x2F;客户端模式的测速，或者你只是关心当前机器 整体的 下载和上传速率，那么 iftop 是更合适你的工具，它们准确反映出当前服务器整体的上传和下载速率。</p>
-<h3 id="2-1-安装-iftop"><a href="#2-1-安装-iftop" class="headerlink" title="2.1. 安装 iftop"></a>2.1. 安装 iftop</h3><p>和 iperf 一样，iftop 也可以通过 yum 安装，但前提是 yum 已经安转了 epel 的 repo, 安装前，先使用命令：</p>
+<h2 id="2-本机自检">2. 本机自检</h2>
+<p>如果你不具备双机互为服务器/客户端模式的测速，或者你只是关心当前机器 整体的 下载和上传速率，那么 iftop 是更合适你的工具，它们准确反映出当前服务器整体的上传和下载速率。</p>
+<h3 id="2-1-安装-iftop">2.1. 安装 iftop</h3>
+<p>和 iperf 一样，iftop 也可以通过 yum 安装，但前提是 yum 已经安转了 epel 的 repo, 安装前，先使用命令：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum repolist</span><br></pre></td></tr></table></figure>
-
 <p>确认一下当前 OS 是否已经安装过了 epel repo，如果没有，可以使用如下命令先安装 epel repo:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># for centos 7</span></span><br><span class="line">wget https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm</span><br><span class="line"><span class="comment"># for centos 6</span></span><br><span class="line">wget https://dl.fedoraproject.org/pub/archive/epel/6/x86_64/epel-release-6-8.noarch.rpm</span><br><span class="line"><span class="built_in">sudo</span> yum -y install ./epel-release-*.noarch.rpm</span><br></pre></td></tr></table></figure>
-
 <p>然后就可以使用 yum 安装 iftop 了：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> yum -y install iftop</span><br></pre></td></tr></table></figure>
-
-<h3 id="2-1-启动-iftop"><a href="#2-1-启动-iftop" class="headerlink" title="2.1. 启动 iftop"></a>2.1. 启动 iftop</h3><p>执行命令：</p>
+<h3 id="2-1-启动-iftop">2.1. 启动 iftop</h3>
+<p>执行命令：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> iftop</span><br></pre></td></tr></table></figure>
-
-<p>会看到如下界面：<br> <img src="/../../images/linux/iperf-iftop-bandwidth-test/4.png" alt="在这里插入图片描述"></p>
+<p>会看到如下界面：<br>
+<img src="../../images/linux/iperf-iftop-bandwidth-test/4.png" alt="在这里插入图片描述"></p>
 <p>这正是我们前面使用 iperf 进行压测时，从客户端机器上截取的 iftop 的输出信息。解释一下各个位置的信息含义：</p>
 <ul>
-<li><p>第一行，是带宽，下面带有标尺，用来标示每个连接上的实时流量占用的带宽（从实测看，iperf 的标尺只能显式到1.79 Gbps )</p>
+<li>
+<p>第一行，是带宽，下面带有标尺，用来标示每个连接上的实时流量占用的带宽（从实测看，iperf 的标尺只能显式到1.79 Gbps )</p>
 </li>
-<li><p>中间部分，是所有的连接，默认显示的是主机名，可以通过参数显示ip，箭头表示数据方向</p>
+<li>
+<p>中间部分，是所有的连接，默认显示的是主机名，可以通过参数显示ip，箭头表示数据方向</p>
 </li>
-<li><p>中间右侧三列，分别是该连接2s、10s、40s的平均流量</p>
+<li>
+<p>中间右侧三列，分别是该连接2s、10s、40s的平均流量</p>
 </li>
-<li><p>底部三行，分别表示发送、接收、汇总的流量</p>
+<li>
+<p>底部三行，分别表示发送、接收、汇总的流量</p>
 </li>
-<li><p>底部三行第2列，为iftop启动到现在的流量汇总</p>
+<li>
+<p>底部三行第2列，为iftop启动到现在的流量汇总</p>
 </li>
-<li><p>底部三行第3列，为峰值速率</p>
+<li>
+<p>底部三行第3列，为峰值速率</p>
 </li>
-<li><p>底部三行第4列，为2s、10s、40s的平均值</p>
+<li>
+<p>底部三行第4列，为2s、10s、40s的平均值</p>
 </li>
 </ul>
-<h2 id="附录：iperf-命令参数"><a href="#附录：iperf-命令参数" class="headerlink" title="附录：iperf 命令参数"></a>附录：iperf 命令参数</h2><ul>
+<h2 id="附录：iperf-命令参数">附录：iperf 命令参数</h2>
+<ul>
 <li>通用参数</li>
 </ul>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">-f, --format \[bkmaBKMA]   <span class="comment"># 格式化带宽数输出</span></span><br><span class="line">-i, --interval <span class="comment">#           # 设置每次报告之间的时间间隔，单位为秒。如果设置为非零值，就会按照此时间间隔输出测试报告。默认值为零。</span></span><br><span class="line">-l, --len <span class="comment">#\[KM]           # 设置读写缓冲区的长度。TCP方式默认为8KB，UDP方式默认为1470字节。</span></span><br><span class="line">-m, --<span class="built_in">print</span>\_mss           <span class="comment"># 输出TCP MSS值（通过TCP\_MAXSEG支持）。MSS值一般比MTU值小40字节。通常情况</span></span><br><span class="line">-p, --port <span class="comment">#               # 设置端口，与服务器端的监听端口一致。默认是5001端口，与ttcp的一样。</span></span><br><span class="line">-u, --udp                  <span class="comment"># 使用UDP方式而不是TCP方式。参看-b选项。</span></span><br><span class="line">-w, --window <span class="comment">#\[KM]        # 设置套接字缓冲区为指定大小。对于TCP方式，此设置为TCP窗口大小。</span></span><br><span class="line">                           <span class="comment"># 对于UDP方式，此设置为接受UDP数据包的缓冲区大小，限制可以接受数据包的最大值。</span></span><br><span class="line">-B, --<span class="built_in">bind</span> host            <span class="comment"># 绑定到主机的多个地址中的一个。对于客户端来说，这个参数设置了出栈接口。对于服务器端来说，</span></span><br><span class="line">                           <span class="comment"># 这个参数设置入栈接口。这个参数只用于具有多网络接口的主机。在Iperf的UDP模式下，此参数用于绑定和加入一个多播组。</span></span><br><span class="line">                           <span class="comment"># 使用范围在224.0.0.0至239.255.255.255的多播地址。参考-T参数。</span></span><br><span class="line">-C, --compatibility        <span class="comment"># 与低版本的Iperf使用时，可以使用兼容模式。不需要两端同时使用兼容模式，但是强烈推荐两端同时使用兼容模式。</span></span><br><span class="line">                           <span class="comment"># 某些情况下，使用某些数据流可以引起1.7版本的服务器端崩溃或引起非预期的连接尝试。</span></span><br><span class="line">-M, --mss                  <span class="comment"># ip头减去40字节。在以太网中，MSS值 为1460字节（MTU1500字节）。许多操作系统不支持此选项。</span></span><br><span class="line">-N, --nodelay              <span class="comment"># 设置TCP无延迟选项，禁用Nagle&#x27;s运算法则。通常情况此选项对于交互程序，例如telnet，是禁用的。</span></span><br><span class="line">-V (from v1.6 or higher)   <span class="comment"># 绑定一个IPv6地址。 服务端：$ iperf -s –V 客户端：$ iperf -c -V 注意：在1.6.3或更高版本中，指定IPv6地址不需要使用-B参数绑定，在1.6之前的版本则需要。在大多数操作系统中，将响应IPv4客户端映射的IPv4地址。</span></span><br></pre></td></tr></table></figure>
-
 <ul>
 <li>服务器端专用参数</li>
 </ul>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">-s, --server                    <span class="comment"># Iperf服务器模式</span></span><br><span class="line">-D (v1.2或更高版本)               <span class="comment"># Unix平台下Iperf作为后台守护进程运行。在Win32平台下，Iperf将作为服务运行。</span></span><br><span class="line">-R(v1.2或更高版本，仅用于Windows)  <span class="comment"># 卸载Iperf服务（如果它在运行）。</span></span><br><span class="line">-o(v1.2或更高版本，仅用于Windows)  <span class="comment"># 重定向输出到指定文件</span></span><br><span class="line">-c, --client host               <span class="comment"># 如果Iperf运行在服务器模式，并且用-c参数指定一个主机，那么Iperf将只接受指定主机的连接。此参数不能工作于UDP模式。</span></span><br><span class="line">-P, --parallel <span class="comment">#                # 服务器关闭之前保持的连接数。默认是0，这意味着永远接受连接。</span></span><br></pre></td></tr></table></figure>
-
 <ul>
 <li>客户端专用参数</li>
 </ul>

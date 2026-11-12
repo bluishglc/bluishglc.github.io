@@ -43,41 +43,45 @@
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Flink：Temporal Table 的两种实现方式 Temporal Table DDL 和 Temporal Table Function</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Flink/">Flink</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2024-03-03T20:57:38.000Z" title="2024-03-03 12:57:38">2024-03-03</time></span><span class="level-item is-hidden-mobile">阅读用时：5 分钟 (约 734 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>从各方收集的资料以及官方文档对 <a target="_blank" rel="noopener" href="https://nightlies.apache.org/flink/flink-docs-release-1.18/zh/docs/dev/table/sql/queries/joins/#temporal-joins">Temporal Joins</a> 和 <a target="_blank" rel="noopener" href="https://nightlies.apache.org/flink/flink-docs-release-1.18/zh/docs/dev/table/concepts/temporal_table_function/">Temporal Table Function</a> 两部分的描述可以确定的是：</p>
-<p><strong>Flink 是先有的 Temporal Table Function，利用它实现了类版本表的功能，注意，是类版本表，不是现在文档中定义的标准版本表概念，后来，Flink 才引入了 Temporal Table （版本表 &#x2F; 普通表）概念（本文称之为“Temporal Table DDL”方式），同时实现了 SQL 2011 标准，引入了 FOR SYSTEM_TIME AS OF 关键字实现了基于版本表的 Temporal Join</strong> 。</p>
+<p><strong>Flink 是先有的 Temporal Table Function，利用它实现了类版本表的功能，注意，是类版本表，不是现在文档中定义的标准版本表概念，后来，Flink 才引入了 Temporal Table （版本表 / 普通表）概念（本文称之为“Temporal Table DDL”方式），同时实现了 SQL 2011 标准，引入了 FOR SYSTEM_TIME AS OF 关键字实现了基于版本表的 Temporal Join</strong> 。</p>
 <p><strong>在 Temporal Join 中，有两种模式，分别是：基于事件时间 和 基于处理时间，最初，Temporal Table DDL 和 Temporal Table Function 都支持这两种模式，但后来，由于 FLINK-19830 问题，使用 Temporal Table DDL 定义的时态表不再支持基于处理时间的 Temporal Join</strong> ，这就是为什么我们今天搜索一些 Temporal Join 的技术文章时，会发现很多 Temporal Table DDL + 基于处理时间的 Temporal Join 示例，但在现在的官方文档中是没有对等示例的。</p>
 <p><strong>本质上，Temporal Table DDL 和 Temporal Table Function 是一样的，它们定义出的都是 “版本表”，再次强调一遍：它们定义出的都是 “版本表”，都具有版本回溯（Time Travel）能力</strong> ：</p>
-<p> <img src="/../../images/flink/flink-temporal-table-ddl-and-function/2.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/flink/flink-temporal-table-ddl-and-function/2.png" alt="在这里插入图片描述"></p>
 <p><strong>对 Temporal Table DDL 来说，这是自然的，大家更容易误解的其实是 Temporal Table Function，认为 Temporal Table Function 可以是“版本表” 也可以是 “普通表”，这是受到了 “只能通过 Temporal Table Function 才可以实现基于处理时间的 Temporal Join”结论的影响而产生的错误解读（至少我本人曾这样错误的认为过）。只要我们认真看一下声明一个 Temporal Table Function 的方法就知道了：Table.createTemporalTableFunction(“时间属性列”, “主键列”)，你会看到，定义一个 Temporal Table Function 必须同时指定主键和时间戳两个字段，这个 Temporal Table DDL 是一样的</strong> ！</p>
 <p>Temporal Table DDL 和 Temporal Table Function 虽然本质上是等价的，但它们之间存在两点差异：</p>
 <ul>
-<li><p><strong>SQL 中可以定义 Temporal Table DDL，但不能定义 Temporal Table Function，后者只能在代码中使用 Table API 注册</strong></p>
+<li>
+<p><strong>SQL 中可以定义 Temporal Table DDL，但不能定义 Temporal Table Function，后者只能在代码中使用 Table API 注册</strong></p>
 </li>
-<li><p><strong>Temporal Table DDL 和 Temporal Table Function 都可以实现 Temporal Join，它们都支持基于事件时间的 Temporal Join，但只有 Temporal Table Function 可以 Temporal Join 任何表&#x2F;视图的最新版本（即”基于处理时间的 Temporal Join”），而 Temporal Table DDL 最初引入时可以的，后因 FLINK-19830 问题又被禁止</strong></p>
+<li>
+<p><strong>Temporal Table DDL 和 Temporal Table Function 都可以实现 Temporal Join，它们都支持基于事件时间的 Temporal Join，但只有 Temporal Table Function 可以 Temporal Join 任何表/视图的最新版本（即&quot;基于处理时间的 Temporal Join&quot;），而 Temporal Table DDL 最初引入时可以的，后因 FLINK-19830 问题又被禁止</strong></p>
 </li>
 </ul>
 <p>以下是对 Temporal Table DDL 和 Temporal Table Function 的对比总结：</p>
 <table>
 <thead>
 <tr>
-<th align="left">方式</th>
-<th align="left">基于事件时间的 Temporal Join</th>
-<th align="left">基于处理事件的 Temporal Join</th>
-<th align="left">可完全在 SQL 中定义</th>
+<th style="text-align:left">方式</th>
+<th style="text-align:left">基于事件时间的 Temporal Join</th>
+<th style="text-align:left">基于处理事件的 Temporal Join</th>
+<th style="text-align:left">可完全在 SQL 中定义</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="left">Temporal Table DDL</td>
-<td align="left">支持</td>
-<td align="left">不支持 (曾经支持，因为 Issue FLINK-19830 而在新版本中禁止)</td>
-<td align="left">可以</td>
+<tbody>
+<tr>
+<td style="text-align:left">Temporal Table DDL</td>
+<td style="text-align:left">支持</td>
+<td style="text-align:left">不支持 (曾经支持，因为 Issue FLINK-19830 而在新版本中禁止)</td>
+<td style="text-align:left">可以</td>
 </tr>
 <tr>
-<td align="left">Temporal Table Function</td>
-<td align="left">支持</td>
-<td align="left">支持（但同样有语义问题，出于兼容考虑才支持）</td>
-<td align="left">不可以（目前只能在代码中函数注册函数）</td>
+<td style="text-align:left">Temporal Table Function</td>
+<td style="text-align:left">支持</td>
+<td style="text-align:left">支持（但同样有语义问题，出于兼容考虑才支持）</td>
+<td style="text-align:left">不可以（目前只能在代码中函数注册函数）</td>
 </tr>
-</tbody></table>
+</tbody>
+</table>
 </div><div class="article-licensing box"><div class="licensing-title"><p>Flink：Temporal Table 的两种实现方式 Temporal Table DDL 和 Temporal Table Function</p><p><a href="https://laurence.enlightgram.com/flink/flink-temporal-table-ddl-and-function/">https://laurence.enlightgram.com/flink/flink-temporal-table-ddl-and-function/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2024-03-03</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Flink/">Flink</a><a class="link-muted mr-2" rel="tag" href="/tags/%E6%97%B6%E6%80%81%E8%A1%A8/">时态表</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/flink/flink-dynamic-table-stream-duality/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">再谈 Flink 的“动态表”和“流表二象性”</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/flink/flink-temporal-table-function/"><span class="level-item">Flink：Temporal Table Function（时态表函数）和 Temporal Join</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

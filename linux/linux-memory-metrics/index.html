@@ -42,47 +42,60 @@
       window.addEventListener('hashchange', switchTab, false);
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
-</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Linux 内存数据 Metrics 指标解读</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Linux/">Linux</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2023-12-29T22:19:26.000Z" title="2023-12-29 14:19:26">2023-12-29</time></span><span class="level-item is-hidden-mobile">阅读用时：4 分钟 (约 668 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>过去从未仔细了解过使用 <code>free</code> 、 <code>top</code> 等命令时显式的 内存 信息，只关注了已用内存 &#x2F; 可用内存。本文我们详解解读和标注一下各个数据项的含义，同时和 Ganglia 显式的数据做一个映射。开始前介绍一个小知识，很多查看内存的命令行工具都是 <code>cat /proc/meminfo</code> 里的数据，所以数据来源都是一样的，区别只在于显式格式， 用户体验 上。本文我们以 <code>free</code> 命令为主，最后介绍一下 <code>top</code> 和 <code>htop</code> 的一些细微差异。先看下图：</p>
-<p><img src="/../../images/linux/linux-memory-metrics/1.jpeg" alt="在这里插入图片描述"></p>
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Linux 内存数据 Metrics 指标解读</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Linux/">Linux</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2023-12-29T22:19:26.000Z" title="2023-12-29 14:19:26">2023-12-29</time></span><span class="level-item is-hidden-mobile">阅读用时：4 分钟 (约 668 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>过去从未仔细了解过使用 <code>free</code> 、 <code>top</code> 等命令时显式的 内存 信息，只关注了已用内存 / 可用内存。本文我们详解解读和标注一下各个数据项的含义，同时和 Ganglia 显式的数据做一个映射。开始前介绍一个小知识，很多查看内存的命令行工具都是 <code>cat /proc/meminfo</code> 里的数据，所以数据来源都是一样的，区别只在于显式格式， 用户体验 上。本文我们以 <code>free</code> 命令为主，最后介绍一下 <code>top</code> 和 <code>htop</code> 的一些细微差异。先看下图：</p>
+<p><img src="../../images/linux/linux-memory-metrics/1.jpeg" alt="在这里插入图片描述"></p>
 <p>第一行：</p>
 <ul>
-<li><p><code>total</code> : 总的物理内存</p>
+<li>
+<p><code>total</code> : 总的物理内存</p>
 </li>
-<li><p><code>used</code> : 已用内存，是 total - free 的值</p>
+<li>
+<p><code>used</code> : 已用内存，是 total - free 的值</p>
 </li>
-<li><p><code>free</code> : 可用内存（没有被任何进程占用的内存）</p>
+<li>
+<p><code>free</code> : 可用内存（没有被任何进程占用的内存）</p>
 </li>
-<li><p><code>shared</code> : 被 tmpfs 文件系统使用的内存，tmpfs 会将文件加载到内存中以便更快速的访问</p>
+<li>
+<p><code>shared</code> : 被 tmpfs 文件系统使用的内存，tmpfs 会将文件加载到内存中以便更快速的访问</p>
 </li>
-<li><p><code>buffers</code> &#x2F; <code>cached</code> : 由操作系统内核管理的内存空间，存放的是近期访问过的数据，可以认为是 OS 级别的缓存，显然从这里读取数据要比从磁盘读取快得多</p>
+<li>
+<p><code>buffers</code> / <code>cached</code> : 由操作系统内核管理的内存空间，存放的是近期访问过的数据，可以认为是 OS 级别的缓存，显然从这里读取数据要比从磁盘读取快得多</p>
 </li>
 </ul>
 <p>第二行：</p>
 <ul>
-<li><p><code>-/+ buffers/cache used</code> : 真 • 已用内存，是 <code>used - ( buffers + cached )</code> 后的值，这是直接被各个进程占用的真实内存， <code>buffers</code> &#x2F; <code>cached</code> 值不应统计在内，因为当内存紧张时，它们也会被征用并分配给应用程序。Ganglia 中使用的 Used Mem 就是这个值！</p>
+<li>
+<p><code>-/+ buffers/cache used</code> : 真 • 已用内存，是 <code>used - ( buffers + cached )</code> 后的值，这是直接被各个进程占用的真实内存， <code>buffers</code> / <code>cached</code> 值不应统计在内，因为当内存紧张时，它们也会被征用并分配给应用程序。Ganglia 中使用的 Used Mem 就是这个值！</p>
 </li>
-<li><p><code>-/+ buffers/cache free</code> : 真 • 可用内存，是 <code>free + ( buffers + cached )</code> 后的值，这是真正还可以拿来分配的总内存， <code>buffers</code> &#x2F; <code>cached</code> 值应该统计在内，因为当内存紧张时，它们也会被征用并分配给应用程序。</p>
+<li>
+<p><code>-/+ buffers/cache free</code> : 真 • 可用内存，是 <code>free + ( buffers + cached )</code> 后的值，这是真正还可以拿来分配的总内存， <code>buffers</code> / <code>cached</code> 值应该统计在内，因为当内存紧张时，它们也会被征用并分配给应用程序。</p>
 </li>
 </ul>
-<p><strong>第二行的统计数据更具有实际参考意义！其实对于“已用内存”和“可用内存”这两个指标，第一行和第二行使用的两种统计口径，差别在于： <code>buffers</code> &#x2F; <code>cached</code> 是算成已用内存还是可用内存，它们被操作系统管理，属于“可调节”的机动资源，应用程序占用的资源多时， <code>buffers</code> &#x2F; <code>cached</code> 就多一些，反之就让渡出来给应用程序，所以它们被看成可用内存会更合理一些，所以说第二行数据更有参考价值，这也是 Ganglia 取 <code>-/+ buffers/cache used</code> 做“已用内存”的原因</strong> 。</p>
+<p><strong>第二行的统计数据更具有实际参考意义！其实对于“已用内存”和“可用内存”这两个指标，第一行和第二行使用的两种统计口径，差别在于： <code>buffers</code> / <code>cached</code> 是算成已用内存还是可用内存，它们被操作系统管理，属于“可调节”的机动资源，应用程序占用的资源多时， <code>buffers</code> / <code>cached</code> 就多一些，反之就让渡出来给应用程序，所以它们被看成可用内存会更合理一些，所以说第二行数据更有参考价值，这也是 Ganglia 取 <code>-/+ buffers/cache used</code> 做“已用内存”的原因</strong> 。</p>
 <p>另外</p>
 <ul>
-<li><p>使用 <code>top</code> 命令查看内存时是不显示 <code>free</code> 的第二行数据的；</p>
+<li>
+<p>使用 <code>top</code> 命令查看内存时是不显示 <code>free</code> 的第二行数据的；</p>
 </li>
-<li><p>使用 <code>htop</code> 命令查看内存时，是通过颜色来区分的：</p>
+<li>
+<p>使用 <code>htop</code> 命令查看内存时，是通过颜色来区分的：</p>
 <ul>
-<li><p>Green &#x3D; Used memory</p>
+<li>
+<p>Green = Used memory</p>
 </li>
-<li><p>Blue &#x3D; Buffers</p>
+<li>
+<p>Blue = Buffers</p>
 </li>
-<li><p>Yellow&#x2F;Orange &#x3D; Cache</p>
+<li>
+<p>Yellow/Orange = Cache</p>
 </li>
 </ul>
 </li>
 </ul>
-<p> <img src="/../../images/linux/linux-memory-metrics/2.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/linux/linux-memory-metrics/2.png" alt="在这里插入图片描述"></p>
 <p>参考：</p>
-<p><a target="_blank" rel="noopener" href="https://www.turing.com/kb/how-to-use-the-">https://www.turing.com/kb/how-to-use-the-</a> linux -free-command<br><a target="_blank" rel="noopener" href="https://serverfault.com/questions/85470/meaning-of-the-buffers-cache-line-in-the-output-of-free">https://serverfault.com/questions/85470/meaning-of-the-buffers-cache-line-in-the-output-of-free</a></p>
+<p><a target="_blank" rel="noopener" href="https://www.turing.com/kb/how-to-use-the-">https://www.turing.com/kb/how-to-use-the-</a> linux -free-command<br>
+<a target="_blank" rel="noopener" href="https://serverfault.com/questions/85470/meaning-of-the-buffers-cache-line-in-the-output-of-free">https://serverfault.com/questions/85470/meaning-of-the-buffers-cache-line-in-the-output-of-free</a></p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>Linux 内存数据 Metrics 指标解读</p><p><a href="https://laurence.enlightgram.com/linux/linux-memory-metrics/">https://laurence.enlightgram.com/linux/linux-memory-metrics/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2023-12-29</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/linux/linux-cpu-metrics/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Linux CPU 数据 Metrics 指标解读</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/linux/async-profiler/"><span class="level-item">使用 async-profiler 分析 CPU 和内存使用情况</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

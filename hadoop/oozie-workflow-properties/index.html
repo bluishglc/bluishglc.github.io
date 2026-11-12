@@ -46,33 +46,38 @@
 <p>##Oozie 工作流 属性配置的三种方式</p>
 <p>Oozie有三种方法可以给工作流提供属性属性配置：</p>
 <ol>
-<li><p>App部署文件夹根目录下的：config-default.xml</p>
+<li>
+<p>App部署文件夹根目录下的：config-default.xml</p>
 </li>
-<li><p>作业属性文件:job.properties</p>
+<li>
+<p>作业属性文件:job.properties</p>
 </li>
-<li><p>在命令行中指定属性:-Dkey&#x3D;value</p>
+<li>
+<p>在命令行中指定属性:-Dkey=value</p>
 </li>
 </ol>
 <p>##Oozie工作流属性配置的策略（最佳实践）</p>
 <p>坦率地讲，三种配置相互重叠，全部使用会使属性的配置过于分散，使得查找和定位属性变得繁琐。就我个人的经验，我倾向于这样做：</p>
 <ol>
-<li><p>对于静态的，不会因每次启动而发生成改变的配置项，全部配置在config-default.xml，因为这个文件是Oozie部署自包含（self-contained application）应用程序规范的一部分，也就是说这个文件会被自动加载并读取，就如同J2EE的中web.xml一样，所以把静态的配置项写在这里是最理想的。</p>
+<li>
+<p>对于静态的，不会因每次启动而发生成改变的配置项，全部配置在config-default.xml，因为这个文件是Oozie部署自包含（self-contained application）应用程序规范的一部分，也就是说这个文件会被自动加载并读取，就如同J2EE的中web.xml一样，所以把静态的配置项写在这里是最理想的。</p>
 </li>
-<li><p>对于动态的，会因为每次启动而变化的配置项（典型的例子是coordinator的start time), 通过命令行的方式指定是最合适的。</p>
+<li>
+<p>对于动态的，会因为每次启动而变化的配置项（典型的例子是coordinator的start time), 通过命令行的方式指定是最合适的。</p>
 </li>
-<li><p>通常，大多数的构建工具（比如maven)都能够在构建时根据build的目标环境替换配置文件中的一些变量，我们应该利用这个特性，对config-default.xml和命令行（假如你有一个命令行脚本的话）中的与环境相关的属性在构建时进行替换。典型的例子是nameNode和jobTracker。</p>
+<li>
+<p>通常，大多数的构建工具（比如maven)都能够在构建时根据build的目标环境替换配置文件中的一些变量，我们应该利用这个特性，对config-default.xml和命令行（假如你有一个命令行脚本的话）中的与环境相关的属性在构建时进行替换。典型的例子是nameNode和jobTracker。</p>
 </li>
-<li><p>避免使用job.properties，因为job.properties是一个本地文件，它显然没有config-default.xml方便，因为config-default.xml是自包含的。</p>
+<li>
+<p>避免使用job.properties，因为job.properties是一个本地文件，它显然没有config-default.xml方便，因为config-default.xml是自包含的。</p>
 </li>
 </ol>
 <p>综上所属，一个简洁地启动工作流的 命令行 应该是这个样子的：首先，指定oozie.wf.application.path或oozie.coord.application.path或oozie.bundle.application.path是必不可少的，因为至少你要告诉oozie，你的应用程序放在哪里，然后我们需要从命令行中再指定一些动态参数。因此，通过命令行启动一个工作流往往会是这样的：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">oozie job -run \</span><br><span class="line">-Doozie.wf.application.path=hdfs://your-namenode:8020/your/app/path \</span><br><span class="line">-DPARAM1=$&#123;PARAM1&#125; \</span><br><span class="line">-DPARAM1=$&#123;PARAM2&#125;</span><br></pre></td></tr></table></figure>
-
-<p>至于工作流其他的属性配置，都已存放于hdfs:&#x2F;&#x2F;your-namenode:8020&#x2F;your&#x2F; app &#x2F;path&#x2F;config-default.xml中。</p>
+<p>至于工作流其他的属性配置，都已存放于hdfs://your-namenode:8020/your/ app /path/config-default.xml中。</p>
 <p>##Oozie工作流属性的命名规范</p>
 <p>最后，作为一个补充，我们来谈谈oozie对其属性命名的要求：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">- Properties that are a valid Java identifier, [A-Za-z_][0-9A-Za-z_]* , are available as &#x27;$&#123;NAME&#125;&#x27; variables within the workflow definition.</span><br><span class="line"></span><br><span class="line">- **Properties that are not valid Java Identifier, for example &#x27;job.tracker&#x27;**, are available via the String wf:conf(String name) function.</span><br></pre></td></tr></table></figure>
-
 <p>是的，看上去也是有点奇葩的规定了，对于Oozie的属性名，只允许 使用数字、字母和下滑线，类似于job.tracker这样的属性名是非法的！</p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>Oozie工作流属性配置的方式与策略</p><p><a href="https://laurence.enlightgram.com/hadoop/oozie-workflow-properties/">https://laurence.enlightgram.com/hadoop/oozie-workflow-properties/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2015-09-14</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Oozie/">Oozie</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/hadoop/hue-39-tarball-install/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">HUE3.9 Tarball安装</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/linux/lvm-examples/"><span class="level-item">LVM操作案例</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");

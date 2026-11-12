@@ -44,139 +44,183 @@
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">C++ 对象和嵌套对象的创建与销毁</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/cpp/">C++</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2026-03-11T15:37:53.000Z" title="2026-03-11 08:37:53">2026-03-11</time></span><span class="level-item is-hidden-mobile">阅读用时：25 分钟 (约 3727 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/cpp/cpp-nested-object-lifecycle/1.png" alt="C++ 对象和嵌套对象的创建与销毁" fetchpriority="high"></figure><div class="content"><p>在了解了 C++ 堆、栈运行方式后，我们可以开始一个专题：研究对象（特别是嵌套对象）的创建与销毁，这是一个表面上看很普通但要搞清楚全部细节却又不简单的话题，本文就带大家细致地剖析一下 C++ 对象创建与销毁的全过程。阅读本文需要储备一定的堆栈知识，可先阅读 <a href="/cpp/virtual-memory-stack-frame-heap/">《编程底层概念回顾：虚拟内存、栈、栈帧、堆》</a> 一文。</p>
 <p>从大的视角上看，对象既可以创建在堆上，又可以创建在栈上，我们想把这两种情形分开讨论，然后然对比一下它们之间的异同。我们先概括地看一下对象在堆和栈上创建、销毁和拷贝的整体描述：</p>
-<p><strong>➢ 创建对象</strong> </p>
+<p><strong>➢ 创建对象</strong></p>
 <ul>
-<li><p>堆上</p>
+<li>
+<p>堆上</p>
 <ul>
-<li><p>使用 new 操作符会在堆上开辟存储空间，然后调用对象的构造函数创建对象，并返回对象在内存中的地址——指针</p>
+<li>
+<p>使用 new 操作符会在堆上开辟存储空间，然后调用对象的构造函数创建对象，并返回对象在内存中的地址——指针</p>
 </li>
-<li><p>特别地，若对象含有对象成员（嵌套对象），则分配给对象的堆空间必定也包含了属于对象成员的部分（sizeof()计算对象空间时会把所有成员（包括嵌套对象）的大小加在一起）</p>
+<li>
+<p>特别地，若对象含有对象成员（嵌套对象），则分配给对象的堆空间必定也包含了属于对象成员的部分（sizeof()计算对象空间时会把所有成员（包括嵌套对象）的大小加在一起）</p>
 </li>
 </ul>
 </li>
-<li><p>栈上</p>
+<li>
+<p>栈上</p>
 <ul>
-<li><p>使用“直接初始化”语法会在栈上开辟存储空间，然后调用对象的构造函数创建对象，直接得到对象本身——实例</p>
+<li>
+<p>使用“直接初始化”语法会在栈上开辟存储空间，然后调用对象的构造函数创建对象，直接得到对象本身——实例</p>
 </li>
-<li><p>特别地，若对象含有对象成员（嵌套对象），则分配给对象的栈空间必定也包含了属于对象成员的部分（sizeof()计算对象空间时会把所有成员（包括嵌套对象）的大小加在一起）</p>
+<li>
+<p>特别地，若对象含有对象成员（嵌套对象），则分配给对象的栈空间必定也包含了属于对象成员的部分（sizeof()计算对象空间时会把所有成员（包括嵌套对象）的大小加在一起）</p>
 </li>
 </ul>
 </li>
 </ul>
-<p><strong>➢ 销毁对象</strong> </p>
+<p><strong>➢ 销毁对象</strong></p>
 <ul>
-<li><p>堆上</p>
+<li>
+<p>堆上</p>
 <p>在堆上的对象（使用 new 创建的对象）必须显式地使用 delete 操作符销毁对象，否则对象不会被自动清理，进而造成内存泄漏，delete 操作会先调用对象的析构函数释放资源，然后再释放对象占用的内存。在析构对象时，不同类型的成员变量处理方式也不同：</p>
 <ul>
-<li><p>堆上对象的普通成员变量不会单独清理，会伴随对象的销毁而自动销毁</p>
+<li>
+<p>堆上对象的普通成员变量不会单独清理，会伴随对象的销毁而自动销毁</p>
 </li>
-<li><p>堆上对象的对象成员（嵌套对象）会在完成对象析构后再由编译器自动调用对象成员的析构函数进行析构，最后和堆上对象作为整体一次性释放内存</p>
+<li>
+<p>堆上对象的对象成员（嵌套对象）会在完成对象析构后再由编译器自动调用对象成员的析构函数进行析构，最后和堆上对象作为整体一次性释放内存</p>
 </li>
-<li><p>堆上对象的指针成员与普通成员变量一样，会伴随对象的销毁而自动销毁，指针指向的对象绝不会自动销毁，所以：必须在对象的析构函数中“显式地 delete 指针指向的对象”，否则就会内存泄漏</p>
+<li>
+<p>堆上对象的指针成员与普通成员变量一样，会伴随对象的销毁而自动销毁，指针指向的对象绝不会自动销毁，所以：必须在对象的析构函数中“显式地 delete 指针指向的对象”，否则就会内存泄漏</p>
 </li>
 </ul>
 </li>
-<li><p>栈上</p>
+<li>
+<p>栈上</p>
 <p>在栈上的对象（使用“直接初始化”语法创建）会在栈退出（作用域结束，栈帧弹出）时自动清理，不需要显式地 delete，同样，不同类型的成员变量处理方式也有所不同：</p>
 <ul>
-<li><p>栈上对象的普通成员变量不会单独清理，会伴随栈退出自动销毁</p>
+<li>
+<p>栈上对象的普通成员变量不会单独清理，会伴随栈退出自动销毁</p>
 </li>
-<li><p>栈上对象的对象成员（嵌套对象）会在完成对象析构后再由编译器自动调用对象成员的析构函数进行析构，最后会伴随栈退出自动销毁</p>
+<li>
+<p>栈上对象的对象成员（嵌套对象）会在完成对象析构后再由编译器自动调用对象成员的析构函数进行析构，最后会伴随栈退出自动销毁</p>
 </li>
-<li><p>栈上对象的指针成员与普通成员变量一样，会伴随对象的销毁而自动销毁，指针指向的对象绝不会自动销毁，所以：必须在对象的析构函数中“显式地 delete 指针指向的对象”，否则就会内存泄漏</p>
+<li>
+<p>栈上对象的指针成员与普通成员变量一样，会伴随对象的销毁而自动销毁，指针指向的对象绝不会自动销毁，所以：必须在对象的析构函数中“显式地 delete 指针指向的对象”，否则就会内存泄漏</p>
 </li>
 </ul>
 </li>
 </ul>
-<h2 id="1-在栈上创建-销毁对象"><a href="#1-在栈上创建-销毁对象" class="headerlink" title="1. 在栈上创建&#x2F;销毁对象"></a>1. 在栈上创建&#x2F;销毁对象</h2><h3 id="1-1-示例"><a href="#1-1-示例" class="headerlink" title="1.1 示例"></a>1.1 示例</h3><p>我们设计了这样一个可以说明多种情形的示例：一个 Order 对象，包含：</p>
+<h2 id="1-在栈上创建-销毁对象">1. 在栈上创建/销毁对象</h2>
+<h3 id="1-1-示例">1.1 示例</h3>
+<p>我们设计了这样一个可以说明多种情形的示例：一个 Order 对象，包含：</p>
 <ul>
-<li><p>一个普通成员变量：orderId</p>
+<li>
+<p>一个普通成员变量：orderId</p>
 </li>
-<li><p>一个对象成员（嵌入对象）：address</p>
+<li>
+<p>一个对象成员（嵌入对象）：address</p>
 </li>
-<li><p>一个指针成员：coupon</p>
+<li>
+<p>一个指针成员：coupon</p>
 </li>
 </ul>
 <p>我们把 Order 创建在栈上，分析一下它的创建和销毁过程。以下是 示例代码 ：</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string&gt;</span></span></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> std;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 优惠券（用作 Order 的指针成员，独立资源，用指针关联）</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Coupon</span> &#123;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    string couponCode;</span><br><span class="line">    <span class="type">int</span> discountAmount;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="built_in">Coupon</span>(string code, <span class="type">int</span> discount) : <span class="built_in">couponCode</span>(code), <span class="built_in">discountAmount</span>(discount) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;[Coupon] 构造函数执行：创建优惠券对象（地址：&quot;</span> &lt;&lt; <span class="keyword">this</span> &lt;&lt; <span class="string">&quot;）&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">Coupon</span>() &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;[Coupon] 析构函数执行：销毁优惠券对象（地址：&quot;</span> &lt;&lt; <span class="keyword">this</span> &lt;&lt; <span class="string">&quot;）&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="type">int</span> <span class="title">getDiscount</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> discountAmount; &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 收货地址（用作 Order 的对象成员，嵌套在订单中）</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Address</span> &#123;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    string receiver;</span><br><span class="line">    string detail;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="built_in">Address</span>(string r, string d) : <span class="built_in">receiver</span>(r), <span class="built_in">detail</span>(d) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;[Address] 构造函数执行：创建地址对象（地址：&quot;</span> &lt;&lt; <span class="keyword">this</span> &lt;&lt; <span class="string">&quot;）&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">Address</span>() &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;[Address] 析构函数执行：销毁地址对象（地址：&quot;</span> &lt;&lt; <span class="keyword">this</span> &lt;&lt; <span class="string">&quot;）&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 订单（主类，演示对象的创建与销毁）</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Order</span> &#123;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    <span class="type">int</span> orderId;        <span class="comment">// 普通成员变量</span></span><br><span class="line">    Address address;    <span class="comment">// 对象成员</span></span><br><span class="line">    Coupon* coupon;     <span class="comment">// 指针成员</span></span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="built_in">Order</span>(<span class="type">int</span> id, Address addr, Coupon* cp) : orderId(id), <span class="built_in">address</span>(addr), <span class="built_in">coupon</span>(cp) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;[Order] 构造函数执行：创建订单对象（地址：&quot;</span> &lt;&lt; <span class="keyword">this</span> &lt;&lt; <span class="string">&quot;）&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    ~<span class="built_in">Order</span>() &#123;</span><br><span class="line">        <span class="comment">// 释放指针指向的堆内存（Coupon对象）</span></span><br><span class="line">        <span class="keyword">if</span> (coupon != <span class="literal">nullptr</span>) &#123;</span><br><span class="line">            <span class="keyword">delete</span> coupon;</span><br><span class="line">            coupon = <span class="literal">nullptr</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;[Order] 析构函数执行：销毁订单对象（地址：&quot;</span> &lt;&lt; <span class="keyword">this</span> &lt;&lt; <span class="string">&quot;）&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="type">int</span> <span class="title">getOrderId</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> orderId; &#125;</span><br><span class="line">    <span class="function">Address <span class="title">getAddress</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> address; &#125;</span><br><span class="line">    <span class="function">Coupon* <span class="title">getCoupon</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> coupon; &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 测试栈上Order对象的生命周期</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">test</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;&gt;&gt;&gt; 进入 test 函数（栈帧已压入）&quot;</span> &lt;&lt; endl;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 1. 栈上创建Address对象</span></span><br><span class="line">    <span class="function">Address <span class="title">addr</span><span class="params">(<span class="string">&quot;张三&quot;</span>, <span class="string">&quot;北京市朝阳区XX小区1号楼101&quot;</span>)</span></span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 2. 堆上创建Coupon对象</span></span><br><span class="line">    Coupon* cp = <span class="keyword">new</span> <span class="built_in">Coupon</span>(<span class="string">&quot;满100减20&quot;</span>, <span class="number">20</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 3. 栈上创建Order对象</span></span><br><span class="line">    <span class="function">Order <span class="title">order</span><span class="params">(<span class="number">10001</span>, addr, cp)</span></span>;</span><br><span class="line"></span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;&gt;&gt;&gt; test 函数即将返回（对象准备自动销毁）...&quot;</span> &lt;&lt; endl;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 函数结束时，栈上对象自动销毁（析构）</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="built_in">test</span>();</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
 <p>程序输出：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">&gt;&gt;&gt; 进入 test 函数（栈帧已压入）</span><br><span class="line">[Address] 构造函数执行：创建地址对象（地址：0000005CF3EFF810）</span><br><span class="line">[Coupon] 构造函数执行：创建优惠券对象（地址：000001DF40C671F0）</span><br><span class="line">[Order] 构造函数执行：创建订单对象（地址：0000005CF3EFF880）</span><br><span class="line">[Address] 析构函数执行：销毁地址对象（地址：0000005CF3EFF990）</span><br><span class="line">&gt;&gt;&gt; test 函数即将返回（对象准备自动销毁）...</span><br><span class="line">[Coupon] 析构函数执行：销毁优惠券对象（地址：000001DF40C671F0）</span><br><span class="line">[Order] 析构函数执行：销毁订单对象（地址：0000005CF3EFF880）</span><br><span class="line">[Address] 析构函数执行：销毁地址对象（地址：0000005CF3EFF888）</span><br><span class="line">[Address] 析构函数执行：销毁地址对象（地址：0000005CF3EFF810）</span><br></pre></td></tr></table></figure>
-
-<h3 id="1-2-解读"><a href="#1-2-解读" class="headerlink" title="1.2 解读"></a>1.2 解读</h3><p><strong>➢ Order 对象的创建过程</strong> </p>
+<h3 id="1-2-解读">1.2 解读</h3>
+<p><strong>➢ Order 对象的创建过程</strong></p>
 <ol>
-<li><p>执行至 <code>test()</code> (第80行）时，函数 test 的栈帧准备压入</p>
+<li>
+<p>执行至 <code>test()</code> (第80行）时，函数 test 的栈帧准备压入</p>
 </li>
-<li><p>先处理函数中的变量声明，为 <code>order</code> 、 <code>addr</code> 、 <code>cp</code> 分配栈空间（注意：cp是指针，仅 8 字节）</p>
+<li>
+<p>先处理函数中的变量声明，为 <code>order</code> 、 <code>addr</code> 、 <code>cp</code> 分配栈空间（注意：cp是指针，仅 8 字节）</p>
 </li>
-<li><p>执行至 <code>Order order(10001, addr, cp)</code> (第72行），开始创建 order 对象：</p>
+<li>
+<p>执行至 <code>Order order(10001, addr, cp)</code> (第72行），开始创建 order 对象：</p>
 <ul>
-<li><p>使用“直接初始化”语法，保证 order 创建在栈上</p>
+<li>
+<p>使用“直接初始化”语法，保证 order 创建在栈上</p>
 </li>
-<li><p><code>addr</code> 、 <code>cp</code> 是以值传递方式传给构造函数的，它们分别复制了一份，作为 <code>address</code> 和 <code>coupon</code> ，其中 <code>address</code> 是 <code>order</code> 的嵌套对象，自然也在栈上， <code>coupon</code> 仅为一个指针，目标对象在堆上（因为 coupon 对象是用 new 创建的）。</p>
+<li>
+<p><code>addr</code> 、 <code>cp</code> 是以值传递方式传给构造函数的，它们分别复制了一份，作为 <code>address</code> 和 <code>coupon</code> ，其中 <code>address</code> 是 <code>order</code> 的嵌套对象，自然也在栈上， <code>coupon</code> 仅为一个指针，目标对象在堆上（因为 coupon 对象是用 new 创建的）。</p>
 </li>
 </ul>
 </li>
 </ol>
 <p>补充一个可能会让人困惑的知识点：关于函数中出现的“变量名”：像 <code>order</code> 、 <code>orderId</code> 、 <code>addr</code> 、 <code>cp</code> 这些，在栈上是不会保存这些“变量名”的，这些“变量名”仅仅是程序员和 编译器 之间使用的“符号”，当代码被编译后，程序只使用“栈基地址 + 偏移量”的方式来标识一个变量。也就是说：“栈基地址 + 偏移量”会定位到栈上的一个内存地址，它是变量的地址，就相当于源代码层面上的“变量名”，地址中存储的数据就是变量的“值”。</p>
-<p><strong>➢ Order 对象的销毁过程</strong> </p>
+<p><strong>➢ Order 对象的销毁过程</strong></p>
 <ol>
-<li><p>执行至 test 函数准备返回 (第77行）时，编译器开始自动销毁栈帧上的局部变量。销毁顺序按“声明顺序的逆序”执行（很好的符合了栈的先进后出原则）</p>
+<li>
+<p>执行至 test 函数准备返回 (第77行）时，编译器开始自动销毁栈帧上的局部变量。销毁顺序按“声明顺序的逆序”执行（很好的符合了栈的先进后出原则）</p>
 </li>
-<li><p>准备销毁 <code>order</code> 对象，编译器会自动调用其析构函数</p>
+<li>
+<p>准备销毁 <code>order</code> 对象，编译器会自动调用其析构函数</p>
 </li>
-<li><p><code>order</code> 的析构函数会主动销毁 <code>coupon</code> 成员，故，最先销毁的是 <code>coupon</code></p>
+<li>
+<p><code>order</code> 的析构函数会主动销毁 <code>coupon</code> 成员，故，最先销毁的是 <code>coupon</code></p>
 </li>
-<li><p><code>order</code> 的析构函数执行完毕，成为第二个被销毁的对象（其普通成员变量 orderId 不会被针对性处理）</p>
+<li>
+<p><code>order</code> 的析构函数执行完毕，成为第二个被销毁的对象（其普通成员变量 orderId 不会被针对性处理）</p>
 </li>
-<li><p><strong>编译器会保证在对象析构后，会自动调用对象的嵌套对象成员的析构函数</strong> ，故 <code>address</code> 是第三个被销毁的对象</p>
+<li>
+<p><strong>编译器会保证在对象析构后，会自动调用对象的嵌套对象成员的析构函数</strong> ，故 <code>address</code> 是第三个被销毁的对象</p>
 </li>
-<li><p>最的一个被销毁的对象是最先声明的 <code>addr</code> ，编译器同样会自动调用其析构函数</p>
+<li>
+<p>最的一个被销毁的对象是最先声明的 <code>addr</code> ，编译器同样会自动调用其析构函数</p>
 </li>
-<li><p>栈帧弹出，栈顶指针后移，等同于上述所有变量一次性集体释放内存</p>
+<li>
+<p>栈帧弹出，栈顶指针后移，等同于上述所有变量一次性集体释放内存</p>
 </li>
 </ol>
-<h2 id="2-在堆上创建-销毁对象"><a href="#2-在堆上创建-销毁对象" class="headerlink" title="2. 在堆上创建&#x2F;销毁对象"></a>2. 在堆上创建&#x2F;销毁对象</h2><h3 id="2-1-示例"><a href="#2-1-示例" class="headerlink" title="2.1 示例"></a>2.1 示例</h3><p>同样仿照 1.1 的示例，但这次我们把 Order 创建在堆上，分析一下它的创建和销毁过程。以下是示例代码：</p>
+<h2 id="2-在堆上创建-销毁对象">2. 在堆上创建/销毁对象</h2>
+<h3 id="2-1-示例">2.1 示例</h3>
+<p>同样仿照 1.1 的示例，但这次我们把 Order 创建在堆上，分析一下它的创建和销毁过程。以下是示例代码：</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string&gt;</span></span></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> std;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 优惠券（用作 Order 的指针成员，独立资源，用指针关联）</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Coupon</span> &#123;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    string couponCode;</span><br><span class="line">    <span class="type">int</span> discountAmount;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="built_in">Coupon</span>(string code, <span class="type">int</span> discount) : <span class="built_in">couponCode</span>(code), <span class="built_in">discountAmount</span>(discount) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;[Coupon] 构造函数执行：堆上创建优惠券（地址：&quot;</span> &lt;&lt; <span class="keyword">this</span> &lt;&lt; <span class="string">&quot;）&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">Coupon</span>() &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;[Coupon] 析构函数执行：销毁优惠券（地址：&quot;</span> &lt;&lt; <span class="keyword">this</span> &lt;&lt; <span class="string">&quot;）&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 收货地址（用作 Order 的对象成员，嵌套在订单中）</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Address</span> &#123;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    string receiver;</span><br><span class="line">    string detail;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="built_in">Address</span>(string r, string d) : <span class="built_in">receiver</span>(r), <span class="built_in">detail</span>(d) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;[Address] 构造函数执行：堆上Order的嵌套地址（地址：&quot;</span> &lt;&lt; <span class="keyword">this</span> &lt;&lt; <span class="string">&quot;）&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">Address</span>() &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;[Address] 析构函数执行：销毁嵌套地址（地址：&quot;</span> &lt;&lt; <span class="keyword">this</span> &lt;&lt; <span class="string">&quot;）&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 订单（主类，演示对象的创建与销毁）</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Order</span> &#123;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    <span class="type">int</span> orderId;        <span class="comment">// 普通成员变量</span></span><br><span class="line">    Address address;    <span class="comment">// 对象成员</span></span><br><span class="line">    Coupon* coupon;     <span class="comment">// 指针成员</span></span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="built_in">Order</span>(<span class="type">int</span> id, Address addr, Coupon* cp) : orderId(id), <span class="built_in">address</span>(addr), <span class="built_in">coupon</span>(cp) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;[Order] 构造函数执行：堆上创建订单（地址：&quot;</span> &lt;&lt; <span class="keyword">this</span> &lt;&lt; <span class="string">&quot;）&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">Order</span>() &#123;</span><br><span class="line">        <span class="comment">// 手动释放指针指向的堆内存（Coupon）</span></span><br><span class="line">        <span class="keyword">if</span> (coupon != <span class="literal">nullptr</span>) &#123;</span><br><span class="line">            <span class="keyword">delete</span> coupon;</span><br><span class="line">            coupon = <span class="literal">nullptr</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;[Order] 析构函数执行：销毁堆上订单（地址：&quot;</span> &lt;&lt; <span class="keyword">this</span> &lt;&lt; <span class="string">&quot;）&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="type">int</span> <span class="title">getOrderId</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> orderId; &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 测试堆上Order对象的生命周期</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">test</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;&gt;&gt;&gt; 进入 test 函数（栈帧已压入）&quot;</span> &lt;&lt; endl;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 1. 先创建栈上的Address临时对象（用于初始化堆上Order的嵌套成员）</span></span><br><span class="line">    <span class="function">Address <span class="title">addr</span><span class="params">(<span class="string">&quot;张三&quot;</span>, <span class="string">&quot;北京市朝阳区XX小区1号楼101&quot;</span>)</span></span>;</span><br><span class="line">    <span class="comment">// 2. 堆上创建Coupon对象（C）</span></span><br><span class="line">    Coupon* cp = <span class="keyword">new</span> <span class="built_in">Coupon</span>(<span class="string">&quot;满100减20&quot;</span>, <span class="number">20</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 3. 堆上创建Order对象（核心操作：new关键字）</span></span><br><span class="line">    Order* order = <span class="keyword">new</span> <span class="built_in">Order</span>(<span class="number">10001</span>, addr, cp);</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;堆上Order对象的指针地址（栈上）：&quot;</span> &lt;&lt; &amp;order &lt;&lt; endl;</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;堆上Order对象本身的地址：&quot;</span> &lt;&lt; order &lt;&lt; endl;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 4. 手动销毁堆上Order对象（必须显式delete，否则内存泄漏）</span></span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;&gt;&gt;&gt; 手动调用 delete 销毁堆上 order...&quot;</span> &lt;&lt; endl;</span><br><span class="line">    <span class="keyword">delete</span> order;</span><br><span class="line">    order = <span class="literal">nullptr</span>; <span class="comment">// 避免野指针</span></span><br><span class="line"></span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;&gt;&gt;&gt; test 函数即将返回（对象准备自动销毁）...&quot;</span> &lt;&lt; endl;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="built_in">test</span>();</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
 <p>程序输出：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">&gt;&gt;&gt; 进入 test 函数（栈帧已压入）</span><br><span class="line">[Address] 构造函数执行：堆上Order的嵌套地址（地址：000000DCB391F950）</span><br><span class="line">[Coupon] 构造函数执行：堆上创建优惠券（地址：00000220F5F772C0）</span><br><span class="line">[Order] 构造函数执行：堆上创建订单（地址：00000220F5F77000）</span><br><span class="line">[Address] 析构函数执行：销毁嵌套地址（地址：000000DCB391FA80）</span><br><span class="line">堆上Order对象的指针地址（栈上）：000000DCB391F9B8</span><br><span class="line">堆上Order对象本身的地址：00000220F5F77000</span><br><span class="line">&gt;&gt;&gt; 手动调用 delete 销毁堆上 order...</span><br><span class="line">[Coupon] 析构函数执行：销毁优惠券（地址：00000220F5F772C0）</span><br><span class="line">[Order] 析构函数执行：销毁堆上订单（地址：00000220F5F77000）</span><br><span class="line">[Address] 析构函数执行：销毁嵌套地址（地址：00000220F5F77008）</span><br><span class="line">&gt;&gt;&gt; test 函数即将返回（对象准备自动销毁）...</span><br><span class="line">[Address] 析构函数执行：销毁嵌套地址（地址：000000DCB391F950）</span><br></pre></td></tr></table></figure>
-
-<h3 id="2-2-解读"><a href="#2-2-解读" class="headerlink" title="2.2 解读"></a>2.2 解读</h3><p><strong>➢ Order 对象的创建过程</strong> </p>
+<h3 id="2-2-解读">2.2 解读</h3>
+<p><strong>➢ Order 对象的创建过程</strong></p>
 <p>在堆上创建 <code>order</code> 对象的过程与栈上基本是一样的，唯一的区别是：order 是使用 new 运算符 创建的，它是在堆上开辟内存，来存放 <code>order</code> 对象，返回的是内存地址，只能使用指针来接收。</p>
-<p><strong>➢ Order 对象的销毁过程</strong> </p>
+<p><strong>➢ Order 对象的销毁过程</strong></p>
 <ol>
-<li><p>执行至 test 函数的 <code>delete order</code> (第70行）时，准备销毁 <code>order</code> 对象</p>
+<li>
+<p>执行至 test 函数的 <code>delete order</code> (第70行）时，准备销毁 <code>order</code> 对象</p>
 </li>
-<li><p>delete 先调用 <code>order</code> 的析构函数</p>
+<li>
+<p>delete 先调用 <code>order</code> 的析构函数</p>
 </li>
-<li><p><code>order</code> 的析构函数会主动销毁 <code>coupon</code> 成员，故，最先销毁的是 <code>coupon</code></p>
+<li>
+<p><code>order</code> 的析构函数会主动销毁 <code>coupon</code> 成员，故，最先销毁的是 <code>coupon</code></p>
 </li>
-<li><p><code>order</code> 的析构函数执行完毕，接着被 delete 释放了占用的内存（其普通成员变量 orderId 不会被针对性处理），成为第二个被销毁的对象</p>
+<li>
+<p><code>order</code> 的析构函数执行完毕，接着被 delete 释放了占用的内存（其普通成员变量 orderId 不会被针对性处理），成为第二个被销毁的对象</p>
 </li>
-<li><p><strong>编译器会保证在对象析构后，会自动调用对象的嵌套对象成员的析构函数</strong> ，故 <code>address</code> 是第三个被销毁的对象（行为与栈上相同）</p>
+<li>
+<p><strong>编译器会保证在对象析构后，会自动调用对象的嵌套对象成员的析构函数</strong> ，故 <code>address</code> 是第三个被销毁的对象（行为与栈上相同）</p>
 </li>
-<li><p>执行至 test 函数准备返回 (第74行）时，编译器开始自动销毁栈帧上的局部变量。销毁顺序按“声明顺序的逆序”执行（很好的符合了栈的先进后出原则）</p>
+<li>
+<p>执行至 test 函数准备返回 (第74行）时，编译器开始自动销毁栈帧上的局部变量。销毁顺序按“声明顺序的逆序”执行（很好的符合了栈的先进后出原则）</p>
 </li>
-<li><p>栈上只有一个对象，就是最先声明的 <code>addr</code> ，编译器同样会自动调用其析构函数</p>
+<li>
+<p>栈上只有一个对象，就是最先声明的 <code>addr</code> ，编译器同样会自动调用其析构函数</p>
 </li>
-<li><p>栈帧弹出，栈顶指针后移，等同于上述所有变量一次性集体释放内存</p>
+<li>
+<p>栈帧弹出，栈顶指针后移，等同于上述所有变量一次性集体释放内存</p>
 </li>
 </ol>
-<h2 id="3-总结"><a href="#3-总结" class="headerlink" title="3. 总结"></a>3. 总结</h2><p>最后，我们再 切换 一下视角，从普通成员变量、对象成员（嵌入对象）、指针成员的角度再总结一下它们伴随对象销毁的行为准则：</p>
-<p><strong>➢ 普通成员变量</strong> </p>
+<h2 id="3-总结">3. 总结</h2>
+<p>最后，我们再 切换 一下视角，从普通成员变量、对象成员（嵌入对象）、指针成员的角度再总结一下它们伴随对象销毁的行为准则：</p>
+<p><strong>➢ 普通成员变量</strong></p>
 <p>不管成员变量所属的对象是在栈上还是在堆上，当它所属的对象被销毁时，它们会都跟随对象一起销毁，无需特别关心。</p>
-<p><strong>➢ 指针成员</strong> </p>
+<p><strong>➢ 指针成员</strong></p>
 <p>不管指针成员所属的对象是在栈上还是在堆上，当它所属的对象被销毁时，它们会都跟随对象一起销毁，但是，指针所指的对象绝不会自动销毁，必须手动调用 delete 才能销毁。</p>
-<p><strong>➢ 对象成员</strong> </p>
+<p><strong>➢ 对象成员</strong></p>
 <ol>
-<li><p><strong>一个对象，如果是在栈上，不需要手动 delete，在栈退出时编译器会自动调用它的析构函数释放资源，然后伴随栈顶指针的移动，其所占内存也被直接释放</strong></p>
+<li>
+<p><strong>一个对象，如果是在栈上，不需要手动 delete，在栈退出时编译器会自动调用它的析构函数释放资源，然后伴随栈顶指针的移动，其所占内存也被直接释放</strong></p>
 </li>
-<li><p><strong>一个对象中的对象（对象成员、嵌套对象），如果它所属的对象在栈上，那它也必定在栈上，不需要手动 delete，在栈退出时编译器会自动调用其所属对象的析构函数，然后再自动调用嵌套对象的析构函数，最后伴随栈顶指针的移动，其所占内存会随其所属对象的内存被直接释放</strong></p>
+<li>
+<p><strong>一个对象中的对象（对象成员、嵌套对象），如果它所属的对象在栈上，那它也必定在栈上，不需要手动 delete，在栈退出时编译器会自动调用其所属对象的析构函数，然后再自动调用嵌套对象的析构函数，最后伴随栈顶指针的移动，其所占内存会随其所属对象的内存被直接释放</strong></p>
 </li>
-<li><p><strong>一个对象，如果是在堆上，必须手动 delete，编译器会先调用它的析构函数释放资源，然后再释放它在堆上的内存空间</strong></p>
+<li>
+<p><strong>一个对象，如果是在堆上，必须手动 delete，编译器会先调用它的析构函数释放资源，然后再释放它在堆上的内存空间</strong></p>
 </li>
-<li><p><strong>一个对象中的对象（对象成员、嵌套对象），如果它所属的对象在堆上，那它也在必定堆上，你不需要手动 delete 它（也没有机会 delete 它，因为它不是指针），编译器会自动调用其所属对象的析构函数，然后自动调用嵌套对象的析构函数，最后嵌套对象的内存会跟随其所属对象的堆内存一起被 delete 释放</strong></p>
+<li>
+<p><strong>一个对象中的对象（对象成员、嵌套对象），如果它所属的对象在堆上，那它也在必定堆上，你不需要手动 delete 它（也没有机会 delete 它，因为它不是指针），编译器会自动调用其所属对象的析构函数，然后自动调用嵌套对象的析构函数，最后嵌套对象的内存会跟随其所属对象的堆内存一起被 delete 释放</strong></p>
 </li>
 </ol>
 </div><div class="article-licensing box"><div class="licensing-title"><p>C++ 对象和嵌套对象的创建与销毁</p><p><a href="https://laurence.enlightgram.com/cpp/cpp-nested-object-lifecycle/">https://laurence.enlightgram.com/cpp/cpp-nested-object-lifecycle/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-03-11</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/cpp/">C++</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/qt/qt-core5compat-not-found/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">CMake 报错：Failed to find optional Qt component Core5Compat</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/qt/bat-wsl-execvpe-error/"><span class="level-item">bat/cmd 脚本报错：＜3＞WSL (472) ERROR: CreateProcessEntryCommon:505: execvpe /bin/bash failed 2</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {

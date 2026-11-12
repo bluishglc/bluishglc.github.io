@@ -46,18 +46,19 @@
 <p>此外，我们应意识到：由于 Table API &amp; SQL 程序是声明式的，管道会哪里维持状态以及状态如何被使用都是不明确的，就是说不能从 SQL 直接简单地推断出来，另外，Flink 还会对查询进行优化，尽可能地减少“状态”的使用。</p>
 <p>下面是官方文档给出的一个状态算子的示例：</p>
 <figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE TABLE</span> doc (</span><br><span class="line">    word STRING</span><br><span class="line">) <span class="keyword">WITH</span> (</span><br><span class="line">    <span class="string">&#x27;connector&#x27;</span> <span class="operator">=</span> <span class="string">&#x27;...&#x27;</span></span><br><span class="line">);</span><br><span class="line"><span class="keyword">CREATE TABLE</span> word_cnt (</span><br><span class="line">    word STRING <span class="keyword">PRIMARY KEY</span> <span class="keyword">NOT</span> ENFORCED,</span><br><span class="line">    cnt  <span class="type">BIGINT</span></span><br><span class="line">) <span class="keyword">WITH</span> (</span><br><span class="line">    <span class="string">&#x27;connector&#x27;</span> <span class="operator">=</span> <span class="string">&#x27;...&#x27;</span></span><br><span class="line">);</span><br><span class="line"></span><br><span class="line"><span class="keyword">INSERT INTO</span> word_cnt</span><br><span class="line"><span class="keyword">SELECT</span> word, <span class="built_in">COUNT</span>(<span class="number">1</span>) <span class="keyword">AS</span> cnt</span><br><span class="line"><span class="keyword">FROM</span> doc</span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> word;</span><br></pre></td></tr></table></figure>
-
 <p>这里的聚合函数 <code>count</code> 就需要状态维持，同时又由于分组（ <code>group by</code> ）的存在，要维持的状态数据就一下变多了，每一个单词都要独立维护一个对应的状态。下图是针对上面的查询语句“编译”（转换）出的流式程序的图解：</p>
-<p> <img src="/../../images/flink/flink-sql-stateful-operators/2.png" alt="img"></p>
+<p><img src="../../images/flink/flink-sql-stateful-operators/2.png" alt="img"></p>
 <p>在这张详细的图解中，我们应该注意这些重点：</p>
 <ol>
-<li><p><code>count</code> 函数是一个状态算子，它的要维持状态数据，也就是每个单词的词频，这些状态数据又同时是下游的输入数据</p>
+<li>
+<p><code>count</code> 函数是一个状态算子，它的要维持状态数据，也就是每个单词的词频，这些状态数据又同时是下游的输入数据</p>
 </li>
-<li><p>状态数据需要实时地推送到下游，状态数据的变更也是以 changelog 形式传导的，所以才会有 <code>+U(&#39;hello&#39;, 2)</code> ， <code>-U(&#39;hello&#39;, 1)</code> 这样的消息产生</p>
+<li>
+<p>状态数据需要实时地推送到下游，状态数据的变更也是以 changelog 形式传导的，所以才会有 <code>+U('hello', 2)</code> ， <code>-U('hello', 1)</code> 这样的消息产生</p>
 </li>
 </ol>
 <p>除了 <a target="_blank" rel="noopener" href="https://nightlies.apache.org/flink/flink-docs-release-1.18/zh/docs/dev/table/sql/queries/joins/">连接</a> 、 <a target="_blank" rel="noopener" href="https://nightlies.apache.org/flink/flink-docs-release-1.18/zh/docs/dev/table/sql/queries/group-agg/">聚合</a> 、 <a target="_blank" rel="noopener" href="https://nightlies.apache.org/flink/flink-docs-release-1.18/zh/docs/dev/table/sql/queries/deduplication/">去重</a> 这些显式的状态算子，还有一些“隐式”的状态算子，按官方文档的介绍是说：由优化器隐式推导出来的。这里面的实现机理暂时还不清楚，但是例子是非常典型的！我们在 <a href="/flink/flink-upsert-kafka-dynamic-table/">《Flink 实时数仓关键技术解读：Upsert Kafka 和 动态表（Dynamic Table）》</a> 这篇文章中曾经详细地解读过 upsert- kafka 作为 sink 时写入到 kafka 中的数据，当再次以这些数据作为 source 进行流式读取时，upsert-kafka 是能够完整推导出 changelog 数据的，利用的就是这里所谓的“隐式推导”能力，具体地说就是一个叫 ChangelogNormalize 的状态算子。</p>
-<p>在持续运行的流上维持状态可能是一个成分非常大的操作，因为流是不会停止的，随着时间的推移和大量数据的涌入，状态数据可能会越积越多，导致 内存 挤爆。所以 Flink 提供了状态的 TTL 机制，当状态在一定时间内没有被更新后就会被自动移除，这个参数就是： <a target="_blank" rel="noopener" href="https://nightlies.apache.org/flink/flink-docs-release-1.18/zh/docs/dev/table/config/#table-exec-state-ttl"> <code>table.exec.state.ttl</code> </a> </p>
+<p>在持续运行的流上维持状态可能是一个成分非常大的操作，因为流是不会停止的，随着时间的推移和大量数据的涌入，状态数据可能会越积越多，导致 内存 挤爆。所以 Flink 提供了状态的 TTL 机制，当状态在一定时间内没有被更新后就会被自动移除，这个参数就是： <a target="_blank" rel="noopener" href="https://nightlies.apache.org/flink/flink-docs-release-1.18/zh/docs/dev/table/config/#table-exec-state-ttl"> <code>table.exec.state.ttl</code> </a></p>
 <p>定义了状态的键在被更新后要保持多长时间才被移除。 在之前的查询例子中， <code>word</code> 的数目会在配置的时间内未更新时立刻被移除。</p>
 <p>通过移除状态的键，连续查询会完全忘记它曾经见过这个键。如果一个状态带有曾被移除状态的键被处理了，这条记录将被认为是对应键的第一条记录。上述例子中意味着 <code>cnt</code> 会再次从 <code>0</code> 开始计数。</p>
 <hr>

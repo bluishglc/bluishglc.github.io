@@ -43,62 +43,68 @@
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">LVM操作案例</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Linux/">Linux</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2015-09-02T21:07:10.000Z" title="2015-09-02 14:07:10">2015-09-02</time></span><span class="level-item is-hidden-mobile">阅读用时：6 分钟 (约 860 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>本文原文出处: <a href="/linux/lvm-examples/">https://laurence.enlightgram.com/linux/lvm-examples/</a> 严禁任何形式的转载，否则将委托CSDN官方维护权益！</p>
-<h2 id="场景"><a href="#场景" class="headerlink" title="场景"></a>场景</h2><p>一台机器配备了3块硬盘，容量为20G，45G，45G，其中20G的硬盘已挂在至根目录</p>
-<h2 id="需求"><a href="#需求" class="headerlink" title="需求"></a>需求</h2><p>由于硬盘容量都较小，需要将剩余两快45G硬盘拼接在一起使用</p>
-<h2 id="LVM基础"><a href="#LVM基础" class="headerlink" title="LVM基础"></a>LVM基础</h2><p> <img src="/../../images/linux/lvm-examples/1.jpg"></p>
-<h2 id="操作"><a href="#操作" class="headerlink" title="操作"></a>操作</h2><h3 id="0-前期准备"><a href="#0-前期准备" class="headerlink" title="0. 前期准备"></a>0. 前期准备</h3><p>我们假定我们已经对各个硬盘进行了分区和格式化操作，也就是说在我们进行LVM改造之前，这些硬盘和分区都已可以正常使用，这样我们来看一下这台机器的硬盘和分区情况：<br> <img src="/../../images/linux/lvm-examples/2.jpg"></p>
+<h2 id="场景">场景</h2>
+<p>一台机器配备了3块硬盘，容量为20G，45G，45G，其中20G的硬盘已挂在至根目录</p>
+<h2 id="需求">需求</h2>
+<p>由于硬盘容量都较小，需要将剩余两快45G硬盘拼接在一起使用</p>
+<h2 id="LVM基础">LVM基础</h2>
+<p><img src="../../images/linux/lvm-examples/1.jpg" alt=""></p>
+<h2 id="操作">操作</h2>
+<h3 id="0-前期准备">0. 前期准备</h3>
+<p>我们假定我们已经对各个硬盘进行了分区和格式化操作，也就是说在我们进行LVM改造之前，这些硬盘和分区都已可以正常使用，这样我们来看一下这台机器的硬盘和分区情况：<br>
+<img src="../../images/linux/lvm-examples/2.jpg" alt=""></p>
 <p>简单地说，三块硬盘，每块硬盘一个分区，每个分区占据了磁盘的全部空间，我们特别注意的是分区的System ID（系统 类 型），也就是System一列对应的值，都是Linux，这是正常Linux物理分区的类型，我们接下来的第一个工作就是要修改它。</p>
 <p>实际上，物理卷是可以直接建立在一个硬盘上的，也就是说，如是你想让整个硬盘成为一个物理卷，你根本不需要提前对它进行分区和格式化操作！这样你也就不需要把某个分区的类型改为Linux LVM了。</p>
-<h3 id="1-修改分区的System-ID（系统类型）"><a href="#1-修改分区的System-ID（系统类型）" class="headerlink" title="1. 修改分区的System ID（系统类型）"></a>1. 修改分区的System ID（系统类型）</h3><p>这是我们要创建LVM的第一步，如前所属，通常Linux分区的System ID为Linux（代码83），我们要把它们修改为Linux LVM （代码 8e）才能被LVM管理和使用。</p>
+<h3 id="1-修改分区的System-ID（系统类型）">1. 修改分区的System ID（系统类型）</h3>
+<p>这是我们要创建LVM的第一步，如前所属，通常Linux分区的System ID为Linux（代码83），我们要把它们修改为Linux LVM （代码 8e）才能被LVM管理和使用。</p>
 <p>具体方法是，使用fdisk来完成修改。在下面的操作示例中：</p>
 <ol>
-<li><p>输入t, 命令修改分区的System ID</p>
+<li>
+<p>输入t, 命令修改分区的System ID</p>
 </li>
-<li><p>接着就需要输入新的System ID，Linux LVM类型的代码是8e</p>
+<li>
+<p>接着就需要输入新的System ID，Linux LVM类型的代码是8e</p>
 </li>
-<li><p>输入w, 保存分区表并退出</p>
+<li>
+<p>输入w, 保存分区表并退出</p>
 </li>
 </ol>
-<p>然后使用fdisk -l来查看更改是否成功，在输出的&#x2F;dev&#x2F;xvdb1分区的信息中我们可以清楚地看到，System ID已经变更为了8e Linux LVM<br> <img src="/../../images/linux/lvm-examples/3.jpg"></p>
+<p>然后使用fdisk -l来查看更改是否成功，在输出的/dev/xvdb1分区的信息中我们可以清楚地看到，System ID已经变更为了8e Linux LVM<br>
+<img src="../../images/linux/lvm-examples/3.jpg" alt=""></p>
 <p>接下就是对第三块硬盘执行同样的操作，将其分区系统类型也改为8e Linux LVM</p>
-<h3 id="2-创建物理卷（PV）"><a href="#2-创建物理卷（PV）" class="headerlink" title="2. 创建物理卷（PV）"></a>2. 创建物理卷（PV）</h3><p>使用命令：</p>
+<h3 id="2-创建物理卷（PV）">2. 创建物理卷（PV）</h3>
+<p>使用命令：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pvcreate /dev/xvdb1 /dev/xvdc1</span><br></pre></td></tr></table></figure>
-
 <p>注：如前文所属，你可以直接把一个硬盘建立物理卷而不是一个分区，你可以这样做</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pvcreate /dev/xvdb /dev/xvdc</span><br></pre></td></tr></table></figure>
-
 <p>创建两个物理卷</p>
 <p>使用命令：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pvdisply</span><br></pre></td></tr></table></figure>
-
 <p>查看创建的物理卷</p>
-<p> <img src="/../../images/linux/lvm-examples/4.jpg"></p>
-<h3 id="3-创建逻辑卷组（VG）"><a href="#3-创建逻辑卷组（VG）" class="headerlink" title="3. 创建逻辑卷组（VG）"></a>3. 创建逻辑卷组（VG）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vgcreate vg1 /dev/xvdb1 /dev/xvdc1</span><br></pre></td></tr></table></figure>
-
+<p><img src="../../images/linux/lvm-examples/4.jpg" alt=""></p>
+<h3 id="3-创建逻辑卷组（VG）">3. 创建逻辑卷组（VG）</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vgcreate vg1 /dev/xvdb1 /dev/xvdc1</span><br></pre></td></tr></table></figure>
 <p>创建逻辑卷组vg1</p>
 <p>注：同样的，如前文所属，如果你是在硬盘上建立的物理卷，你应该这样做：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vgcreate vg1 /dev/xvdb /dev/xvdc</span><br></pre></td></tr></table></figure>
-
 <p>使用命令：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vgdisplay</span><br></pre></td></tr></table></figure>
-
 <p>查看创建的逻辑卷组</p>
-<p> <img src="/../../images/linux/lvm-examples/5.jpg"></p>
+<p><img src="../../images/linux/lvm-examples/5.jpg" alt=""></p>
 <p>值得注意的是vg1的容量已经是两个分区的总和了。</p>
-<h3 id="4-创建逻辑卷"><a href="#4-创建逻辑卷" class="headerlink" title="4. 创建逻辑卷"></a>4. 创建逻辑卷</h3><p>使用命令：</p>
+<h3 id="4-创建逻辑卷">4. 创建逻辑卷</h3>
+<p>使用命令：</p>
 <figure class="highlight lasso"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">lvcreate <span class="params">-l</span> <span class="number">100</span>%VG <span class="params">-n</span> lv1 vg1</span><br></pre></td></tr></table></figure>
-
 <p>创建逻辑卷lv1,将逻辑卷组vg1的全部容量分配给它</p>
 <p>使用命令：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">lvdisplay</span><br></pre></td></tr></table></figure>
-
 <p>查看刚刚创建的逻辑卷</p>
-<p> <img src="/../../images/linux/lvm-examples/6.jpg"></p>
-<h3 id="5-格式化逻辑卷"><a href="#5-格式化逻辑卷" class="headerlink" title="5. 格式化逻辑卷"></a>5. 格式化逻辑卷</h3><p>使用命令：</p>
+<p><img src="../../images/linux/lvm-examples/6.jpg" alt=""></p>
+<h3 id="5-格式化逻辑卷">5. 格式化逻辑卷</h3>
+<p>使用命令：</p>
 <figure class="highlight avrasm"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mkfs.ext4 /dev/vg1/lv1</span><br></pre></td></tr></table></figure>
-
 <p>至此，一个逻辑卷已经创建完成，我们可以看到，它在系统中和一个物理上的75GB的硬盘没有任何区别，接下来我们就可以把它挂载一个文件夹下使用了。我们可以使用 parted查看一下全部的分区情况：</p>
-<p> <img src="/../../images/linux/lvm-examples/7.jpg"></p>
+<p><img src="../../images/linux/lvm-examples/7.jpg" alt=""></p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>LVM操作案例</p><p><a href="https://laurence.enlightgram.com/linux/lvm-examples/">https://laurence.enlightgram.com/linux/lvm-examples/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2015-09-02</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/LVM/">LVM</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/hadoop/oozie-workflow-properties/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Oozie工作流属性配置的方式与策略</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/hadoop/ambari-metrics/"><span class="level-item">Ambari Metrics介绍</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

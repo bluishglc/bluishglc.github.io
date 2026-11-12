@@ -44,24 +44,28 @@
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Qt 为什么不允许主窗体直接设置布局?</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Qt/">Qt</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2026-03-04T17:18:24.000Z" title="2026-03-04 09:18:24">2026-03-04</time></span><span class="level-item is-hidden-mobile">阅读用时：6 分钟 (约 830 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>初次接触 Qt 时，可能会对一段常见的代码感到费解：</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">MainWindow::<span class="built_in">MainWindow</span>(QWidget *parent): <span class="built_in">QMainWindow</span>(parent) &#123;</span><br><span class="line">    <span class="comment">// set central widget</span></span><br><span class="line">    centralWidget = <span class="keyword">new</span> <span class="built_in">QWidget</span>(<span class="keyword">this</span>);</span><br><span class="line">    centralWidget-&gt;<span class="built_in">setObjectName</span>(<span class="string">&quot;centralWidget&quot;</span>);</span><br><span class="line">    <span class="keyword">this</span>-&gt;<span class="built_in">setCentralWidget</span>(centralWidget);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// set layout of central widget</span></span><br><span class="line">    verticalLayout = <span class="keyword">new</span> <span class="built_in">QVBoxLayout</span>(centralWidget);</span><br><span class="line">    verticalLayout-&gt;<span class="built_in">setObjectName</span>(<span class="string">&quot;verticalLayout&quot;</span>);</span><br><span class="line">    verticalLayout-&gt;<span class="built_in">addWidget</span>(...);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
 <p>直觉上，我们会觉得直接把 <code>verticalLayout</code> 设为 <code>MainWindow</code> 的 centralWidget 会更简洁直观：</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 错误代码示范</span></span><br><span class="line"><span class="keyword">this</span>-&gt;<span class="built_in">setCentralWidget</span>(verticalLayout);</span><br></pre></td></tr></table></figure>
-
 <p>因为 new 一个新的 QWidget 却只为让它去“包裹”一个“布局”[^1]看上去是有些“绕”的，但在 Qt 里，这是必须的。这涉及到 Qt 中的 Widget 类 型和它们与 Layout 之间的关系。</p>
 <p>从布局的角度看，Qt 有两种类型的 widget：一类是普通的 widget，它们可以设置 layout；另一类则是“框架型”容器，它们的布局是预设好且不可修改的，典型的例子就是 QMainWindow，它的布局固定框架结构是：</p>
 <ul>
-<li><p>QMainWindow</p>
+<li>
+<p>QMainWindow</p>
 <ul>
-<li><p>menu bar</p>
+<li>
+<p>menu bar</p>
 </li>
-<li><p>tool bar</p>
+<li>
+<p>tool bar</p>
 </li>
-<li><p>dock widget</p>
+<li>
+<p>dock widget</p>
 </li>
-<li><p>status bar</p>
+<li>
+<p>status bar</p>
 </li>
-<li><p>central widget</p>
+<li>
+<p>central widget</p>
 </li>
 </ul>
 </li>
@@ -70,33 +74,39 @@
 <table>
 <thead>
 <tr>
-<th align="left">类型</th>
-<th align="left">特点</th>
-<th align="left">典型代表</th>
+<th style="text-align:left">类型</th>
+<th style="text-align:left">特点</th>
+<th style="text-align:left">典型代表</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="left">普通容器（自由容器）</td>
-<td align="left">可以设置 layout</td>
-<td align="left">QWidget、QFrame、QDialog</td>
+<tbody>
+<tr>
+<td style="text-align:left">普通容器（自由容器）</td>
+<td style="text-align:left">可以设置 layout</td>
+<td style="text-align:left">QWidget、QFrame、QDialog</td>
 </tr>
 <tr>
-<td align="left">框架容器（结构型容器）</td>
-<td align="left">布局是预设好的固定结构，不可以设置 layout</td>
-<td align="left">QMainWindow、QScrollArea</td>
+<td style="text-align:left">框架容器（结构型容器）</td>
+<td style="text-align:left">布局是预设好的固定结构，不可以设置 layout</td>
+<td style="text-align:left">QMainWindow、QScrollArea</td>
 </tr>
-</tbody></table>
+</tbody>
+</table>
 <p>此外，还需要明确的一点是： <strong>Layout 并不是一种容器型的 Widget，QLayout 和 QWidget 是两个独立演化的类族，彼此之间不存在任何继承关系，Layout 的本质是“管理几何关系的算法”</strong> 。</p>
 <p>最后，Layout 是通过“挂靠”到（“依附”于）一个 QWidget 而存在和发挥作用的，不存在一个包含了若干子控件但却不隶属于任何 Widget 的 Layout。</p>
 <p>基于以上三点解释，我们重新回看一下上面的问题：</p>
 <ul>
-<li><p>既然 QMainWindow 的 setCentralWidget 方法需要的参数类型是 <code>QWidget* widget</code> ，则设置一个 Layout 显然是不合法的</p>
+<li>
+<p>既然 QMainWindow 的 setCentralWidget 方法需要的参数类型是 <code>QWidget* widget</code> ，则设置一个 Layout 显然是不合法的</p>
 </li>
-<li><p>理论上 QMainWindow 也可以添加一个 setCentralLayout 方法，但这个 API 很像是一个“毛刺”，与整体的 API 设计显得极不协调，因为：</p>
+<li>
+<p>理论上 QMainWindow 也可以添加一个 setCentralLayout 方法，但这个 API 很像是一个“毛刺”，与整体的 API 设计显得极不协调，因为：</p>
 <ul>
-<li><p>所有 QWidget 都是通过 setLayout 设置布局的，这个 API 势必“干预”到了基子控件的内部实现，破坏了子控件的“封装”</p>
+<li>
+<p>所有 QWidget 都是通过 setLayout 设置布局的，这个 API 势必“干预”到了基子控件的内部实现，破坏了子控件的“封装”</p>
 </li>
-<li><p>承接上一点，既然 Layout 必须“挂靠”到一个 QWidget，可以想象，setCentralLayout 方法的实现也还是得先 new 一个 widget 出来再 setLayout，如果封装起来，用户就没有机会控制或选择 new 一个什么 widget 出来了。</p>
+<li>
+<p>承接上一点，既然 Layout 必须“挂靠”到一个 QWidget，可以想象，setCentralLayout 方法的实现也还是得先 new 一个 widget 出来再 setLayout，如果封装起来，用户就没有机会控制或选择 new 一个什么 widget 出来了。</p>
 </li>
 </ul>
 </li>
@@ -104,7 +114,7 @@
 <p>总之，在这个问题上，可以看出 Qt 的设计理念是：</p>
 <p><strong>一个 widget 要么可以设置自己（整体且唯一）的布局，然后在布局里再去嵌套其他的子 widget 和子 layout，要么就是内部结构固定，不可设置布局，也不可“干预”其“组成部分”的布局，“组成部分”的布局应留给开发者设置，但布局又不可以独立存在，它必须依附于一个 Widget，故而才出现了“new 一个新的 QWidget 却只为让它去包裹一个布局[^1]”的情况，应该说这种情形是在 Qt 工整而严谨的 API 设计下衍生出的一种正常表现，习惯了也就不会觉得怪异了</strong> 。</p>
 <hr>
-<p>[^1]: 这个 QWidget 也并非真得“一无是处”，在布局之下添加 widget 时，parent 都是它，但这是后话了   </p>
+<p>[^1]: 这个 QWidget 也并非真得“一无是处”，在布局之下添加 widget 时，parent 都是它，但这是后话了</p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>Qt 为什么不允许主窗体直接设置布局?</p><p><a href="https://laurence.enlightgram.com/qt/qt-main-window-layout/">https://laurence.enlightgram.com/qt/qt-main-window-layout/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-03-04</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Qt/">Qt</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/qt/qt-button-icon-color/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Qt基础：设置按钮图标并控制选中时变色</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/qt/qt-main-window/"><span class="level-item">手把手带你编写 Qt 应用主窗体</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

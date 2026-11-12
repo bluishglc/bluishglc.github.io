@@ -43,34 +43,40 @@
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Airflow架构与扩容</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Big-Data/">Big Data</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2022-11-08T19:48:44.000Z" title="2022-11-08 11:48:44">2022-11-08</time></span><span class="level-item is-hidden-mobile">阅读用时：5 分钟 (约 754 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>整体上， Airflow 是一种主从架构的作业调度系统，其官方给出的架构图如下：</p>
-<p> <img src="/../../images/bigdata/airflow-architecture-and-scaling/1.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/bigdata/airflow-architecture-and-scaling/1.png" alt="在这里插入图片描述"></p>
 <p>像Metadata DB, Webserver这些组件不必过多解释，作为一个web应用，这些是常规组件，我们重点关注以下核心组件：</p>
 <ul>
-<li><p>Scheduler：生成作业排期，将各种Task提交给executor实行</p>
+<li>
+<p>Scheduler：生成作业排期，将各种Task提交给executor实行</p>
 </li>
-<li><p>Executor：是一个偏抽象的概念，落地可以是多种不同的形式，但逻辑上，Executor扮演一个“队列”的角色，Scheduler生成的Task都会放入Executor（队列）中，由Executor委派给各个Worker节点执行，从这个角度上看，Scheduler是Task队列的生产者，Worker是Task队列的消费者。</p>
+<li>
+<p>Executor：是一个偏抽象的概念，落地可以是多种不同的形式，但逻辑上，Executor扮演一个“队列”的角色，Scheduler生成的Task都会放入Executor（队列）中，由Executor委派给各个Worker节点执行，从这个角度上看，Scheduler是Task队列的生产者，Worker是Task队列的消费者。</p>
 </li>
-<li><p>Worker：实际执行任务的节点，与多数主从架构中的Worker节点类似。</p>
+<li>
+<p>Worker：实际执行任务的节点，与多数主从架构中的Worker节点类似。</p>
 </li>
 </ul>
 <p>Airflow的Executor有多种不同的 类 型可供选择，主要影响的是逻辑上的队列本身的伸缩性。当然，Worker节点的数量也很关键，但是Worker节点的伸缩很简单，后面会补充谈一下。上图中Executor和Scheduler是画在一起的，这是因为Airflow在默认安装方式中，会将Executor（默认的Executor是Sequential Executor）和Scheduler安装在一起，但是在生产环境中，往往会使用更健壮，伸缩性更好的Executor（往往也是独立服务器安装的）。以下是几类Executor的介绍:</p>
 <ul>
-<li><p>Sequential Executor: 顾名思义，按顺序执行Task，无并行能力，使用SQLite存储Task元数据。不适用于生产环境</p>
+<li>
+<p>Sequential Executor: 顾名思义，按顺序执行Task，无并行能力，使用SQLite存储Task元数据。不适用于生产环境</p>
 </li>
-<li><p>Local Executor：可并行执行Task，使用一个专职的关系型数据库（如PG）存储元数据。健壮性比Sequential Executor强</p>
+<li>
+<p>Local Executor：可并行执行Task，使用一个专职的关系型数据库（如PG）存储元数据。健壮性比Sequential Executor强</p>
 </li>
-<li><p>Celery Executor：使用专职的 Redis or RabbitMQ来分发消息，可同时分发多个Task到多个Worker节点上，同样需要一个专职的关系型数据库（如PG）。这是多数大规模生产环境上部署Airflow采用的Executor，以下是以Redis作为Celery Executor的架构示例：</p>
+<li>
+<p>Celery Executor：使用专职的 Redis or RabbitMQ来分发消息，可同时分发多个Task到多个Worker节点上，同样需要一个专职的关系型数据库（如PG）。这是多数大规模生产环境上部署Airflow采用的Executor，以下是以Redis作为Celery Executor的架构示例：</p>
 </li>
 </ul>
-<p> <img src="/../../images/bigdata/airflow-architecture-and-scaling/2.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/bigdata/airflow-architecture-and-scaling/2.png" alt="在这里插入图片描述"></p>
 <p>或是：</p>
-<p> <img src="/../../images/bigdata/airflow-architecture-and-scaling/3.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/bigdata/airflow-architecture-and-scaling/3.png" alt="在这里插入图片描述"></p>
 <ul>
 <li>Kubernetes Executor： 基于Kubernetes工作，为每一个Task创建一个Pod，这显然适用于基础设施已经Kubernetes化的IT环境，相应的，这种模式下扩缩容会更加敏捷。</li>
 </ul>
 <p>最后，我们再来看一个Worker节点扩缩容，我们可以通过向集群中添加更多 worker 节点来水平地扩展集群，并使这些新节点指向同一个元数据库，从而分发处理过程。由于 worker 不需要在任何守护进程注册即可执行任务，因此所以 worker 节点可以在不停机，不重启服务下的情况进行扩展，也就是说可以随时扩展。如果是垂直扩展 你可以通过增加单个 worker 节点的守护进程数来垂直扩展集群。可以通过修改 airflow 的配置文件 <code>{AIRFLOW_HOME}/airflow.cfg</code> 中 celeryd_concurrency 的值来实现，例如：</p>
 <p>参考：</p>
-<p><a target="_blank" rel="noopener" href="https://blog.knoldus.com/airflow-scaling-using-">https://blog.knoldus.com/airflow-scaling-using-</a> celery -executor&#x2F;</p>
+<p><a target="_blank" rel="noopener" href="https://blog.knoldus.com/airflow-scaling-using-">https://blog.knoldus.com/airflow-scaling-using-</a> celery -executor/</p>
 <p><a target="_blank" rel="noopener" href="https://valohai.com/blog/scaling-airflow-machine-learning/">https://valohai.com/blog/scaling-airflow-machine-learning/</a></p>
 <p><a target="_blank" rel="noopener" href="https://valohai.com/blog/scaling-airflow-machine-learning/">https://valohai.com/blog/scaling-airflow-machine-learning/</a></p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>Airflow架构与扩容</p><p><a href="https://laurence.enlightgram.com/bigdata/airflow-architecture-and-scaling/">https://laurence.enlightgram.com/bigdata/airflow-architecture-and-scaling/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2022-11-08</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Airflow/">Airflow</a><a class="link-muted mr-2" rel="tag" href="/tags/Redis/">Redis</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/linux/shell-lazy-loading/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">在Shell中实现延迟加载(Lazy Loading)</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/bigdata/airflow-mwaa-notes/"><span class="level-item">Airflow / MWAA 细节备忘</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {

@@ -44,33 +44,38 @@
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">SQL 术语：Join 中的 Build 和 Probe 是什么意思？</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Database/">Database</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2024-03-02T20:00:02.000Z" title="2024-03-02 12:00:02">2024-03-02</time></span><span class="level-item is-hidden-mobile">阅读用时：6 分钟 (约 890 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>我们可能在一些介绍数据库 Join 档中看到 Build 和 Probe，分别代表着 Join 操作中的 右表 和 左表，为什么会有这样的称呼呢？原来它们都出自于一种叫 ”Hash Join“ 的 join 算法（常见的 Join 算法有：Hash Join、 Loop Join、Merge Join）。先看一下名词解释：</p>
 <ul>
-<li><p>Hash Join：一种实现 Join 的算法，它通过在 Join 的一侧构建 Hash Table 并在另一侧不断匹配 Hash Table 来得到 Join 的结果。</p>
+<li>
+<p>Hash Join：一种实现 Join 的算法，它通过在 Join 的一侧构建 Hash Table 并在另一侧不断匹配 Hash Table 来得到 Join 的结果。</p>
 </li>
-<li><p>Build Side （构建端 &#x2F; 右表）：Hash Join 中用于构建 Hash Table 的一侧，称为 Build Side。多数引擎默认以 Join 的右表作为 Build Side。</p>
+<li>
+<p>Build Side （构建端 / 右表）：Hash Join 中用于构建 Hash Table 的一侧，称为 Build Side。多数引擎默认以 Join 的右表作为 Build Side。</p>
 </li>
-<li><p>Probe Side（探查端 &#x2F; 左表）：Hash Join 中用于不断匹配 Hash Table 的一侧，称为 Probe Side。多数引擎默认以 Join 的左表作为 Probe Side。</p>
+<li>
+<p>Probe Side（探查端 / 左表）：Hash Join 中用于不断匹配 Hash Table 的一侧，称为 Probe Side。多数引擎默认以 Join 的左表作为 Probe Side。</p>
 </li>
 </ul>
 <p>下面，简答介绍一下 Hash Join 的原理，我们基于 <a target="_blank" rel="noopener" href="https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/">Hash join in MySQL 8</a> 一文给出的解释展开，讲解使用的 SQL 示例为：</p>
 <figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span></span><br><span class="line">  given_name, country_name</span><br><span class="line"><span class="keyword">FROM</span></span><br><span class="line">  persons <span class="keyword">JOIN</span> countries <span class="keyword">ON</span> persons.country_id <span class="operator">=</span> countries.country_id;</span><br></pre></td></tr></table></figure>
-
 <p>Hash Join 的实现分为：构建和探查两个阶段，以下是详细介绍。</p>
-<h3 id="Hash-Join-原理：构建阶段"><a href="#Hash-Join-原理：构建阶段" class="headerlink" title="Hash Join 原理：构建阶段"></a>Hash Join 原理：构建阶段</h3><p>在 Hash Join 算法下，当两张表要 Join 时，SQL 引擎会在内存中创建一张哈希表，然后选择将其中一张较小的表（按字节度量而不是行数）的数据加载到这张哈希表中，并以 Join 列的值作哈希的 Key。既然是要将表的数据加载到内存中，所以，不难理解算法为什么要选择加载小表而不是大表。</p>
+<h3 id="Hash-Join-原理：构建阶段">Hash Join 原理：构建阶段</h3>
+<p>在 Hash Join 算法下，当两张表要 Join 时，SQL 引擎会在内存中创建一张哈希表，然后选择将其中一张较小的表（按字节度量而不是行数）的数据加载到这张哈希表中，并以 Join 列的值作哈希的 Key。既然是要将表的数据加载到内存中，所以，不难理解算法为什么要选择加载小表而不是大表。</p>
 <p>在上面的 SQL 示例中， <code>countries</code> 表肯定是一张小表，所以它会被加载到内存的哈希表中，也就是成为 Build Side，而 Join 列 <code>country_id</code> 的值经 hash 后的值会作为哈希表中 Key。</p>
-<p><em>❖ 至于为什么现在都将右表称为 Build Side，左表称为 Probe Side，我并没有找到比较主流的有说服力的观点，可能是因为算法在最初提出时就是这样约定的：选择右表作 Build Side, 左表作 Probe Side，后来随着 SQL 引擎的优化，虽然能自动选择小表作为 Build Side 了，但这种称谓习惯被保留了下来。欢迎了解其中原委的读者补充</em> </p>
+<p><em>❖ 至于为什么现在都将右表称为 Build Side，左表称为 Probe Side，我并没有找到比较主流的有说服力的观点，可能是因为算法在最初提出时就是这样约定的：选择右表作 Build Side, 左表作 Probe Side，后来随着 SQL 引擎的优化，虽然能自动选择小表作为 Build Side 了，但这种称谓习惯被保留了下来。欢迎了解其中原委的读者补充</em></p>
 <p>下图形象地展示了构建阶段的工作原理：</p>
-<p><img src="/../../images/database/sql-join-build-and-probe/2.jpeg" alt="img"></p>
-<h3 id="Hash-Join-原理：探查阶段"><a href="#Hash-Join-原理：探查阶段" class="headerlink" title="Hash Join 原理：探查阶段"></a>Hash Join 原理：探查阶段</h3><p>构建阶段完成后，SQL 引擎就从 探测端 逐行读取记录，然后用 Join 列的 Hash 值去内存中的哈希表中查找是否有对应记录，有就是匹配到了 构建端 的记录，然后联合两端的数据作为结果输出。</p>
+<p><img src="../../images/database/sql-join-build-and-probe/2.jpeg" alt="img"></p>
+<h3 id="Hash-Join-原理：探查阶段">Hash Join 原理：探查阶段</h3>
+<p>构建阶段完成后，SQL 引擎就从 探测端 逐行读取记录，然后用 Join 列的 Hash 值去内存中的哈希表中查找是否有对应记录，有就是匹配到了 构建端 的记录，然后联合两端的数据作为结果输出。</p>
 <p>同样以上面的示例 SQL 为例，SQL 引擎逐行读取 <code>persons</code> 表中的记录，取出它的 <code>country_id</code> 列进行 hash 处理，以得到的哈希值为 Key 去哈希表中查找，找同相同哈希值的记录就意味着和 <code>countries</code> 表中的一条记录 Join 上了。</p>
 <p>下图展示了探查阶段的工作原理：</p>
-<p><img src="/../../images/database/sql-join-build-and-probe/3.jpeg" alt="img"></p>
+<p><img src="../../images/database/sql-join-build-and-probe/3.jpeg" alt="img"></p>
 <p>不过，上图并不算好，没有把“探查”动作描述出来，下图相对更加形象一些：</p>
-<p><img src="/../../images/database/sql-join-build-and-probe/4.png" alt="Figure 1: Build and probe sides of the Hash Join algorithm."></p>
-<h3 id="Hash-Join-的限制"><a href="#Hash-Join-的限制" class="headerlink" title="Hash Join 的限制"></a>Hash Join 的限制</h3><p>最后，提醒一下 Hash Join 的限制，其实从上面的原理介绍中你大概能推测出来：由于 Hash Join 是使用 join 列的哈希值进行匹配的，所以，关联条件中必须包含至少一个 <code>equi join(=)</code> ！</p>
+<p><img src="../../images/database/sql-join-build-and-probe/4.png" alt="Figure 1: Build and probe sides of the Hash Join algorithm."></p>
+<h3 id="Hash-Join-的限制">Hash Join 的限制</h3>
+<p>最后，提醒一下 Hash Join 的限制，其实从上面的原理介绍中你大概能推测出来：由于 Hash Join 是使用 join 列的哈希值进行匹配的，所以，关联条件中必须包含至少一个 <code>equi join(=)</code> ！</p>
 <hr>
 <p>参考资料 ：</p>
 <p><a target="_blank" rel="noopener" href="https://www.zhihu.com/question/35906621">https://www.zhihu.com/question/35906621</a></p>
-<p><a target="_blank" rel="noopener" href="https://dev.mysql.com/">https://dev.mysql.com/</a> blog -archive&#x2F;hash-join-in-mysql-8&#x2F;</p>
+<p><a target="_blank" rel="noopener" href="https://dev.mysql.com/">https://dev.mysql.com/</a> blog -archive/hash-join-in-mysql-8/</p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>SQL 术语：Join 中的 Build 和 Probe 是什么意思？</p><p><a href="https://laurence.enlightgram.com/database/sql-join-build-and-probe/">https://laurence.enlightgram.com/database/sql-join-build-and-probe/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2024-03-02</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/SQL/">SQL</a><a class="link-muted mr-2" rel="tag" href="/tags/Join/">Join</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/flink/flink-temporal-table-function/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Flink：Temporal Table Function（时态表函数）和 Temporal Join</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/flink/flink-table-concepts/"><span class="level-item">Flink：动态表 / 时态表 / 版本表 / 普通表 概念区别澄清</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

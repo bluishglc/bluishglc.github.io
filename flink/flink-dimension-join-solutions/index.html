@@ -44,115 +44,153 @@
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Flink：维表 Join 难点和技术方案汇总</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Flink/">Flink</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2024-03-26T16:25:39.000Z" title="2024-03-26 09:25:39">2024-03-26</time></span><span class="level-item is-hidden-mobile">阅读用时：14 分钟 (约 2103 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>目前看， Flink 的 “维表 Join” 主要就三种实现方式，叫法可能会有细微差别，以下是我是用更直白的语言总结的称谓：</p>
 <ul>
-<li><p>直连外部数据库进行关联</p>
+<li>
+<p>直连外部数据库进行关联</p>
 </li>
-<li><p>将维表加载到内存中关联</p>
+<li>
+<p>将维表加载到内存中关联</p>
 </li>
-<li><p>基于维表变更日志的关联</p>
+<li>
+<p>基于维表变更日志的关联</p>
 </li>
 </ul>
 <p>这些 Join 方案具体会使用到 Flink 的 Lookup Join、Temporal Join 等相关机制，所以在研究维表 Join 方案前，应先补齐这部分的知识，具体可参考本文末给出的本博客相关系列文章。</p>
 <p>网上有这样一篇文章 <a target="_blank" rel="noopener" href="https://flink-learning.org.cn/article/detail/b8df32fbc6542257a5b449114e137cc3">《Flink DataStream 关联维表实战》</a> ，总结得已经非常好了，我们不打算重新发明轮子，本文更像是一篇学习笔记。</p>
-<h2 id="1-直连外部-数据库-进行关联"><a href="#1-直连外部-数据库-进行关联" class="headerlink" title="1. 直连外部 数据库 进行关联"></a>1. 直连外部 数据库 进行关联</h2><p>顾名思义，这种方式就不需要再解释了。Flink 中的 Lookup Join 就是应用在这种场景下的。我们来分析一下这种关联方式的优缺点，应该说它的优缺点是非常鲜明的：</p>
+<h2 id="1-直连外部-数据库-进行关联">1. 直连外部 数据库 进行关联</h2>
+<p>顾名思义，这种方式就不需要再解释了。Flink 中的 Lookup Join 就是应用在这种场景下的。我们来分析一下这种关联方式的优缺点，应该说它的优缺点是非常鲜明的：</p>
 <ul>
-<li><p>优点</p>
+<li>
+<p>优点</p>
 <ul>
-<li><p>实现简单 &#x3D;&gt; 是所有管理方式中最容易实现的</p>
+<li>
+<p>实现简单 =&gt; 是所有管理方式中最容易实现的</p>
 </li>
-<li><p>实时性高 &#x3D;&gt; 维表发生变更后能立即反映到关联的结果集中</p>
+<li>
+<p>实时性高 =&gt; 维表发生变更后能立即反映到关联的结果集中</p>
 </li>
-<li><p>不占用内存 ( 能够关联较大的维表 ) &#x3D;&gt; 维度数据是直接从数据库查询获得，不会占用 Flink 工作节点的内存，这也就意味着能关联较大的维表</p>
+<li>
+<p>不占用内存 ( 能够关联较大的维表 ) =&gt; 维度数据是直接从数据库查询获得，不会占用 Flink 工作节点的内存，这也就意味着能关联较大的维表</p>
 </li>
 </ul>
 </li>
-<li><p>缺点</p>
+<li>
+<p>缺点</p>
 <ul>
-<li>数据库负载高 ( 容易成为性能瓶颈 ) &#x3D;&gt; 流上的 Join 是持续查询，对维表数据库的访问会异常频繁，极易导致性能问题</li>
+<li>数据库负载高 ( 容易成为性能瓶颈 ) =&gt; 流上的 Join 是持续查询，对维表数据库的访问会异常频繁，极易导致性能问题</li>
 </ul>
 </li>
-<li><p>适用场景：</p>
+<li>
+<p>适用场景：</p>
 <ul>
-<li><p>数据流量不大的流</p>
+<li>
+<p>数据流量不大的流</p>
 </li>
-<li><p>项目初期的原型快速实现</p>
+<li>
+<p>项目初期的原型快速实现</p>
 </li>
 </ul>
 </li>
 </ul>
 <p>鉴于直连外部数据库进行关联对数据库的压力过大，有一些优化措施可以适当缓解一下数据库的压力，具体地说主要是“异步查询“和”引入 缓存 “两种优化措施，而上面说的默认实现方式是”同步查询“，这样，在该选型下，总共有三种细分方案。</p>
-<h3 id="1-1-同步查询"><a href="#1-1-同步查询" class="headerlink" title="1.1. 同步查询"></a>1.1. 同步查询</h3><p>没有任何特别之处，默认情况下，使用客户端查询数据库都是同步模式。同步模式的性能问题会尤为突出，没有做任何优化。</p>
-<h3 id="1-2-异步查询"><a href="#1-2-异步查询" class="headerlink" title="1.2. 异步查询"></a>1.2. 异步查询</h3><p>要想在 Flink 中异步访问数据库，首先需要目标数据库本身支持异步查询（提供异步查询的客户端、类库），然后，再基于 Flink 的 <a target="_blank" rel="noopener" href="https://nightlies.apache.org/flink/flink-docs-master/docs/dev/datastream/operators/asyncio/">Async I&#x2F;O</a> API 进行一层封装才能实现异步查询。异步查询可以显著提升查询的吞吐量，但不能保准顺序性，所以在维度数据变更前后有可以会出现关联了错误版本的维度数据（无序性），通常，维表的变化速率都不会太快（缓慢变化维度），一般的应用是可以接受这种情况的，且流上的数据进入流计算引擎时本身就已经有了一定的时延，所以异步导致的问题基本都是可以忽略不计的。如果对关联的时间尺度要求极高，则应考虑”基于维表变更日志的关联“。</p>
-<h3 id="1-3-引入缓存"><a href="#1-3-引入缓存" class="headerlink" title="1.3. 引入缓存"></a>1.3. 引入缓存</h3><p>和 Web 应用中引入缓存加速数据读取性能一样，Flink 程序也可以引入缓存实现同样的目标。这部分的实现其实和 Flink 本身的 API 没有太大关系，只是运行环境是 Flink 罢了，这个命题其实可以改为：在 Java 程序中有没有好的缓存框架以及如何使用。这一块可以研究一下 Guava Cache，看上去是目前 Java 平台上比较主流的缓存框架了。当然，引入专门的分布式缓存基础设施也是可考虑的方案之一。</p>
+<h3 id="1-1-同步查询">1.1. 同步查询</h3>
+<p>没有任何特别之处，默认情况下，使用客户端查询数据库都是同步模式。同步模式的性能问题会尤为突出，没有做任何优化。</p>
+<h3 id="1-2-异步查询">1.2. 异步查询</h3>
+<p>要想在 Flink 中异步访问数据库，首先需要目标数据库本身支持异步查询（提供异步查询的客户端、类库），然后，再基于 Flink 的 <a target="_blank" rel="noopener" href="https://nightlies.apache.org/flink/flink-docs-master/docs/dev/datastream/operators/asyncio/">Async I/O</a> API 进行一层封装才能实现异步查询。异步查询可以显著提升查询的吞吐量，但不能保准顺序性，所以在维度数据变更前后有可以会出现关联了错误版本的维度数据（无序性），通常，维表的变化速率都不会太快（缓慢变化维度），一般的应用是可以接受这种情况的，且流上的数据进入流计算引擎时本身就已经有了一定的时延，所以异步导致的问题基本都是可以忽略不计的。如果对关联的时间尺度要求极高，则应考虑”基于维表变更日志的关联“。</p>
+<h3 id="1-3-引入缓存">1.3. 引入缓存</h3>
+<p>和 Web 应用中引入缓存加速数据读取性能一样，Flink 程序也可以引入缓存实现同样的目标。这部分的实现其实和 Flink 本身的 API 没有太大关系，只是运行环境是 Flink 罢了，这个命题其实可以改为：在 Java 程序中有没有好的缓存框架以及如何使用。这一块可以研究一下 Guava Cache，看上去是目前 Java 平台上比较主流的缓存框架了。当然，引入专门的分布式缓存基础设施也是可考虑的方案之一。</p>
 <p>引入缓存的收益是非常明显的，只是如何保持缓存数据和数据库的数据一致是比较麻烦的，同异步查询一样，如果对关联的时间尺度要求极高，在没有很好的缓存更新策略下，还是应考虑”基于维表变更日志的关联“。</p>
-<h2 id="2-将维表加载到-内存-中关联"><a href="#2-将维表加载到-内存-中关联" class="headerlink" title="2. 将维表加载到 内存 中关联"></a>2. 将维表加载到 内存 中关联</h2><p>“将维表加载到内存中关联” 像是 “直连外部数据库实时关联” 的反向极端，它的优缺点也是非常鲜明的：</p>
+<h2 id="2-将维表加载到-内存-中关联">2. 将维表加载到 内存 中关联</h2>
+<p>“将维表加载到内存中关联” 像是 “直连外部数据库实时关联” 的反向极端，它的优缺点也是非常鲜明的：</p>
 <ul>
-<li><p>优点</p>
+<li>
+<p>优点</p>
 <ul>
-<li><p>极致的性能 &#x3D;&gt; 不会有这种方式更快的关联方式了</p>
+<li>
+<p>极致的性能 =&gt; 不会有这种方式更快的关联方式了</p>
 </li>
-<li><p>高吞吐量 &#x3D;&gt; 数据驻留内存，吞吐量瓶颈只取决于 Flink 集群自身</p>
+<li>
+<p>高吞吐量 =&gt; 数据驻留内存，吞吐量瓶颈只取决于 Flink 集群自身</p>
 </li>
-<li><p>数据库负载低 &#x3D;&gt; 对数据库的压力几乎可以忽略不计</p>
+<li>
+<p>数据库负载低 =&gt; 对数据库的压力几乎可以忽略不计</p>
 </li>
 </ul>
 </li>
-<li><p>缺点</p>
+<li>
+<p>缺点</p>
 <ul>
-<li><p>高内存占用 &#x3D;&gt; 占用过多内存，不能加载过大，过多的维表</p>
+<li>
+<p>高内存占用 =&gt; 占用过多内存，不能加载过大，过多的维表</p>
 </li>
-<li><p>实时性差 &#x3D;&gt; 源表维度数据发生变更后，内存中的数据感知不到，只能手动触发更新或定时刷新</p>
+<li>
+<p>实时性差 =&gt; 源表维度数据发生变更后，内存中的数据感知不到，只能手动触发更新或定时刷新</p>
 </li>
 </ul>
 </li>
-<li><p>适用场景</p>
+<li>
+<p>适用场景</p>
 <ul>
 <li>体量小且几乎不会变更表，例如：字典表</li>
 </ul>
 </li>
 </ul>
 <p>在 <a target="_blank" rel="noopener" href="https://flink-learning.org.cn/article/detail/b8df32fbc6542257a5b449114e137cc3">《Flink DataStream 关联维表实战》</a> 一文中还详细介绍了该方法下的几种优化方案，包括：只加载特定分区的数据缓解内存压力，如何进行定时的数据刷新，以及将加载数据到内存与直连数据库两种方法结合起来使用，详情可参考原文。</p>
-<h2 id="3-基于维表变更日志的关联"><a href="#3-基于维表变更日志的关联" class="headerlink" title="3. 基于维表变更日志的关联"></a>3. 基于维表变更日志的关联</h2><p>基于维表变更日志的关联就是 Flink 的 Temporal Join，所以这种方法会细分为：</p>
+<h2 id="3-基于维表变更日志的关联">3. 基于维表变更日志的关联</h2>
+<p>基于维表变更日志的关联就是 Flink 的 Temporal Join，所以这种方法会细分为：</p>
 <ul>
-<li><p>使用基于事件时间的 Temporal Join 关联维表</p>
+<li>
+<p>使用基于事件时间的 Temporal Join 关联维表</p>
 </li>
-<li><p>使用基于处理时间的 Temporal Join 关联维表</p>
+<li>
+<p>使用基于处理时间的 Temporal Join 关联维表</p>
 </li>
 </ul>
 <p>基于事件时间的维表关联，在时间尺度上是最严格，最准确的，它能确保关联到事实表数据所代表的事件在发生时维表上当时的对应数据，如果业务场景的维表变更速率很快，业务上又不容许任何时间上的错误关联（例如关联汇率表进行汇率换算），则这是唯一的关联方式。</p>
 <p>基于处理时间的 Temporal Join 关联维表在时效性上其实也能满足绝大多数的场景需求，因为大多的维表变更速率都不快（缓慢变化维度）。基于基于处理时间的 Temporal Join 和 直连数据库的 Lookup 非常像，以至于有人错误地将它们认成是同一种关联方式，它们的主要区别是：Lookup Join 是直连数据查询的，而 “基于处理时间的 Temporal Join” 是构建在 Flink 上的动态表，变更是靠 CDC 实时同步的；Lookup Join 需要高频访问数据库，对于数据库会造成较高的负载，而“基于处理时间的 Temporal Join”维表数据是在流上，维表变化是通过 CDC 更新的，所以，后者不会对维表数据库造成压力。</p>
 <ul>
-<li><p>优点</p>
+<li>
+<p>优点</p>
 <ul>
-<li><p>实时性高 &#x3D;&gt; 尤其基于事件时间的 Temporal Join，实时性和准确性是最高的</p>
+<li>
+<p>实时性高 =&gt; 尤其基于事件时间的 Temporal Join，实时性和准确性是最高的</p>
 </li>
-<li><p>数据库负载低 &#x3D;&gt; 对数据库的压力几乎可以忽略不计</p>
+<li>
+<p>数据库负载低 =&gt; 对数据库的压力几乎可以忽略不计</p>
 </li>
 </ul>
 </li>
-<li><p>缺点</p>
+<li>
+<p>缺点</p>
 <ul>
-<li>内存占用高 &#x3D;&gt; 其内存占用没有“将维表加载到内存中关联”那样高，但是对于大的维表，为了维持状态，依然会占用相当可观的内存</li>
+<li>内存占用高 =&gt; 其内存占用没有“将维表加载到内存中关联”那样高，但是对于大的维表，为了维持状态，依然会占用相当可观的内存</li>
 </ul>
 </li>
-<li><p>适用场景</p>
+<li>
+<p>适用场景</p>
 <ul>
 <li>对关联的实时性和时态上的准确性要求严格的场景，如：关联汇率表计算汇率</li>
 </ul>
 </li>
 </ul>
 <p>关于这种方式的实现难度其实还好，主要是前期要积累足够的知识，包括 Flink CDC， Upsert-Kafka，Temporal Join 等，实现的代码并不多，只是知识密度比较高。</p>
-<h3 id="3-1-使用基于事件时间的-Temporal-Join-关联维表"><a href="#3-1-使用基于事件时间的-Temporal-Join-关联维表" class="headerlink" title="3.1 使用基于事件时间的 Temporal Join 关联维表"></a>3.1 使用基于事件时间的 Temporal Join 关联维表</h3><p>关于这种实现方式，请参考本博客另外两篇文章：</p>
+<h3 id="3-1-使用基于事件时间的-Temporal-Join-关联维表">3.1 使用基于事件时间的 Temporal Join 关联维表</h3>
+<p>关于这种实现方式，请参考本博客另外两篇文章：</p>
 <ul>
-<li><p><a href="/flink/flink-temporal-join-1-ddl-event-time/">《Flink Temporal Join 系列 (1)：用 Temporal Table DDL 实现基于事件时间的关联》</a></p>
+<li>
+<p><a href="/flink/flink-temporal-join-1-ddl-event-time/">《Flink Temporal Join 系列 (1)：用 Temporal Table DDL 实现基于事件时间的关联》</a></p>
 </li>
-<li><p><a href="/flink/flink-temporal-join-3-function-event-time/">《Flink Temporal Join 系列 (3)：用 Temporal Table Function 实现基于事件时间的关联》</a></p>
+<li>
+<p><a href="/flink/flink-temporal-join-3-function-event-time/">《Flink Temporal Join 系列 (3)：用 Temporal Table Function 实现基于事件时间的关联》</a></p>
 </li>
 </ul>
-<h3 id="3-2-使用基于处理时间的-Temporal-Join-关联维表"><a href="#3-2-使用基于处理时间的-Temporal-Join-关联维表" class="headerlink" title="3.2 使用基于处理时间的 Temporal Join 关联维表"></a>3.2 使用基于处理时间的 Temporal Join 关联维表</h3><p>关于这种实现方式，请参考本博客另外两篇文章：</p>
+<h3 id="3-2-使用基于处理时间的-Temporal-Join-关联维表">3.2 使用基于处理时间的 Temporal Join 关联维表</h3>
+<p>关于这种实现方式，请参考本博客另外两篇文章：</p>
 <ul>
-<li><p><a href="/flink/flink-temporal-join-2-ddl-processing-time/">《Flink Temporal Join 系列 (2)：用 Temporal Table DDL 实现基于处理时间的关联》</a></p>
+<li>
+<p><a href="/flink/flink-temporal-join-2-ddl-processing-time/">《Flink Temporal Join 系列 (2)：用 Temporal Table DDL 实现基于处理时间的关联》</a></p>
 </li>
-<li><p><a href="/flink/flink-temporal-join-4-function-processing-time/">《Flink Temporal Join 系列 (4)：用 Temporal Table Function 实现基于处理时间的关联》</a></p>
+<li>
+<p><a href="/flink/flink-temporal-join-4-function-processing-time/">《Flink Temporal Join 系列 (4)：用 Temporal Table Function 实现基于处理时间的关联》</a></p>
 </li>
 </ul>
 <hr>

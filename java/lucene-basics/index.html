@@ -45,12 +45,117 @@
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Lucene基本应用示例</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Java/">Java</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2010-09-06T22:16:00.000Z" title="2010-09-06 15:16:00">2010-09-06</time></span><span class="level-item is-hidden-mobile">阅读用时：5 分钟 (约 727 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>以下两段代码分别展示如何创建lucene索引和通过lucene进行检索：</p>
 <p>1.为指定的数据表创建索引</p>
 <p>indexDirPath是索引文件的存放路径。clearDir是指明是否在每次建立索引时清空文件夹。batchIndexingDao是专来提取数据的DAO接口，它有一个public <T> List<T> getBatchRecords(String tableName, int beginIndex, int count);方法用来分批次的从表中提取数据。此接口一般由某具体Dao实现。tableName，用于需要做索引的数据表。其实这个参数是不应该出现的，它应该由某个具体的DAO封装起来了。这里是由于程序中的特殊原因。indexDocWrapper是很有意思的一个接口，它很像spirngjdbc的rowmapper，由于把DAO返回的实体对象包裹或者说适配成lucene的Document对象。</p>
-<p>&#x2F;**<br>	 * Creates index. This is generic method for creating index.<br>	 *<br>	 * @param <T> the object type which will be indexed.<br>	 * @param indexFileDir the index file’s directory.<br>	 * @param clearDir whether clear the direcory first when creating index.<br>	 * @param batchIndexingDao the batch indexing dao, it’s used to load objects from database when indexing.<br>	 * @param tableName the table name. there are many topic and reply daily tables.<br>	 * @param indexDocWrapper the wrapper to wrap an object into document.<br>	 *&#x2F;<br>	public <T> void createIndex(String indexDirPath, boolean clearDir, BatchIndexingDao batchIndexingDao ,String tableName , IndexDocWrapper<T> indexDocWrapper){	<br>		IndexWriter writer &#x3D; null;<br>		try {<br>			File indexFileDir &#x3D; new File(indexDirPath);<br>			if(indexFileDir.exists()&amp;&amp;clearDir&#x3D;&#x3D;true){<br>				FileUtils.cleanDirectory(indexFileDir);<br>				logger.info(“The specified direcory:” + indexDirPath +” has cleared.”);<br>			}<br>			writer &#x3D; new IndexWriter(FSDirectory.open(indexFileDir), new IKAnalyzer(), true, IndexWriter.MaxFieldLength.LIMITED);<br>			writer.setRAMBufferSizeMB(Constants.INDEX_WRITER_RAM_BUFFER);<br>			int recordIndex &#x3D; 0;<br>			List<T> objects &#x3D; null;<br>			do {<br>				try {<br>					objects &#x3D; batchIndexingDao.getBatchRecords(tableName, recordIndex, Constants.BATCH_INDEX_SIZE);<br>				} catch (BadSqlGrammarException e) {<br>					logger.error(tableName+” does not exist!”);<br>					continue;<br>				}<br>				if (objects !&#x3D; null &amp;&amp; !objects.isEmpty()) {<br>					for (T object : objects) {<br>						writer.addDocument(indexDocWrapper.createDoc(object));<br>					}<br>					logger.info(recordIndex + objects.size() + “ records has added!”);<br>					recordIndex +&#x3D; Constants.BATCH_INDEX_SIZE;<br>				}<br>			} while (objects !&#x3D; null &amp;&amp; !objects.isEmpty());<br>			logger.info(“Starts to optimize…”);<br>			writer.optimize();<br>			logger.info(“Optimize finished.”);<br>		} catch (CorruptIndexException e) {<br>			logger.error(e.getMessage());<br>			e.printStackTrace();<br>		} catch (LockObtainFailedException e) {<br>			logger.error(e.getMessage());<br>			e.printStackTrace();<br>		} catch (IOException e) {<br>			logger.error(e.getMessage());<br>			e.printStackTrace();<br>		} finally {<br>			if(writer!&#x3D;null){<br>				try {<br>					writer.close();<br>					logger.info(“Topic indexing work finished.”);<br>				} catch (CorruptIndexException e) {<br>					e.printStackTrace();<br>				} catch (IOException e) {<br>					e.printStackTrace();<br>				}<br>			}<br>		}<br>	}</p>
+<p>/**<br>
+* Creates index. This is generic method for creating index.<br>
+*<br>
+* @param <T> the object type which will be indexed.<br>
+* @param indexFileDir the index file’s directory.<br>
+* @param clearDir whether clear the direcory first when creating index.<br>
+* @param batchIndexingDao the batch indexing dao, it’s used to load objects from database when indexing.<br>
+* @param tableName the table name. there are many topic and reply daily tables.<br>
+* @param indexDocWrapper the wrapper to wrap an object into document.<br>
+*/<br>
+public <T> void createIndex(String indexDirPath, boolean clearDir, BatchIndexingDao batchIndexingDao ,String tableName , IndexDocWrapper<T> indexDocWrapper){	<br>
+IndexWriter writer = null;<br>
+try {<br>
+File indexFileDir = new File(indexDirPath);<br>
+if(indexFileDir.exists()&amp;&amp;clearDir==true){<br>
+FileUtils.cleanDirectory(indexFileDir);<br>
+<a target="_blank" rel="noopener" href="http://logger.info">logger.info</a>(“The specified direcory:” + indexDirPath +&quot; has cleared.“);<br>
+}<br>
+writer = new IndexWriter(FSDirectory.open(indexFileDir), new IKAnalyzer(), true, IndexWriter.MaxFieldLength.LIMITED);<br>
+writer.setRAMBufferSizeMB(Constants.INDEX_WRITER_RAM_BUFFER);<br>
+int recordIndex = 0;<br>
+List<T> objects = null;<br>
+do {<br>
+try {<br>
+objects = batchIndexingDao.getBatchRecords(tableName, recordIndex, Constants.BATCH_INDEX_SIZE);<br>
+} catch (BadSqlGrammarException e) {<br>
+logger.error(tableName+” does not exist!“);<br>
+continue;<br>
+}<br>
+if (objects != null &amp;&amp; !objects.isEmpty()) {<br>
+for (T object : objects) {<br>
+writer.addDocument(indexDocWrapper.createDoc(object));<br>
+}<br>
+<a target="_blank" rel="noopener" href="http://logger.info">logger.info</a>(recordIndex + objects.size() + &quot; records has added!”);<br>
+recordIndex += Constants.BATCH_INDEX_SIZE;<br>
+}<br>
+} while (objects != null &amp;&amp; !objects.isEmpty());<br>
+<a target="_blank" rel="noopener" href="http://logger.info">logger.info</a>(“Starts to optimize…”);<br>
+writer.optimize();<br>
+<a target="_blank" rel="noopener" href="http://logger.info">logger.info</a>(“Optimize finished.”);<br>
+} catch (CorruptIndexException e) {<br>
+logger.error(e.getMessage());<br>
+e.printStackTrace();<br>
+} catch (LockObtainFailedException e) {<br>
+logger.error(e.getMessage());<br>
+e.printStackTrace();<br>
+} catch (IOException e) {<br>
+logger.error(e.getMessage());<br>
+e.printStackTrace();<br>
+} finally {<br>
+if(writer!=null){<br>
+try {<br>
+writer.close();<br>
+<a target="_blank" rel="noopener" href="http://logger.info">logger.info</a>(“Topic indexing work finished.”);<br>
+} catch (CorruptIndexException e) {<br>
+e.printStackTrace();<br>
+} catch (IOException e) {<br>
+e.printStackTrace();<br>
+}<br>
+}<br>
+}<br>
+}</p>
 <ol start="2">
 <li>根据给定的关键字检索命中的对象</li>
 </ol>
 <p>indexDirPath是索引文件的存放路径。field是将被检索的Lucene的Document的field.expression是lucene表达式。indexObjectWrapper和indexDocWrapper是对应的，当是把lucene的Document提取出来封装到对象中的包裹器。beginIndex和count是当检索结果很多时用来分页的。</p>
-<p>&#x2F;**<br>	 * Search. This is generic method for searching with paging.<br>	 *<br>	 * @param <T>  the searching target object type.<br>	 * @param indexFileDir the index file dir<br>	 * @param field the document field for searching.<br>	 * @param expression the expression<br>	 * @param indexObjectWrapper the index object wrapper<br>	 * @param beginIndex the begin index<br>	 * @param count the count<br>	 * @return the list<br>	 *&#x2F;<br>	public <T> List<T> search(String indexFileDir, String field,  String expression, IndexObjectWrapper<T> indexObjectWrapper, int beginIndex, int count){<br>		IndexSearcher indexSearcher &#x3D; null;<br>		try {<br>			logger.info(“Starts to search…”);<br>			if(expression&#x3D;&#x3D;null||””.equals(expression.trim())){<br>				throw new NullPointerException(“The lucene expression is null or empty!”);<br>			}<br>			indexSearcher &#x3D; new IndexSearcher(FSDirectory.open(new File(indexFileDir)));<br>			Query query &#x3D; new QueryParser(Version.LUCENE_CURRENT, field, new IKAnalyzer()).parse(expression);<br>			TopDocs topDocs &#x3D; indexSearcher.search(query, Integer.MAX_VALUE);<br>			ScoreDoc[] scoreDocs &#x3D; topDocs.scoreDocs;<br>			logger.info(“Total Hits: “+topDocs.totalHits);<br>			List<T> objects &#x3D; new ArrayList<T>();<br>			int endIndex &#x3D; beginIndex+count;<br>			for (int i &#x3D; beginIndex; i &lt; endIndex; i++) {<br>				Document targetDoc &#x3D; indexSearcher.doc(scoreDocs[i].doc);<br>				objects.add(indexObjectWrapper.createObject(targetDoc));<br>			}<br>			return objects;<br>		}  catch (Exception e) {<br>			logger.info(e.getMessage());<br>			e.printStackTrace();<br>			return null;<br>		} finally {<br>			if(indexSearcher!&#x3D;null){<br>				try {<br>					indexSearcher.close();<br>				} catch (IOException e) {<br>					e.printStackTrace();<br>				}<br>			}<br>		}<br>	}</p>
+<p>/**<br>
+* Search. This is generic method for searching with paging.<br>
+*<br>
+* @param <T>  the searching target object type.<br>
+* @param indexFileDir the index file dir<br>
+* @param field the document field for searching.<br>
+* @param expression the expression<br>
+* @param indexObjectWrapper the index object wrapper<br>
+* @param beginIndex the begin index<br>
+* @param count the count<br>
+* @return the list<br>
+*/<br>
+public <T> List<T> search(String indexFileDir, String field,  String expression, IndexObjectWrapper<T> indexObjectWrapper, int beginIndex, int count){<br>
+IndexSearcher indexSearcher = null;<br>
+try {<br>
+<a target="_blank" rel="noopener" href="http://logger.info">logger.info</a>(“Starts to search…”);<br>
+if(expression==null||“”.equals(expression.trim())){<br>
+throw new NullPointerException(“The lucene expression is null or empty!”);<br>
+}<br>
+indexSearcher = new IndexSearcher(FSDirectory.open(new File(indexFileDir)));<br>
+Query query = new QueryParser(Version.LUCENE_CURRENT, field, new IKAnalyzer()).parse(expression);<br>
+TopDocs topDocs = indexSearcher.search(query, Integer.MAX_VALUE);<br>
+ScoreDoc[] scoreDocs = topDocs.scoreDocs;<br>
+<a target="_blank" rel="noopener" href="http://logger.info">logger.info</a>(&quot;Total Hits: &quot;+topDocs.totalHits);<br>
+List<T> objects = new ArrayList<T>();<br>
+int endIndex = beginIndex+count;<br>
+for (int i = beginIndex; i &lt; endIndex; i++) {<br>
+Document targetDoc = indexSearcher.doc(scoreDocs[i].doc);<br>
+objects.add(indexObjectWrapper.createObject(targetDoc));<br>
+}<br>
+return objects;<br>
+}  catch (Exception e) {<br>
+<a target="_blank" rel="noopener" href="http://logger.info">logger.info</a>(e.getMessage());<br>
+e.printStackTrace();<br>
+return null;<br>
+} finally {<br>
+if(indexSearcher!=null){<br>
+try {<br>
+indexSearcher.close();<br>
+} catch (IOException e) {<br>
+e.printStackTrace();<br>
+}<br>
+}<br>
+}<br>
+}</p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>Lucene基本应用示例</p><p><a href="https://laurence.enlightgram.com/java/lucene-basics/">https://laurence.enlightgram.com/java/lucene-basics/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2010-09-06</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Lucene/">Lucene</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/linux/install-bugzilla-linux/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Linux下安装bugzilla</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/java/cargo-configuration/"><span class="level-item">配置Cargo</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

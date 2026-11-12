@@ -42,144 +42,185 @@
       window.addEventListener('hashchange', switchTab, false);
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
-</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">HBase 例行灾备方案：快照备份与还原演练</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/HBase/">HBase</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2023-12-27T21:14:41.000Z" title="2023-12-27 13:14:41">2023-12-27</time></span><span class="level-item is-hidden-mobile">阅读用时：22 分钟 (约 3301 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>该方案是为某用户定制的 HBase 灾备方案，方案本身具有很好的适用性，可以复用于常规 HBase 灾备场景。用户对 HBase 的灾备工作非常重视，每周会对 HBase 进行一次全量备份，将快照上传至 S3 保存，同时，在消息队列和其他数据库中保存着两周以内的增量数据，当 HBase 宕机时，会先还原快照将数据库恢复至一周内某一时刻的全量状态，然后再从其他系统读取一周内的增量数据进行补录，直至数据追平。本文将重点讨论 HBase 基于快照的例行备份和灾后恢复操作，并给出详细的解释和操作脚本。更多快照导入导出操作的详细介绍可参考本文姊妹篇: <a href="/hbase/hbase-large-table-migration/">《HBase 超大表迁移、备份、还原、同步演练手册：全量快照 + 实时同步（Snapshot + Replication）不停机迁移方案》</a> </p>
-<h2 id="1-方案-架构"><a href="#1-方案-架构" class="headerlink" title="1. 方案 架构"></a>1. 方案 架构</h2><p>由于 HBase 的快照导入、导出是一个基于 Yarn 的 Map-Reduce 作业，而生产集群是一个专职的 HBase 集群，不宜为 Yarn 分配过多资源，所以，直接使用 HBase 的生产集群执行快照导入、导出作业并不是一个明智的选择，推荐的做法是：为快照导入和导出创建专用集群，这样做的好处是：</p>
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">HBase 例行灾备方案：快照备份与还原演练</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/HBase/">HBase</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2023-12-27T21:14:41.000Z" title="2023-12-27 13:14:41">2023-12-27</time></span><span class="level-item is-hidden-mobile">阅读用时：22 分钟 (约 3301 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>该方案是为某用户定制的 HBase 灾备方案，方案本身具有很好的适用性，可以复用于常规 HBase 灾备场景。用户对 HBase 的灾备工作非常重视，每周会对 HBase 进行一次全量备份，将快照上传至 S3 保存，同时，在消息队列和其他数据库中保存着两周以内的增量数据，当 HBase 宕机时，会先还原快照将数据库恢复至一周内某一时刻的全量状态，然后再从其他系统读取一周内的增量数据进行补录，直至数据追平。本文将重点讨论 HBase 基于快照的例行备份和灾后恢复操作，并给出详细的解释和操作脚本。更多快照导入导出操作的详细介绍可参考本文姊妹篇: <a href="/hbase/hbase-large-table-migration/">《HBase 超大表迁移、备份、还原、同步演练手册：全量快照 + 实时同步（Snapshot + Replication）不停机迁移方案》</a></p>
+<h2 id="1-方案-架构">1. 方案 架构</h2>
+<p>由于 HBase 的快照导入、导出是一个基于 Yarn 的 Map-Reduce 作业，而生产集群是一个专职的 HBase 集群，不宜为 Yarn 分配过多资源，所以，直接使用 HBase 的生产集群执行快照导入、导出作业并不是一个明智的选择，推荐的做法是：为快照导入和导出创建专用集群，这样做的好处是：</p>
 <ul>
-<li><p>HBase 的生产集群将不再需要为 Yarn 分配资源，可以将资源集中投放给 HBase；</p>
+<li>
+<p>HBase 的生产集群将不再需要为 Yarn 分配资源，可以将资源集中投放给 HBase；</p>
 </li>
-<li><p>用于快照导入、导出的专用集群可以将全部资源分配给 Yarn，同时在配置上针对 Map-Reduce 进行定向性能调优，以最快速度完成快照导入、导出工作；</p>
+<li>
+<p>用于快照导入、导出的专用集群可以将全部资源分配给 Yarn，同时在配置上针对 Map-Reduce 进行定向性能调优，以最快速度完成快照导入、导出工作；</p>
 </li>
-<li><p>在超大数据集下，无论是快照导出、导入还是还原，都需要对 HBase 做多项特定配置，包含超时和文件清理周期的调整，这些都不是正常生产集群上应有的配置，该方案可以规避修改配置并重启集群的问题；</p>
+<li>
+<p>在超大数据集下，无论是快照导出、导入还是还原，都需要对 HBase 做多项特定配置，包含超时和文件清理周期的调整，这些都不是正常生产集群上应有的配置，该方案可以规避修改配置并重启集群的问题；</p>
 </li>
-<li><p>导入、导出执行完毕后，可随即释放集群，无额外支出</p>
+<li>
+<p>导入、导出执行完毕后，可随即释放集群，无额外支出</p>
 </li>
 </ul>
 <p>以下是快照备份场景的架构示意图：</p>
-<p> <img src="/../../images/hbase/hbase-snapshot-disaster-recovery/2.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/hbase/hbase-snapshot-disaster-recovery/2.jpeg" alt="请添加图片描述"></p>
 <p>在这一场景下，我们通过专用的快照导出集群从生产集群中导出快照（读取的是生产集群的 HDFS），然后将数据写入到 S3 并保存至少1周时间，从效果上等同于生产集群将自己的快照直接上传至 S3，但却不需要为此特别修改配置。</p>
 <p>以下是灾后还原场景的架构示意图：</p>
-<p> <img src="/../../images/hbase/hbase-snapshot-disaster-recovery/3.jpeg" alt="请添加图片描述"></p>
+<p><img src="../../images/hbase/hbase-snapshot-disaster-recovery/3.jpeg" alt="请添加图片描述"></p>
 <p>在这一场景下，我们通过专用的快照导入集群读取 S3 中的快照文件，然后将数据写入到还原集群中（写入的是还原集群的 HDFS），从效果上等同于还原集群直接从 S3 上下载快照并还原，但却不需要为此特别修改配置。</p>
-<h2 id="2-环境说明"><a href="#2-环境说明" class="headerlink" title="2. 环境说明"></a>2. 环境说明</h2><p>本次模拟演练使用的环境是：HBase 1.4.9 （EMR版本：5.23.0），全场景涉及4个 HBase 集群，分别是：</p>
+<h2 id="2-环境说明">2. 环境说明</h2>
+<p>本次模拟演练使用的环境是：HBase 1.4.9 （EMR版本：5.23.0），全场景涉及4个 HBase 集群，分别是：</p>
 <ul>
-<li><p>生产集群：m5.4xlarge （16 vCore，64 GB），3 个 Master Node + 20 个 Core Node</p>
+<li>
+<p>生产集群：m5.4xlarge （16 vCore，64 GB），3 个 Master Node + 20 个 Core Node</p>
 </li>
-<li><p>快照导出专用集群：r5.2xlarge （8 vCore，64 GB），1 个 Master Node + 32 个 Core Node</p>
+<li>
+<p>快照导出专用集群：r5.2xlarge （8 vCore，64 GB），1 个 Master Node + 32 个 Core Node</p>
 </li>
-<li><p>快照导入专用集群：r5.2xlarge （8 vCore，64 GB），1 个 Master Node + 32 个 Core Node</p>
+<li>
+<p>快照导入专用集群：r5.2xlarge （8 vCore，64 GB），1 个 Master Node + 32 个 Core Node</p>
 </li>
-<li><p>恢复集群：m5.4xlarge （16 vCore，64 GB），3 个 Master Node + 20 个 Core Node</p>
+<li>
+<p>恢复集群：m5.4xlarge （16 vCore，64 GB），3 个 Master Node + 20 个 Core Node</p>
 </li>
 </ul>
 <p>以下是4个集群的详细信息：</p>
 <table>
 <thead>
 <tr>
-<th align="left">信息项</th>
-<th align="left">生产集群</th>
-<th align="left">快照导出专用集群</th>
-<th align="left">快照导入专用集群</th>
-<th align="left">恢复集群</th>
+<th style="text-align:left">信息项</th>
+<th style="text-align:left">生产集群</th>
+<th style="text-align:left">快照导出专用集群</th>
+<th style="text-align:left">快照导入专用集群</th>
+<th style="text-align:left">恢复集群</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="left">HBase 版本</td>
-<td align="left">1.4.9</td>
-<td align="left">1.4.9</td>
-<td align="left">1.4.9</td>
-<td align="left">1.4.9</td>
+<tbody>
+<tr>
+<td style="text-align:left">HBase 版本</td>
+<td style="text-align:left">1.4.9</td>
+<td style="text-align:left">1.4.9</td>
+<td style="text-align:left">1.4.9</td>
+<td style="text-align:left">1.4.9</td>
 </tr>
 <tr>
-<td align="left">EMR 版本</td>
-<td align="left">5.23.0</td>
-<td align="left">5.23.0</td>
-<td align="left">5.23.0</td>
-<td align="left">5.23.0</td>
+<td style="text-align:left">EMR 版本</td>
+<td style="text-align:left">5.23.0</td>
+<td style="text-align:left">5.23.0</td>
+<td style="text-align:left">5.23.0</td>
+<td style="text-align:left">5.23.0</td>
 </tr>
 <tr>
-<td align="left">实例机型</td>
-<td align="left">m5.4xlarge</td>
-<td align="left">r5.2xlarge</td>
-<td align="left">r5.2xlarge</td>
-<td align="left">m5.4xlarge</td>
+<td style="text-align:left">实例机型</td>
+<td style="text-align:left">m5.4xlarge</td>
+<td style="text-align:left">r5.2xlarge</td>
+<td style="text-align:left">r5.2xlarge</td>
+<td style="text-align:left">m5.4xlarge</td>
 </tr>
 <tr>
-<td align="left">主节点</td>
-<td align="left">3</td>
-<td align="left">1</td>
-<td align="left">1</td>
-<td align="left">3</td>
+<td style="text-align:left">主节点</td>
+<td style="text-align:left">3</td>
+<td style="text-align:left">1</td>
+<td style="text-align:left">1</td>
+<td style="text-align:left">3</td>
 </tr>
 <tr>
-<td align="left">Core节点</td>
-<td align="left">20</td>
-<td align="left">&lt;&#x3D; 32</td>
-<td align="left">32</td>
-<td align="left">20</td>
+<td style="text-align:left">Core节点</td>
+<td style="text-align:left">20</td>
+<td style="text-align:left">&lt;= 32</td>
+<td style="text-align:left">32</td>
+<td style="text-align:left">20</td>
 </tr>
 <tr>
-<td align="left">存储介质</td>
-<td align="left">HDFS</td>
-<td align="left">HDFS</td>
-<td align="left">HDFS</td>
-<td align="left">HDFS</td>
+<td style="text-align:left">存储介质</td>
+<td style="text-align:left">HDFS</td>
+<td style="text-align:left">HDFS</td>
+<td style="text-align:left">HDFS</td>
+<td style="text-align:left">HDFS</td>
 </tr>
-</tbody></table>
-<h2 id="3-前置条件"><a href="#3-前置条件" class="headerlink" title="3. 前置条件"></a>3. 前置条件</h2><p>进行实操演练前，需要您的环境中已经创建了：</p>
+</tbody>
+</table>
+<h2 id="3-前置条件">3. 前置条件</h2>
+<p>进行实操演练前，需要您的环境中已经创建了：</p>
 <ol>
-<li><p>一个生产集群</p>
+<li>
+<p>一个生产集群</p>
 </li>
-<li><p>一张演练用的测试表</p>
+<li>
+<p>一张演练用的测试表</p>
 </li>
 </ol>
 <p>如果只是进行演练，您可以根据自身账号情况灵活配置 HBase 生产集群的规模，不必拘泥于上述建议配置；创建测试用表可以参考 <a href="">《AWS EMR HBase 超大表迁移、备份、还原、同步演练手册：全量快照 + 实时同步（Snapshot + Replication）不停机迁移方案</a> 》一文的第 5.5 - 5.7 节。</p>
 <p>进行正式演练前，需要提醒注意以下事项：</p>
 <ul>
-<li><p>本演练的多数命令都需执行较长时间，因此，命令都使用了 <code>nohup ... &amp;</code> 形式转为了后台运行，以防 Linux 终端 Session 超时导致命令意外终止；</p>
+<li>
+<p>本演练的多数命令都需执行较长时间，因此，命令都使用了 <code>nohup ... &amp;</code> 形式转为了后台运行，以防 Linux 终端 Session 超时导致命令意外终止；</p>
 </li>
-<li><p>本演练的操作必须按顺序执行，不可在前一个命令转为后台运行后，立即执行下一条命令；</p>
+<li>
+<p>本演练的操作必须按顺序执行，不可在前一个命令转为后台运行后，立即执行下一条命令；</p>
 </li>
-<li><p>演练过程中需要在各个集群和 AWS Console 上来回切换，为了提醒操作者，本文特意使用 <code>[ 执行环境 ] :: ...</code> 形式的标题强调本节操作的执行环境</p>
+<li>
+<p>演练过程中需要在各个集群和 AWS Console 上来回切换，为了提醒操作者，本文特意使用 <code>[ 执行环境 ] :: ...</code> 形式的标题强调本节操作的执行环境</p>
 </li>
 </ul>
-<h2 id="4-全局变量"><a href="#4-全局变量" class="headerlink" title="4. 全局变量"></a>4. 全局变量</h2><p>为了让脚本更具可移植性，我们将所有环境相关的信息抽离出来，以变量形式统一声明和维护（请注意替换脚本中出现的 &#96;&#96;&#96;&#96;bash<br>export TABLE_NAME&#x3D;”<your-table-name>“<br>export SNAPSHOT_NAME&#x3D;”${TABLE_NAME}-$(date +’%Y%m%d’)”<br>export SNAPSHOTS_REPO&#x3D;”s3:&#x2F;&#x2F;<your-snapshot-repo-bucket>“<br>export SNAPSHOT_S3_LOCATION&#x3D;”${SNAPSHOTS_REPO}&#x2F;${SNAPSHOT_NAME}&#x2F;“<br>export WORKER_NODES&#x3D;32<br>export SNAPSHOT_EXPORT_MAPPERS&#x3D;2040<br>export INUSE_CLUSTER_NAMENODES&#x3D;”<your-in-use-cluster-namenode>“<br>export SNAPSHOT_EXPORT_CLUSTER_NAMENODES&#x3D;”<your-snapshot-export-cluster-namenode>“<br>export SNAPSHOT_IMPORT_CLUSTER_NAMENODES&#x3D;”<your-snapshot-import-cluster-namenode>“<br>export RESTORED_CLUSTER_NAMENODES&#x3D;”<your-restored-cluster-namenode-namenode>“</p>
+<h2 id="4-全局变量">4. 全局变量</h2>
+<p>为了让脚本更具可移植性，我们将所有环境相关的信息抽离出来，以变量形式统一声明和维护（请注意替换脚本中出现的 ````bash<br>
+export TABLE_NAME=“<your-table-name>”<br>
+export SNAPSHOT_NAME=“${TABLE_NAME}-$(date +‘%Y%m%d’)”<br>
+export SNAPSHOTS_REPO=“s3://<your-snapshot-repo-bucket>”<br>
+export SNAPSHOT_S3_LOCATION=“${SNAPSHOTS_REPO}/${SNAPSHOT_NAME}/”<br>
+export WORKER_NODES=32<br>
+export SNAPSHOT_EXPORT_MAPPERS=2040<br>
+export INUSE_CLUSTER_NAMENODES=“<your-in-use-cluster-namenode>”<br>
+export SNAPSHOT_EXPORT_CLUSTER_NAMENODES=“<your-snapshot-export-cluster-namenode>”<br>
+export SNAPSHOT_IMPORT_CLUSTER_NAMENODES=“<your-snapshot-import-cluster-namenode>”<br>
+export RESTORED_CLUSTER_NAMENODES=“<your-restored-cluster-namenode-namenode>”</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">## 5. 备份快照 ( 例行灾备作业 )</span><br><span class="line"></span><br><span class="line">快照备份工作每周执行一次，快照文件会导出到 S3 上存储。本演练文档会给出详细的步骤说明和操作脚本，在实际运维中，该部分操作应提升为脚本或工作流由调度引擎每周触发执行。</span><br><span class="line"></span><br><span class="line">### 5.1. [ 生产集群 ] :: 创建快照</span><br><span class="line"></span><br><span class="line">由于生产环境的 HBase 集群不能停机，所以我们在创建快照时，不可以 disable table，而是直接创建快照：</span><br><span class="line"></span><br><span class="line">```bash</span><br><span class="line"># create snapshot</span><br><span class="line">sudo -u hbase hbase snapshot create -n $SNAPSHOT_NAME -t $TABLE_NAME</span><br><span class="line"># sleep for a while, snapshot may be NOT available immediately.</span><br><span class="line">sleep 120</span><br><span class="line"># check if snapshot is available</span><br><span class="line">sudo -u hbase hbase snapshot info -list-snapshots</span><br></pre></td></tr></table></figure>
-
 <p>通过这种方式创建出来的快照叫：Online Snapshot，如果事先 disable table，则创建出来的就叫 Offline Snapshot。</p>
-<h3 id="5-2-AWS-控制台-创建快照导出专用集群"><a href="#5-2-AWS-控制台-创建快照导出专用集群" class="headerlink" title="5.2. [ AWS 控制台 ] :: 创建快照导出专用集群"></a>5.2. [ AWS 控制台 ] :: 创建快照导出专用集群</h3><p>对于快照导入、导出集群的机型和配置，我们做了多轮测试，最终选定了 r5.2xlarge，因为导入导出作业是一个内存和网络IO密集型作业，网络IO的上限已由生产集群的机型和节点数量决定了，所以，我们从内存上找到了一些优化空间，最终选定了 r5.2xlarge 机型，并将 60 GB 内存分配给 Yarn，单一 worker 节点切分 16 个 Container，Map 任务数量是 Container 的 4 倍，这样的配置在多种配置组合中，性能最佳。以下是具体配置 (请注意替换配置文件中的 <code>&lt;your-aws-access-key-id&gt;</code> 和 <code>&lt;your-aws-secret-access-key&gt;</code> )：</p>
+<h3 id="5-2-AWS-控制台-创建快照导出专用集群">5.2. [ AWS 控制台 ] :: 创建快照导出专用集群</h3>
+<p>对于快照导入、导出集群的机型和配置，我们做了多轮测试，最终选定了 r5.2xlarge，因为导入导出作业是一个内存和网络IO密集型作业，网络IO的上限已由生产集群的机型和节点数量决定了，所以，我们从内存上找到了一些优化空间，最终选定了 r5.2xlarge 机型，并将 60 GB 内存分配给 Yarn，单一 worker 节点切分 16 个 Container，Map 任务数量是 Container 的 4 倍，这样的配置在多种配置组合中，性能最佳。以下是具体配置 (请注意替换配置文件中的 <code>&lt;your-aws-access-key-id&gt;</code> 和 <code>&lt;your-aws-secret-access-key&gt;</code> )：</p>
 <figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">[</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;Classification&quot;</span><span class="punctuation">:</span> <span class="string">&quot;hdfs-site&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;Properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;dfs.replication&quot;</span><span class="punctuation">:</span> <span class="string">&quot;1&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;Classification&quot;</span><span class="punctuation">:</span> <span class="string">&quot;emrfs-site&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;Properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;fs.s3.maxRetries&quot;</span><span class="punctuation">:</span> <span class="string">&quot;50&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;fs.s3.maxConnections&quot;</span><span class="punctuation">:</span> <span class="string">&quot;500000&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;Classification&quot;</span><span class="punctuation">:</span> <span class="string">&quot;core-site&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;Properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;fs.s3n.multipart.uploads.split.size&quot;</span><span class="punctuation">:</span> <span class="string">&quot;1073741824&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;fs.s3.awsAccessKeyId&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&lt;your-aws-access-key-id&gt;&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;fs.s3.awsSecretAccessKey&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&lt;your-aws-secret-access-key&gt;&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;Classification&quot;</span><span class="punctuation">:</span> <span class="string">&quot;yarn-site&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;Properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;yarn.nodemanager.resource.memory-mb&quot;</span><span class="punctuation">:</span> <span class="string">&quot;61440&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;yarn.scheduler.maximum-allocation-mb&quot;</span><span class="punctuation">:</span> <span class="string">&quot;61440&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;yarn.scheduler.minimum-allocation-mb&quot;</span><span class="punctuation">:</span> <span class="string">&quot;1&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;yarn.nodemanager.vmem-pmem-ratio&quot;</span><span class="punctuation">:</span> <span class="string">&quot;10&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;Classification&quot;</span><span class="punctuation">:</span> <span class="string">&quot;mapred-site&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;Properties&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;mapred.job.jvm.num.tasks&quot;</span><span class="punctuation">:</span> <span class="string">&quot;-1&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;mapreduce.map.memory.mb&quot;</span><span class="punctuation">:</span> <span class="string">&quot;3840&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;mapreduce.map.java.opts&quot;</span><span class="punctuation">:</span> <span class="string">&quot;-Xmx3072m&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;mapreduce.map.cpu.vcores&quot;</span><span class="punctuation">:</span> <span class="string">&quot;2&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;mapreduce.reduce.memory.mb&quot;</span><span class="punctuation">:</span> <span class="string">&quot;7680&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;mapreduce.reduce.java.opts&quot;</span><span class="punctuation">:</span> <span class="string">&quot;-Xmx6144m&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;mapreduce.reduce.cpu.vcores&quot;</span><span class="punctuation">:</span> <span class="string">&quot;4&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;yarn.app.mapreduce.am.resource.mb&quot;</span><span class="punctuation">:</span> <span class="string">&quot;7680&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;yarn.app.mapreduce.am.resource.cpu-vcores&quot;</span><span class="punctuation">:</span> <span class="string">&quot;4&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">]</span></span><br></pre></td></tr></table></figure>
-
-<p>不同于生产集群，导入导出集群并不存储数据，所以无需增加磁盘存储，使用默认配置即可。此外， <strong>集群创建完毕后，须用 Primary Node 的 Private DNS 或 IP 为全局变量 <code>INUSE_CLUSTER_NAMENODES</code> 赋值，并在 Master 节点上执行一次第 4 节的全局变量声明脚本。</strong> </p>
-<h3 id="5-3-快照导出专用集群-导出快照"><a href="#5-3-快照导出专用集群-导出快照" class="headerlink" title="5.3. [ 快照导出专用集群 ] :: 导出快照"></a>5.3. [ 快照导出专用集群 ] :: 导出快照</h3><p>在快照导出专用集群的主节点上，执行如下命令：</p>
+<p>不同于生产集群，导入导出集群并不存储数据，所以无需增加磁盘存储，使用默认配置即可。此外， <strong>集群创建完毕后，须用 Primary Node 的 Private DNS 或 IP 为全局变量 <code>INUSE_CLUSTER_NAMENODES</code> 赋值，并在 Master 节点上执行一次第 4 节的全局变量声明脚本。</strong></p>
+<h3 id="5-3-快照导出专用集群-导出快照">5.3. [ 快照导出专用集群 ] :: 导出快照</h3>
+<p>在快照导出专用集群的主节点上，执行如下命令：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">nohup</span> <span class="built_in">sudo</span> -u hbase hbase snapshot <span class="built_in">export</span> \</span><br><span class="line">    -snapshot <span class="variable">$SNAPSHOT_NAME</span> \</span><br><span class="line">    -copy-from <span class="string">&quot;hdfs://<span class="variable">$&#123;INUSE_CLUSTER_NAMENODES&#125;</span>:8020/user/hbase/&quot;</span> \</span><br><span class="line">    -copy-to <span class="variable">$&#123;SNAPSHOT_S3_LOCATION&#125;</span> \</span><br><span class="line">    -mappers <span class="variable">$SNAPSHOT_EXPORT_MAPPERS</span> \</span><br><span class="line">    -bandwidth $((<span class="number">2</span>**<span class="number">31</span>-<span class="number">1</span>)) &amp;&gt; <span class="built_in">export</span>-<span class="variable">$SNAPSHOT_NAME</span>.out &amp;</span><br><span class="line"><span class="built_in">tail</span> -f /var/log/hbase/hbase.log</span><br></pre></td></tr></table></figure>
-
 <p>注意：</p>
 <ul>
-<li><p><code>-mappers</code> 参数的设定值 <code>$SNAPSHOT_EXPORT_MAPPERS</code> 是根据集群配置优化过的，如果不了解该配置项的细节，请勿随意修改，否则会影响性能</p>
+<li>
+<p><code>-mappers</code> 参数的设定值 <code>$SNAPSHOT_EXPORT_MAPPERS</code> 是根据集群配置优化过的，如果不了解该配置项的细节，请勿随意修改，否则会影响性能</p>
 </li>
-<li><p><code>-bandwidth</code> 参数用于限制带宽，默认值是 <code>100</code> ，单位是 MBps，此处设定为 <code> $((2**31-1))</code> ，是 Java 中的 Integer.MAX_VALUE，目的是不进行带宽限制，由于快照导出会对生成集群造成一定的压力，特别是会占用相当份额的网络带宽，所以是否需要限速可视实际情况进行调整，具体可参考第 7 节的详细说明。</p>
+<li>
+<p><code>-bandwidth</code> 参数用于限制带宽，默认值是 <code>100</code> ，单位是 MBps，此处设定为 <code> $((2**31-1))</code> ，是 Java 中的 Integer.MAX_VALUE，目的是不进行带宽限制，由于快照导出会对生成集群造成一定的压力，特别是会占用相当份额的网络带宽，所以是否需要限速可视实际情况进行调整，具体可参考第 7 节的详细说明。</p>
 </li>
 </ul>
-<h3 id="5-4-生产集群-删除快照"><a href="#5-4-生产集群-删除快照" class="headerlink" title="5.4. [ 生产集群 ] :: 删除快照"></a>5.4. [ 生产集群 ] :: 删除快照</h3><p><strong>快照导出后，须及时删除快照</strong> ！因为创建快照后，快照引用的 HFile 将不再被自动清理，随着时间推移，在经历了几轮 Compaction 后，HBase 的 archive 文件夹通常会有大幅增长，HDFS 会有被写满的危险。执行以下命令可删除快照：</p>
+<h3 id="5-4-生产集群-删除快照">5.4. [ 生产集群 ] :: 删除快照</h3>
+<p><strong>快照导出后，须及时删除快照</strong> ！因为创建快照后，快照引用的 HFile 将不再被自动清理，随着时间推移，在经历了几轮 Compaction 后，HBase 的 archive 文件夹通常会有大幅增长，HDFS 会有被写满的危险。执行以下命令可删除快照：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> -u hbase hbase shell &lt;&lt;&lt; <span class="string">&quot;delete_snapshot &#x27;<span class="variable">$SNAPSHOT_NAME</span>&#x27;&quot;</span></span><br></pre></td></tr></table></figure>
-
-<h3 id="5-5-AWS-控制台-终止快照导出专用集群"><a href="#5-5-AWS-控制台-终止快照导出专用集群" class="headerlink" title="5.5. [ AWS 控制台 ] :: 终止快照导出专用集群"></a>5.5. [ AWS 控制台 ] :: 终止快照导出专用集群</h3><p>导出完成后，即可在控制台上终止快照导出专用集群。## 6. 还原快照 ( 灾后恢复作业 )</p>
+<h3 id="5-5-AWS-控制台-终止快照导出专用集群">5.5. [ AWS 控制台 ] :: 终止快照导出专用集群</h3>
+<p>导出完成后，即可在控制台上终止快照导出专用集群。## 6. 还原快照 ( 灾后恢复作业 )</p>
 <p>快照还原仅发生在系统宕机后的恢复阶段，非例行作业，可以按本文档手动操作完成。### 6.1. [ AWS 控制台 ] :: 创建恢复集群</p>
-<p>恢复集群就是重建后的生产集群，其配置应完全参照原生产集群，但是，**要特别注意 hbase-site.xml 中的<code>hbase.master.cleaner.interval</code> ，这是还原集群的一个必配项（初始创建的生产集群通常不会配置该项），这个配置项的值应大于从启动恢复集群到完成全部快照导入和还原操作的总时间！**此外， <strong>集群创建完毕后，须用 Primary Node 的 Private DNS 或 IP 为全局变量 <code>RESTORED_CLUSTER_NAMENODES</code> 赋值，并在 Master 节点上执行一次第 4 节的全局变量声明脚本。</strong> </p>
-<h3 id="6-2-AWS-控制台-创建快照导入专用集群"><a href="#6-2-AWS-控制台-创建快照导入专用集群" class="headerlink" title="6.2. [ AWS 控制台 ] :: 创建快照导入专用集群"></a>6.2. [ AWS 控制台 ] :: 创建快照导入专用集群</h3><p>快照还原专用集群的配置和操作与 5.2. 节：“创建快照导出专用集群” 完全一致，请参考此节。### 6.3. [ 快照导入专用集群 ] :: 导入快照</p>
-<p>在快照导入专用集群的主节点上，执行如下命令：&#96;&#96;&#96;bash<br>nohup sudo -u hbase hbase snapshot export <br>    -snapshot $SNAPSHOT_NAME <br>    -copy-from ${SNAPSHOT_S3_LOCATION} <br>    -copy-to “hdfs:&#x2F;&#x2F;${INUSE_CLUSTER_NAMENODES}:8020&#x2F;user&#x2F;hbase&#x2F;“ <br>    -mappers $SNAPSHOT_EXPORT_MAPPERS <br>    -bandwidth $((2**31-1)) &amp;&gt; import-$SNAPSHOT_NAME.out &amp;<br>tail -f &#x2F;var&#x2F;log&#x2F;hbase&#x2F;hbase.log</p>
+<p>恢复集群就是重建后的生产集群，其配置应完全参照原生产集群，但是，**要特别注意 hbase-site.xml 中的<code>hbase.master.cleaner.interval</code> ，这是还原集群的一个必配项（初始创建的生产集群通常不会配置该项），这个配置项的值应大于从启动恢复集群到完成全部快照导入和还原操作的总时间！**此外， <strong>集群创建完毕后，须用 Primary Node 的 Private DNS 或 IP 为全局变量 <code>RESTORED_CLUSTER_NAMENODES</code> 赋值，并在 Master 节点上执行一次第 4 节的全局变量声明脚本。</strong></p>
+<h3 id="6-2-AWS-控制台-创建快照导入专用集群">6.2. [ AWS 控制台 ] :: 创建快照导入专用集群</h3>
+<p>快照还原专用集群的配置和操作与 5.2. 节：“创建快照导出专用集群” 完全一致，请参考此节。### 6.3. [ 快照导入专用集群 ] :: 导入快照</p>
+<p>在快照导入专用集群的主节点上，执行如下命令：```bash<br>
+nohup sudo -u hbase hbase snapshot export <br>
+-snapshot $SNAPSHOT_NAME <br>
+-copy-from ${SNAPSHOT_S3_LOCATION} <br>
+-copy-to “hdfs://${INUSE_CLUSTER_NAMENODES}:8020/user/hbase/” <br>
+-mappers $SNAPSHOT_EXPORT_MAPPERS <br>
+-bandwidth $((2**31-1)) &amp;&gt; import-$SNAPSHOT_NAME.out &amp;<br>
+tail -f /var/log/hbase/hbase.log</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">注意：</span><br><span class="line"></span><br><span class="line">- 这里是一个导入操作，但依旧使用的是 export 命令，导入和导出是一个相对概念，HBase 中没有 snapshot import 命令</span><br><span class="line"></span><br><span class="line">- `-mappers` 参数的设定值 `$SNAPSHOT_EXPORT_MAPPERS` 是根据集群配置优化过的，如果不了解该配置项的细节，请勿随意修改，否则会影响性能</span><br><span class="line"></span><br><span class="line">- `-bandwidth` 参数用于限制带宽，默认值是 `100` ，单位是 MBps，此处设定为 ` $((2**31-1))` ，是 Java 中的 Integer.MAX_VALUE，目的是不进行带宽限制，还原阶段恢复集群尚未上线，可以全力接收导入的数据，因为无需限速。</span><br><span class="line"></span><br><span class="line">### 6.4. [ 还原集群 ] :: 还原快照</span><br><span class="line"></span><br><span class="line">快照导入完毕后，登录还原集群，检查快照是否已就绪：</span><br><span class="line"></span><br><span class="line">```bash</span><br><span class="line">sudo -u hbase hbase snapshot info -list-snapshots</span><br></pre></td></tr></table></figure>
-
 <p>确认快照已存在就可以执行快照还原了：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF | nohup sudo -u hbase hbase shell &amp;&gt; restore-$SNAPSHOT_NAME.out &amp;</span></span><br><span class="line"><span class="string">restore_snapshot &#x27;$SNAPSHOT_NAME&#x27;</span></span><br><span class="line"><span class="string">enable &#x27;$TABLE_NAME&#x27;</span></span><br><span class="line"><span class="string">EOF</span></span><br><span class="line"><span class="built_in">tail</span> -f restore-<span class="variable">$SNAPSHOT_NAME</span>.out</span><br></pre></td></tr></table></figure>
-
-<h3 id="6-5-还原集群-删除快照"><a href="#6-5-还原集群-删除快照" class="headerlink" title="6.5. [ 还原集群 ] :: 删除快照"></a>6.5. [ 还原集群 ] :: 删除快照</h3><p>快照还原后，同样 <strong>应及时删除还原集群上的快照</strong> ，原因与 4.4 节的解释一样。</p>
+<h3 id="6-5-还原集群-删除快照">6.5. [ 还原集群 ] :: 删除快照</h3>
+<p>快照还原后，同样 <strong>应及时删除还原集群上的快照</strong> ，原因与 4.4 节的解释一样。</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> -u hbase hbase shell &lt;&lt;&lt; <span class="string">&quot;delete_snapshot &#x27;<span class="variable">$SNAPSHOT_NAME</span>&#x27;&quot;</span></span><br></pre></td></tr></table></figure>
-
-<h3 id="6-6-AWS-控制台-终止快照导入专用集群"><a href="#6-6-AWS-控制台-终止快照导入专用集群" class="headerlink" title="6.6. [ AWS 控制台 ] :: 终止快照导入专用集群"></a>6.6. [ AWS 控制台 ] :: 终止快照导入专用集群</h3><p>导入完成后，即可在控制台上终止快照导入专用集群。</p>
-<h2 id="7-注意事项"><a href="#7-注意事项" class="headerlink" title="7. 注意事项"></a>7. 注意事项</h2><h3 id="7-1-快照备份的带宽控制"><a href="#7-1-快照备份的带宽控制" class="headerlink" title="7.1. 快照备份的带宽控制"></a>7.1. 快照备份的带宽控制</h3><p>在执行快照导出作业时，HBase 的生产集需要承担输出 HDFS 数据的任务，会占用较大份额的上行网络带宽，下图是执行 9 个批次（每个批次导出 10TB 数据）的导出作业时，源端集群（即本文档所指的生产集群）一个 Core 节点的负载情况。 <strong>右下角的网络 IO 指标需要特别注意，因为 m5.4xlarge 的基准带宽是 4750Mbps，即：每秒最多可上传 593.75 MB 数据, 从上图可知：导出作业的上行带宽峰值已经逼近 600 MB。虽然导出作业会选择业务低估期执行，但如果认定此时占用的带宽已经影响到了线上生产，则需要缩减导出集群的规模或进行限速处理，但要注意的是：这就意味着导出时间会变长，相应地又会影响到 <code>hbase.master.cleaner.interval</code> 参数的设置。这是一个需要权衡的问题，应该根据生产环境的实际状况进行调整。</strong> </p>
-<p> <img src="/../../images/hbase/hbase-snapshot-disaster-recovery/4.png" alt="m5_4xlarge_20_nodes_1x1_source_node"></p>
-<h3 id="7-2-快照还原的带宽控制"><a href="#7-2-快照还原的带宽控制" class="headerlink" title="7.2. 快照还原的带宽控制"></a>7.2. 快照还原的带宽控制</h3><p>在快照导入阶段，由于还原集群尚未接入生产，无其他负载，从尽量缩短故障恢复时间的角度出发，应以在最短时间内以最大吞吐率完成快照还原操作，所以，快照导入集群不应也不需要限速，推荐使用 32 节点的 r5.2xlarge 集群以最短时间完成导入作业。</p>
+<h3 id="6-6-AWS-控制台-终止快照导入专用集群">6.6. [ AWS 控制台 ] :: 终止快照导入专用集群</h3>
+<p>导入完成后，即可在控制台上终止快照导入专用集群。</p>
+<h2 id="7-注意事项">7. 注意事项</h2>
+<h3 id="7-1-快照备份的带宽控制">7.1. 快照备份的带宽控制</h3>
+<p>在执行快照导出作业时，HBase 的生产集需要承担输出 HDFS 数据的任务，会占用较大份额的上行网络带宽，下图是执行 9 个批次（每个批次导出 10TB 数据）的导出作业时，源端集群（即本文档所指的生产集群）一个 Core 节点的负载情况。 <strong>右下角的网络 IO 指标需要特别注意，因为 m5.4xlarge 的基准带宽是 4750Mbps，即：每秒最多可上传 593.75 MB 数据, 从上图可知：导出作业的上行带宽峰值已经逼近 600 MB。虽然导出作业会选择业务低估期执行，但如果认定此时占用的带宽已经影响到了线上生产，则需要缩减导出集群的规模或进行限速处理，但要注意的是：这就意味着导出时间会变长，相应地又会影响到 <code>hbase.master.cleaner.interval</code> 参数的设置。这是一个需要权衡的问题，应该根据生产环境的实际状况进行调整。</strong></p>
+<p><img src="../../images/hbase/hbase-snapshot-disaster-recovery/4.png" alt="m5_4xlarge_20_nodes_1x1_source_node"></p>
+<h3 id="7-2-快照还原的带宽控制">7.2. 快照还原的带宽控制</h3>
+<p>在快照导入阶段，由于还原集群尚未接入生产，无其他负载，从尽量缩短故障恢复时间的角度出发，应以在最短时间内以最大吞吐率完成快照还原操作，所以，快照导入集群不应也不需要限速，推荐使用 32 节点的 r5.2xlarge 集群以最短时间完成导入作业。</p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>HBase 例行灾备方案：快照备份与还原演练</p><p><a href="https://laurence.enlightgram.com/hbase/hbase-snapshot-disaster-recovery/">https://laurence.enlightgram.com/hbase/hbase-snapshot-disaster-recovery/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2023-12-27</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/HBase/">HBase</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%A4%87%E4%BB%BD/">备份</a><a class="link-muted mr-2" rel="tag" href="/tags/%E7%81%BE%E5%A4%87/">灾备</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%BF%AB%E7%85%A7/">快照</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/linux/async-profiler/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">使用 async-profiler 分析 CPU 和内存使用情况</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/hbase/ycsb-table-pre-split/"><span class="level-item">YCSB 测试表预分区</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

@@ -43,168 +43,209 @@
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">CDC 数据实时同步入湖的技术、架构和方案汇总</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Hudi/">Hudi</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2024-05-27T16:20:18.000Z" title="2024-05-27 09:20:18">2024-05-27</time></span><span class="level-item is-hidden-mobile">阅读用时：15 分钟 (约 2180 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/hudi/cdc-to-lake-solutions/2.png" alt="CDC 数据实时同步入湖的技术、架构和方案汇总" fetchpriority="high"></figure><div class="content"><p>近期，对 “实时摄取 CDC 数据同步到数据湖” 这一技术主题作了一系列深入的研究和验证，目前这部分工作已经告一段落，本文把截止目前（2024年5月）的研究结果和重要结论做一下梳理和汇总。为了能给出针对性的技术方案，我们收敛了一下话题，对一些技术选型做了限制，在数据库这一侧，主要以 MySQL 作为示例进行介绍和演示（理论上，PG 等其他主流数据库均可行），在数据湖这一侧，我们重点关注的是 Apache Hudi。</p>
-<h2 id="1-方案-架构"><a href="#1-方案-架构" class="headerlink" title="1. 方案 架构"></a>1. 方案 架构</h2><p>首先，我们认为在链路上引入 Kafka 是很有必要的，这在架构上会有很大的弹性和灵活性，所以我们讨论的所有方案都是先将 CDC 数据接入到 Kafka，然后再从 Kafka 读取 CDC 数据并写入到 Hudi 表中，没有调研从数据库直接落地到数据湖的方案。因此，这一主题的技术架构基本上可以分为两个相对独立的部分：</p>
+<h2 id="1-方案-架构">1. 方案 架构</h2>
+<p>首先，我们认为在链路上引入 Kafka 是很有必要的，这在架构上会有很大的弹性和灵活性，所以我们讨论的所有方案都是先将 CDC 数据接入到 Kafka，然后再从 Kafka 读取 CDC 数据并写入到 Hudi 表中，没有调研从数据库直接落地到数据湖的方案。因此，这一主题的技术架构基本上可以分为两个相对独立的部分：</p>
 <ul>
-<li><p><strong>前半程：{ 数据库 &#x3D;&gt; Kafka } 的 CDC 数据采集</strong></p>
+<li>
+<p><strong>前半程：{ 数据库 =&gt; Kafka } 的 CDC 数据采集</strong></p>
 </li>
-<li><p><strong>后半程：{ Kafka &#x3D;&gt; 数据湖 } 的 CDC 数据写入</strong></p>
+<li>
+<p><strong>后半程：{ Kafka =&gt; 数据湖 } 的 CDC 数据写入</strong></p>
 </li>
 </ul>
 <p>在这套方案的架构上，有一个显著的差异，或者说挑战：不管是前半程还是后半程，都有两种可能的模式：</p>
 <ul>
-<li><p><strong>单表单作业：使用一个作业将一张表同步到 Kafka ，再使用一个作业读取 Kafka 数据并写入一张 Hudi 表</strong></p>
+<li>
+<p><strong>单表单作业：使用一个作业将一张表同步到 Kafka ，再使用一个作业读取 Kafka 数据并写入一张 Hudi 表</strong></p>
 </li>
-<li><p><strong>多表单作业：使用一个作业将整库 &#x2F; 多表同步到 Kafka ，再使用一个作业读取 Kafka 数据并同时写入多张 Hudi 表</strong></p>
+<li>
+<p><strong>多表单作业：使用一个作业将整库 / 多表同步到 Kafka ，再使用一个作业读取 Kafka 数据并同时写入多张 Hudi 表</strong></p>
 </li>
 </ul>
 <p>如果是单表单作业模式，方案已经已经非常成熟了，但是这种模式不适合大中型场景，应用范围有限，应该说，最好的实现方式是：多表单作业，但目前来看，这一方式实现起来还有一定的挑战，我们后文会详细介绍。</p>
-<h2 id="2-技术堆栈"><a href="#2-技术堆栈" class="headerlink" title="2. 技术堆栈"></a>2. 技术堆栈</h2><p>从技术选型上看，整个链路可能会包含这样几类组件：</p>
+<h2 id="2-技术堆栈">2. 技术堆栈</h2>
+<p>从技术选型上看，整个链路可能会包含这样几类组件：</p>
 <ul>
-<li><p><strong>CDC 数据采集组件：Flink CDC、Kafka Connect</strong></p>
+<li>
+<p><strong>CDC 数据采集组件：Flink CDC、Kafka Connect</strong></p>
 </li>
-<li><p><strong>Schema Registry组件：Confluent Schema Registry 或 不设置</strong></p>
+<li>
+<p><strong>Schema Registry组件：Confluent Schema Registry 或 不设置</strong></p>
 </li>
-<li><p><strong>Hudi 表数据写入组件：Flink Hudi Connector、HoodieMultiTableStreamer</strong></p>
+<li>
+<p><strong>Hudi 表数据写入组件：Flink Hudi Connector、HoodieMultiTableStreamer</strong></p>
 </li>
 </ul>
 <p>除了搭配使用多个 开源 组件形成一套完整的解决方案外，还有一些一站式的解决方案，例如：阿里云实时计算Flink版的 <a target="_blank" rel="noopener" href="https://www.alibabacloud.com/help/zh/flink/use-cases/synchronize-data-from-all-tables-in-a-mysql-database-to-kafka">MySQL整库同步Kafka</a> 功能，开源工具 Dinky 的 <a target="_blank" rel="noopener" href="https://www.dinky.org.cn/docs/next/practical_guide/cdcsource_practice/cdcsource_mysqlcdc2hudi">MySQLCDC 整库到 Hudi</a> 等</p>
-<h2 id="3-关键差异"><a href="#3-关键差异" class="headerlink" title="3. 关键差异"></a>3. 关键差异</h2><p>在整个链路中，我们需要考虑多个关键技术点的实现，评估它们的利弊，这些技术点包括：</p>
+<h2 id="3-关键差异">3. 关键差异</h2>
+<p>在整个链路中，我们需要考虑多个关键技术点的实现，评估它们的利弊，这些技术点包括：</p>
 <ul>
-<li><p><strong>在 { 数据库 &#x3D;&gt; Kafka } 的 CDC 数据采集过程中，是一张表对应一个作业，占用一个数据库链接还是整库 &#x2F; 多表对应一个作业，占用一个数据库链接？</strong></p>
+<li>
+<p><strong>在 { 数据库 =&gt; Kafka } 的 CDC 数据采集过程中，是一张表对应一个作业，占用一个数据库链接还是整库 / 多表对应一个作业，占用一个数据库链接？</strong></p>
 </li>
-<li><p><strong>在 { Kafka &#x3D;&gt; 数据湖 } 的 CDC 数据写入过程中，是一个 Topic 对应一个作业还是多个 Topic 对应一个作业？</strong></p>
+<li>
+<p><strong>在 { Kafka =&gt; 数据湖 } 的 CDC 数据写入过程中，是一个 Topic 对应一个作业还是多个 Topic 对应一个作业？</strong></p>
 </li>
-<li><p><strong>在整个链路中是通过集成一个 Schema Registry 来注册并获取每张表的 Schema 信息？还是靠建表语句（Flink SQL）？或是类型推断（Spark）？</strong></p>
+<li>
+<p><strong>在整个链路中是通过集成一个 Schema Registry 来注册并获取每张表的 Schema 信息？还是靠建表语句（Flink SQL）？或是类型推断（Spark）？</strong></p>
 </li>
 </ul>
 <p>这些关键技术点叠加不同的技术组件会形成复杂多样的技术组合，并各有各的优缺点。</p>
-<h2 id="4-值得期待的方案"><a href="#4-值得期待的方案" class="headerlink" title="4. 值得期待的方案"></a>4. 值得期待的方案</h2><p>个人认为：在仅依赖主流开源产品原生机制和特性的前提下（即：不引入第三方非主流依赖和付费功能与产品），最值得期待的方案应该是：</p>
+<h2 id="4-值得期待的方案">4. 值得期待的方案</h2>
+<p>个人认为：在仅依赖主流开源产品原生机制和特性的前提下（即：不引入第三方非主流依赖和付费功能与产品），最值得期待的方案应该是：</p>
 <blockquote>
-<p><strong>Flink CDC ( API 整库 &#x2F; 多表同步，分流写入多个 Topic ，集成 Schema Registry ) &#x3D;&gt; Kafka &#x3D;&gt; HoodieMultiTableStreamer &#x3D;&gt; Hudi</strong> </p>
+<p><strong>Flink CDC ( API 整库 / 多表同步，分流写入多个 Topic ，集成 Schema Registry ) =&gt; Kafka =&gt; HoodieMultiTableStreamer =&gt; Hudi</strong></p>
 </blockquote>
 <p>前半程的功能除了还不能和 Schema Registry 对接外，其他都已经实现，即使不能自动向 Schema Registry 自动注册 Schema，还可以手动注册，这不是一个 Block Issue ；后半程的功能其实应该已经支持了，但是，截止当前最新版本 ( Hudi <code>0.14.1</code> )，HoodieMultiTableStreamer 在处理 Debezium CDC 数据时依然有问题，需要再等待一段时间。</p>
 <p>这套方案值得期待的原因在于：后半程 CDC 数据写入 Hudi 表的工作依赖的是 Hudi 的原生组件 HoodieMultiTableStreamer ，尽管目前它还不成熟，但未来是很值得期待的，这比自己编写和维护解析 CDC 数据并写入 Hudi 表要明智的多。至于前半程 Flink CDC 是否会集成 Schema Registry，目前没有查到确切信息，但如前所述，没有也不会是很大的问题，无非是手动注册一个 Schema。不过从长远来看，Schema Registry 会在实时链路中扮演越来越重要的角色。</p>
-<h2 id="5-当前的务实方案"><a href="#5-当前的务实方案" class="headerlink" title="5. 当前的务实方案"></a>5. 当前的务实方案</h2><p>在 HoodieMultiTableStreamer 工具完善之前的这段时间里，个人认为：在不引入任何第三方依赖的前提下，目前最为可靠和实用的解决方案应该是：</p>
+<h2 id="5-当前的务实方案">5. 当前的务实方案</h2>
+<p>在 HoodieMultiTableStreamer 工具完善之前的这段时间里，个人认为：在不引入任何第三方依赖的前提下，目前最为可靠和实用的解决方案应该是：</p>
 <blockquote>
-<p><strong>Flink CDC ( API 整库 &#x2F; 多表同步，分流写入多个 Topic ) &#x3D;&gt; Kafka &#x3D;&gt; Flink Hudi Connector &#x3D;&gt; Hudi</strong> </p>
+<p><strong>Flink CDC ( API 整库 / 多表同步，分流写入多个 Topic ) =&gt; Kafka =&gt; Flink Hudi Connector =&gt; Hudi</strong></p>
 </blockquote>
-<p>这一方案的优势在于：前半程是整库 &#x2F; 多表同步，对数据库影响较小，后半程使用 Flink Hudi Connector 读取 Kafka 数据写入 Hudi 表，其中，在创建 Hudi 表时，使用 Flink SQL 的 <code>create table ... with ... like ...</code> 子句可以极大简化建表语句（建表其实就是提供 Schema 的过程），总体上的代码量并不大。这个方案不太完美的地方在于：从 Kafka &#x3D;&gt; Hudi 还是要一张表对应一个 Flink 作业，不过，对于一般用户来说，这未必会带来很多麻烦。 这一方案具体实现代码已经在 <a href="/flink/flink-cdc-whole-database-to-kafka/">《Flink CDC 整库 &#x2F; 多表同步至 Kafka 方案（附源码）》</a> 一文中给出。</p>
-<p>此外，关于后半程 { Kafka &#x3D;&gt; Hudi } 的写入还有一种实现方案：使用 Spark 的 <code>foreachBatch</code> 自行编程实现 Hudi 的多表写入，各个表的 Hudi 配置也是需要配置文件提供，至于 Schema 信息可以利用 Spark 的 Schema 推断自动生成，不必显式配置，但是这种方式多少是有些类型不安全的，本系列文章没有展开讨论，网上有现成方案可供参考。长远来说，个人还是更看好 HoodieMultiTableStreamer + Confluent Schema Registry 的组合。</p>
-<h2 id="6-具体方案汇总"><a href="#6-具体方案汇总" class="headerlink" title="6. 具体方案汇总"></a>6. 具体方案汇总</h2><p>以下是近期研究和检验过的六个主要的解决方案及其它们的优势、不足和评价：</p>
-<p><strong><a href="/flink/flink-cdc-whole-database-to-kafka/">《Flink CDC 整库 &#x2F; 多表同步至 Kafka 方案（附源码）》</a></strong> </p>
+<p>这一方案的优势在于：前半程是整库 / 多表同步，对数据库影响较小，后半程使用 Flink Hudi Connector 读取 Kafka 数据写入 Hudi 表，其中，在创建 Hudi 表时，使用 Flink SQL 的 <code>create table ... with ... like ...</code> 子句可以极大简化建表语句（建表其实就是提供 Schema 的过程），总体上的代码量并不大。这个方案不太完美的地方在于：从 Kafka =&gt; Hudi 还是要一张表对应一个 Flink 作业，不过，对于一般用户来说，这未必会带来很多麻烦。 这一方案具体实现代码已经在 <a href="/flink/flink-cdc-whole-database-to-kafka/">《Flink CDC 整库 / 多表同步至 Kafka 方案（附源码）》</a> 一文中给出。</p>
+<p>此外，关于后半程 { Kafka =&gt; Hudi } 的写入还有一种实现方案：使用 Spark 的 <code>foreachBatch</code> 自行编程实现 Hudi 的多表写入，各个表的 Hudi 配置也是需要配置文件提供，至于 Schema 信息可以利用 Spark 的 Schema 推断自动生成，不必显式配置，但是这种方式多少是有些类型不安全的，本系列文章没有展开讨论，网上有现成方案可供参考。长远来说，个人还是更看好 HoodieMultiTableStreamer + Confluent Schema Registry 的组合。</p>
+<h2 id="6-具体方案汇总">6. 具体方案汇总</h2>
+<p>以下是近期研究和检验过的六个主要的解决方案及其它们的优势、不足和评价：</p>
+<p><strong><a href="/flink/flink-cdc-whole-database-to-kafka/">《Flink CDC 整库 / 多表同步至 Kafka 方案（附源码）》</a></strong></p>
 <ul>
-<li><p>优势</p>
+<li>
+<p>优势</p>
 <ul>
-<li><p>{ 数据库 &#x3D;&gt; Kafka } 只有一个作业，只占用一个连接</p>
+<li>
+<p>{ 数据库 =&gt; Kafka } 只有一个作业，只占用一个连接</p>
 </li>
-<li><p>多表公用一个 Topic 还是 一张表对应一个 Topic 可选</p>
+<li>
+<p>多表公用一个 Topic 还是 一张表对应一个 Topic 可选</p>
 </li>
-<li><p>使用 Flink SQL 的 <code>create table ... with ... like ...</code> 子句一定程度上简化了 Hudi 的建表工作</p>
+<li>
+<p>使用 Flink SQL 的 <code>create table ... with ... like ...</code> 子句一定程度上简化了 Hudi 的建表工作</p>
 </li>
 </ul>
 </li>
-<li><p>不足</p>
+<li>
+<p>不足</p>
 <ul>
-<li>Kafka &#x3D;&gt; Hudi 还是必须要一张表一个 Flink 作业</li>
+<li>Kafka =&gt; Hudi 还是必须要一张表一个 Flink 作业</li>
 </ul>
 </li>
-<li><p>评价</p>
+<li>
+<p>评价</p>
 <ul>
 <li>实用，但还有提升空间</li>
 </ul>
 </li>
 </ul>
-<p><strong><a href="/hudi/cdc-mysql-kafka-connect-hudi-flink/">《CDC 实时入湖方案：MySQL &gt; Kafka Connect &gt; Kafka ＆ Schema Registry &gt; Hudi ( Flink Connector ) 》</a></strong> </p>
+<p><strong><a href="/hudi/cdc-mysql-kafka-connect-hudi-flink/">《CDC 实时入湖方案：MySQL &gt; Kafka Connect &gt; Kafka ＆ Schema Registry &gt; Hudi ( Flink Connector ) 》</a></strong></p>
 <ul>
-<li><p>优势</p>
+<li>
+<p>优势</p>
 <ul>
 <li>前半程有 Schema Registry 参与，提供 Schema 的注册、获取和变更管理</li>
 </ul>
 </li>
-<li><p>不足</p>
+<li>
+<p>不足</p>
 <ul>
-<li>{ 数据库 &#x3D;&gt; Kafka } 和 { Kafka &#x3D;&gt; 数据湖 } 两端都是一张表一个作业&#x2F;数据库连接</li>
+<li>{ 数据库 =&gt; Kafka } 和 { Kafka =&gt; 数据湖 } 两端都是一张表一个作业/数据库连接</li>
 </ul>
 </li>
-<li><p>评价</p>
+<li>
+<p>评价</p>
 <ul>
 <li>整体链路完全打通，但只能应用于表数量不多的中小型场景</li>
 </ul>
 </li>
 </ul>
-<p><strong><a href="/hudi/cdc-kafka-connect-hoodiemultitablestreamer/">《CDC 实时入湖方案：MySQL &gt; Kafka Connect &gt; Kafka ＆ Schema Registry &gt; Hudi ( HoodieMultiTableStreamer ) 》</a></strong> </p>
+<p><strong><a href="/hudi/cdc-kafka-connect-hoodiemultitablestreamer/">《CDC 实时入湖方案：MySQL &gt; Kafka Connect &gt; Kafka ＆ Schema Registry &gt; Hudi ( HoodieMultiTableStreamer ) 》</a></strong></p>
 <ul>
-<li><p>优势</p>
+<li>
+<p>优势</p>
 <ul>
 <li>全程有 Schema Registry 参与，提供 Schema 的注册、获取和变更管理</li>
 </ul>
 </li>
-<li><p>不足</p>
+<li>
+<p>不足</p>
 <ul>
-<li><p>{ 数据库 &#x3D;&gt; Kafka } 是一张表一个作业&#x2F;数据库连接</p>
+<li>
+<p>{ 数据库 =&gt; Kafka } 是一张表一个作业/数据库连接</p>
 </li>
-<li><p>目前版本的 HoodieMultiTableStreamer 有缺陷</p>
+<li>
+<p>目前版本的 HoodieMultiTableStreamer 有缺陷</p>
 </li>
 </ul>
 </li>
-<li><p>评价</p>
+<li>
+<p>评价</p>
 <ul>
 <li>整体链路尚未完全打通，需要等待 Hudi 的后续版本修复 Bug</li>
 </ul>
 </li>
 </ul>
-<p><strong><a href="/hudi/cdc-mysql-flink-cdc-hudi-flink/">《CDC 实时入湖方案：MySQL &gt; Flink CDC &gt; Kafka ＆ Schema Registry &gt; Hudi ( Flink Connector ) 》</a></strong> </p>
+<p><strong><a href="/hudi/cdc-mysql-flink-cdc-hudi-flink/">《CDC 实时入湖方案：MySQL &gt; Flink CDC &gt; Kafka ＆ Schema Registry &gt; Hudi ( Flink Connector ) 》</a></strong></p>
 <ul>
-<li><p>优势</p>
+<li>
+<p>优势</p>
 <ul>
 <li>前半程有 Schema Registry 参与，提供 Schema 的注册、获取和变更管理</li>
 </ul>
 </li>
-<li><p>不足</p>
+<li>
+<p>不足</p>
 <ul>
-<li>{ 数据库 &#x3D;&gt; Kafka } 和 { Kafka &#x3D;&gt; 数据湖 } 两端都是一张表一个作业&#x2F;数据库连接</li>
+<li>{ 数据库 =&gt; Kafka } 和 { Kafka =&gt; 数据湖 } 两端都是一张表一个作业/数据库连接</li>
 </ul>
 </li>
-<li><p>评价</p>
+<li>
+<p>评价</p>
 <ul>
 <li>整体链路完全打通，但只能应用于表数量不多的中小型场景</li>
 </ul>
 </li>
 </ul>
-<p><strong><a href="/hudi/cdc-flink-cdc-hoodiemultitablestreamer/">《CDC 实时入湖方案：MySQL &gt; Flink CDC &gt; Kafka ＆ Schema Registry &gt; Hudi ( HoodieMultiTableStreamer ) 》</a></strong> </p>
+<p><strong><a href="/hudi/cdc-flink-cdc-hoodiemultitablestreamer/">《CDC 实时入湖方案：MySQL &gt; Flink CDC &gt; Kafka ＆ Schema Registry &gt; Hudi ( HoodieMultiTableStreamer ) 》</a></strong></p>
 <ul>
-<li><p>优势</p>
+<li>
+<p>优势</p>
 <ul>
 <li>全程有 Schema Registry 参与，提供 Schema 的注册、获取和变更管理</li>
 </ul>
 </li>
-<li><p>不足</p>
+<li>
+<p>不足</p>
 <ul>
-<li><p>{ 数据库 &#x3D;&gt; Kafka } 是一张表一个作业&#x2F;数据库连接</p>
+<li>
+<p>{ 数据库 =&gt; Kafka } 是一张表一个作业/数据库连接</p>
 </li>
-<li><p>目前版本的 HoodieMultiTableStreamer 有缺陷</p>
+<li>
+<p>目前版本的 HoodieMultiTableStreamer 有缺陷</p>
 </li>
 </ul>
 </li>
-<li><p>评价</p>
+<li>
+<p>评价</p>
 <ul>
 <li>整体链路尚未完全打通，需要等待 Hudi 的后续版本修复 Bug</li>
 </ul>
 </li>
 </ul>
-<p><strong><a href="/hudi/cdc-flink-kafka-hudi/">《CDC 实时入湖方案：MySQL &gt; Flink CDC &gt; Kafka &gt; Hudi》</a></strong> </p>
+<p><strong><a href="/hudi/cdc-flink-kafka-hudi/">《CDC 实时入湖方案：MySQL &gt; Flink CDC &gt; Kafka &gt; Hudi》</a></strong></p>
 <ul>
-<li><p>优势</p>
+<li>
+<p>优势</p>
 <ul>
 <li>链路最简单，实现起来最容易</li>
 </ul>
 </li>
-<li><p>不足</p>
+<li>
+<p>不足</p>
 <ul>
-<li>{ 数据库 &#x3D;&gt; Kafka } 和 { Kafka &#x3D;&gt; 数据湖 } 两端都是一张表一个作业&#x2F;数据库连接</li>
+<li>{ 数据库 =&gt; Kafka } 和 { Kafka =&gt; 数据湖 } 两端都是一张表一个作业/数据库连接</li>
 </ul>
 </li>
-<li><p>评价</p>
+<li>
+<p>评价</p>
 <ul>
 <li>整体链路完全打通，但只能应用于表数量不多的中小型场景</li>
 </ul>

@@ -44,41 +44,47 @@
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">工程安装与部署中处理环境变量的最佳实践</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Linux/">Linux</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2021-05-31T17:04:12.000Z" title="2021-05-31 10:04:12">2021-05-31</time></span><span class="level-item is-hidden-mobile">阅读用时：6 分钟 (约 966 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>长久以来，对环境相关变量的处理一直是应用程序在构建部署时普遍遇到的问题，对于这些环境相关变量的替换一般会选择在下面两个环节中的一个完成：</p>
 <ul>
-<li><p>编译期</p>
+<li>
+<p>编译期</p>
 </li>
-<li><p>安装部署期</p>
+<li>
+<p>安装部署期</p>
 </li>
 </ul>
 <p>就编译期的 环境变量 替换，Maven的Profile机制可算是一个非常经典的实现了，也是当之无愧的最佳实践，其他构建工具也有类似的功能，这种依赖编译工具在编译时将面向特定环境的变量进行替换的作法可以满足大多数的项目的需求。</p>
 <p>但是在编译期处理也有一些“不便之处”：</p>
 <ul>
-<li><p>用户必须检出源代码进行编译才能得到适合自己环境的安装包，操作起来比较麻烦</p>
+<li>
+<p>用户必须检出源代码进行编译才能得到适合自己环境的安装包，操作起来比较麻烦</p>
 </li>
-<li><p>为了完成编译，用户还必须先行安装编译工具，编译过程中还需要下载依赖包，费力耗时</p>
+<li>
+<p>为了完成编译，用户还必须先行安装编译工具，编译过程中还需要下载依赖包，费力耗时</p>
 </li>
-<li><p>用户必须熟悉工程使用的构建工具，才能准确找到修改配置环境变量的地方</p>
+<li>
+<p>用户必须熟悉工程使用的构建工具，才能准确找到修改配置环境变量的地方</p>
 </li>
 </ul>
 <p>对于一个开发团队来说，可以通过文档和培训快速掌握相关技能，但如果应用是 开源项目 ，对公共开放的话，从编译开始构建应用是不够友好的，侧面提高了使用项目的技术门槛，不利于于项目的应用和推广。所以， <strong>即使应用程序已经在编译期实现了变量替换，为程序安装包提供安装部署期的环境变量替换依然是非常值得一做的</strong> ，这可以帮助用户跳过源代码编译，直接在本地安装。</p>
 <p>接下来我们就重点讨论一下如何在安装 部署 期进行环境变量的替换，这里有两点最佳实践：</p>
-<h3 id="将环境变量统一至于一个-shell-脚本文件"><a href="#将环境变量统一至于一个-shell-脚本文件" class="headerlink" title="将环境变量统一至于一个 shell 脚本文件"></a>将环境变量统一至于一个 shell 脚本文件</h3><p>我们应该把环境变量统一提取到一个独立的shell脚本中，可取名为 <code>env.sh</code> 或 <code>constants.sh</code> ，其他脚本通过source命令引入该脚本，脚本中的变量定义使用如下格式：</p>
+<h3 id="将环境变量统一至于一个-shell-脚本文件">将环境变量统一至于一个 shell 脚本文件</h3>
+<p>我们应该把环境变量统一提取到一个独立的shell脚本中，可取名为 <code>env.sh</code> 或 <code>constants.sh</code> ，其他脚本通过source命令引入该脚本，脚本中的变量定义使用如下格式：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">APP_HOST=<span class="string">&quot;<span class="variable">$&#123;app.host&#125;</span>&quot;</span></span><br><span class="line">APP_USER=<span class="string">&quot;<span class="variable">$&#123;app.user&#125;</span>&quot;</span></span><br></pre></td></tr></table></figure>
-
 <p>对于变量实际取值的替换，可以由两种方式独立实现：</p>
 <ul>
-<li><p>在编译期，借助Maven的Profile机制完成变量替换</p>
+<li>
+<p>在编译期，借助Maven的Profile机制完成变量替换</p>
 </li>
-<li><p>在安装部署期，可以在安装脚本（如install.sh一类的shell脚本）中通过sed命令进行变量替换</p>
+<li>
+<p>在安装部署期，可以在安装脚本（如install.sh一类的shell脚本）中通过sed命令进行变量替换</p>
 </li>
 </ul>
 <p>这一做法的好处是：两种变量替换方式彼此独立，互不干扰，灵活满足不同情形下的环境变量的替换问题。</p>
-<h3 id="使用-find-sed进行查找替换"><a href="#使用-find-sed进行查找替换" class="headerlink" title="使用 find +sed进行查找替换"></a>使用 find +sed进行查找替换</h3><p>上述作法已经可以满足绝大多数应用了，但是不排除有一些环境变量不能或不方便提取到shell中的情况，举个例子：在大数据 项目 中会包含数量庞大的sql文件，这些sql会频繁地引用hdfs或s3上的路径，这些路径都是环境相关的，取决于用户分配的目录，例如下面的sql:</p>
+<h3 id="使用-find-sed进行查找替换">使用 find +sed进行查找替换</h3>
+<p>上述作法已经可以满足绝大多数应用了，但是不排除有一些环境变量不能或不方便提取到shell中的情况，举个例子：在大数据 项目 中会包含数量庞大的sql文件，这些sql会频繁地引用hdfs或s3上的路径，这些路径都是环境相关的，取决于用户分配的目录，例如下面的sql:</p>
 <figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">create table</span> if <span class="keyword">not</span> <span class="keyword">exists</span> <span class="keyword">user</span>(</span><br><span class="line">  `id` <span class="type">bigint</span>,</span><br><span class="line">  `name` string,</span><br><span class="line">  ...</span><br><span class="line">)</span><br><span class="line">partitioned <span class="keyword">by</span> (<span class="keyword">year</span> string, <span class="keyword">month</span> string)</span><br><span class="line">stored <span class="keyword">as</span> parquet</span><br><span class="line">location <span class="string">&#x27;s3://$&#123;data.bucket&#125;/user/&#x27;</span>;</span><br></pre></td></tr></table></figure>
-
 <p>这些 sql 中大量使用 <code>${data.bucket}</code> 这些的 Maven 变量，以期望在编译期进行变量替换，由于这是sql文件，不能或不方便像shell那样在一个统一的地方定义这些变量。</p>
 <p>类似这样的情形，我们可以使用find+sed命令，大批量地进行查找和替换，例如下面的命令：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">find <span class="string">&quot;/my-project-home/sql/&quot;</span> -<span class="built_in">type</span> f -name <span class="string">&quot;*.sql&quot;</span> -print0 | xargs -0 sed -i <span class="string">&quot;s|s3://[a-zA-Z0-9_-]*/|s3://<span class="variable">$DATA_BUCKET</span>/|g&quot;</span></span><br></pre></td></tr></table></figure>
-
 <p>将可以将类似 <code>s3://my-data-bucket/user/</code> 一类的路径替换为变量DATA_BUCKET的值。</p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>工程安装与部署中处理环境变量的最佳实践</p><p><a href="https://laurence.enlightgram.com/linux/env-vars-best-practices/">https://laurence.enlightgram.com/linux/env-vars-best-practices/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2021-05-31</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Maven/">Maven</a><a class="link-muted mr-2" rel="tag" href="/tags/%E7%8E%AF%E5%A2%83%E5%8F%98%E9%87%8F/">环境变量</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/hudi/hudi-glue-vs-emr-metadata-sync/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Apache Hudi在AWS Glue和AWS EMR上同步元数据的异同</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/aws/aws-vpc-peering/"><span class="level-item">创建AWS VPC Peering</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");

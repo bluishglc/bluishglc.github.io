@@ -42,44 +42,45 @@
       window.addEventListener('hashchange', switchTab, false);
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
-</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Flink CDC 提取记录变更时间作为事件时间和 Hudi 表的 precombine.field 以及1970-01-01 取值问题</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Hudi/">Hudi</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2024-02-27T21:36:32.000Z" title="2024-02-27 13:36:32">2024-02-27</time></span><span class="level-item is-hidden-mobile">阅读用时：8 分钟 (约 1135 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>CDC 数据中的记录变更时间标记着这条记录在数据库中执行对应操作（创建&#x2F;更新&#x2F;删除）的时间，可以说是天然的“事件时间”，特别是对于那些本身没有记录时间字段的表来说就更加合适了。 <a target="_blank" rel="noopener" href="https://nightlies.apache.org/flink/flink-docs-release-1.18/zh/docs/dev/table/concepts/versioned_tables/#%E5%A3%B0%E6%98%8E%E7%89%88%E6%9C%AC%E8%A1%A8">Flink 官方文档</a> 也建议在使用 CDC 的情况下，优先使用 CDC 中的这个时间字段，这个时间更加精准。</p>
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Flink CDC 提取记录变更时间作为事件时间和 Hudi 表的 precombine.field 以及1970-01-01 取值问题</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Hudi/">Hudi</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2024-02-27T21:36:32.000Z" title="2024-02-27 13:36:32">2024-02-27</time></span><span class="level-item is-hidden-mobile">阅读用时：8 分钟 (约 1135 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>CDC 数据中的记录变更时间标记着这条记录在数据库中执行对应操作（创建/更新/删除）的时间，可以说是天然的“事件时间”，特别是对于那些本身没有记录时间字段的表来说就更加合适了。 <a target="_blank" rel="noopener" href="https://nightlies.apache.org/flink/flink-docs-release-1.18/zh/docs/dev/table/concepts/versioned_tables/#%E5%A3%B0%E6%98%8E%E7%89%88%E6%9C%AC%E8%A1%A8">Flink 官方文档</a> 也建议在使用 CDC 的情况下，优先使用 CDC 中的这个时间字段，这个时间更加精准。</p>
 <p>与此同时，在定义 Hudi 表时，precombine.field 也是一个非常重要的配置，显然 CDC 数据中的记录变更时间是最合适的，没有之一。</p>
 <p>CDC 数据中的记录变更时间属于元数据范畴，以 Flink CDC 的 MySQL 数据库为例，它提供四种元数据的抽取：</p>
 <table>
 <thead>
 <tr>
-<th align="left">Key</th>
-<th align="left">DataType</th>
-<th align="left">Description</th>
+<th style="text-align:left">Key</th>
+<th style="text-align:left">DataType</th>
+<th style="text-align:left">Description</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="left">table_name</td>
-<td align="left">STRING NOT NULL</td>
-<td align="left">Name of the table that contain the row.</td>
+<tbody>
+<tr>
+<td style="text-align:left">table_name</td>
+<td style="text-align:left">STRING NOT NULL</td>
+<td style="text-align:left">Name of the table that contain the row.</td>
 </tr>
 <tr>
-<td align="left">database_name</td>
-<td align="left">STRING NOT NULL</td>
-<td align="left">Name of the database that contain the row.</td>
+<td style="text-align:left">database_name</td>
+<td style="text-align:left">STRING NOT NULL</td>
+<td style="text-align:left">Name of the database that contain the row.</td>
 </tr>
 <tr>
-<td align="left"><strong>op_ts</strong></td>
-<td align="left"><strong>TIMESTAMP_LTZ(3) NOT NULL</strong></td>
-<td align="left"><strong>It indicates the time that the change was made in the database. If the record is read from snapshot of the table instead of the binlog, the value is always 0.</strong></td>
+<td style="text-align:left"><strong>op_ts</strong></td>
+<td style="text-align:left"><strong>TIMESTAMP_LTZ(3) NOT NULL</strong></td>
+<td style="text-align:left"><strong>It indicates the time that the change was made in the database. If the record is read from snapshot of the table instead of the binlog, the value is always 0.</strong></td>
 </tr>
 <tr>
-<td align="left">row_kind</td>
-<td align="left">STRING NOT NULL</td>
-<td align="left">It indicates the row kind of the changelog,Note: The downstream SQL operator may fail to compare due to this new added column when processing the row retraction if the source operator chooses to output the ‘row_kind’ column for each record. It is recommended to use this metadata column only in simple synchronization jobs. ‘+I’ means INSERT message, ‘-D’ means DELETE message, ‘-U’ means UPDATE_BEFORE message and ‘+U’ means UPDATE_AFTER message.</td>
+<td style="text-align:left">row_kind</td>
+<td style="text-align:left">STRING NOT NULL</td>
+<td style="text-align:left">It indicates the row kind of the changelog,Note: The downstream SQL operator may fail to compare due to this new added column when processing the row retraction if the source operator chooses to output the ‘row_kind’ column for each record. It is recommended to use this metadata column only in simple synchronization jobs. ‘+I’ means INSERT message, ‘-D’ means DELETE message, ‘-U’ means UPDATE_BEFORE message and ‘+U’ means UPDATE_AFTER message.</td>
 </tr>
-</tbody></table>
+</tbody>
+</table>
 <p>其中的 <code>op_ts</code> 就是我们想要的，也就是：CDC 数据中的记录变更时间。我们可以在定义数据表时声明这个列，Flink CDC 可以将其提取出来作为普通字段供下游使用，就像下表中这样：</p>
 <figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE TABLE</span> IF <span class="keyword">NOT</span> <span class="keyword">EXISTS</span> orders_mysql_cdc (</span><br><span class="line">    `order_number` <span class="type">INT</span> <span class="keyword">NOT NULL</span>,</span><br><span class="line">    `order_date` <span class="type">DATE</span> <span class="keyword">NOT NULL</span>,</span><br><span class="line">    `purchaser` <span class="type">INT</span> <span class="keyword">NOT NULL</span>,</span><br><span class="line">    `quantity` <span class="type">INT</span> <span class="keyword">NOT NULL</span>,</span><br><span class="line">    `product_id` <span class="type">INT</span> <span class="keyword">NOT NULL</span>,</span><br><span class="line">    `op_ts` TIMESTAMP_LTZ(<span class="number">3</span>) METADATA <span class="keyword">FROM</span> <span class="string">&#x27;op_ts&#x27;</span> VIRTUAL,</span><br><span class="line">    <span class="keyword">PRIMARY KEY</span> (`order_number`) <span class="keyword">NOT</span> ENFORCED</span><br><span class="line">) <span class="keyword">WITH</span> (</span><br><span class="line">    <span class="string">&#x27;connector&#x27;</span> <span class="operator">=</span> <span class="string">&#x27;mysql-cdc&#x27;</span>,</span><br><span class="line">    ...</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
-
 <p>注意，在定义 Flink CDC 源表时， <code>op_ts</code> 的数据类型是 <code>TIMESTAMP_LTZ(3)</code> ，不是 <code>TIMESTAMP(3)</code> ，写入下游表时，可以是 <code>TIMESTAMP(3)</code> 。</p>
 <p>当我们初次使用这个 <code>op_ts</code> 字段时，你会发现，写入到的数据库的数据全部都是 <code>1970-01-01 00:00:00.000</code> ，就像下面这样：</p>
-<p> <img src="/../../images/hudi/flink-cdc-hudi-precombine-field/2.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/hudi/flink-cdc-hudi-precombine-field/2.png" alt="在这里插入图片描述"></p>
 <p>你可能会认为是哪里出错了，实际上，这是 Flink CDC 特别设计的，也是合理的，Flink CDC 官方文档的解释是：</p>
 <blockquote>
 <p>If the record is read from snapshot of the table instead of the binlog, the value is always 0.</p>
@@ -92,15 +93,20 @@
 <p>补充：以下是 Flink CDC 官方文档对 <a target="_blank" rel="noopener" href="https://ververica.github.io/flink-cdc-connectors/release-2.4/content/connectors/mysql-cdc.html#startup-reading-position"> <code>scan.startup.mode</code> </a> 5 种同步模式的解释：</p>
 <p>The config option scan.startup.mode specifies the startup mode for MySQL CDC consumer. The valid enumerations are:</p>
 <ul>
-<li><p><code>initial</code> (default): Performs an initial snapshot on the monitored database tables upon first startup, and continue to read the latest binlog.</p>
+<li>
+<p><code>initial</code> (default): Performs an initial snapshot on the monitored database tables upon first startup, and continue to read the latest binlog.</p>
 </li>
-<li><p><code>earliest-offset</code> : Skip snapshot phase and start reading binlog events from the earliest accessible binlog offset.</p>
+<li>
+<p><code>earliest-offset</code> : Skip snapshot phase and start reading binlog events from the earliest accessible binlog offset.</p>
 </li>
-<li><p><code>latest-offset</code> : Never to perform snapshot on the monitored database tables upon first startup, just read from the end of the binlog which means only have the changes since the connector was started.</p>
+<li>
+<p><code>latest-offset</code> : Never to perform snapshot on the monitored database tables upon first startup, just read from the end of the binlog which means only have the changes since the connector was started.</p>
 </li>
-<li><p><code>specific-offset</code> : Skip snapshot phase and start reading binlog events from a specific offset. The offset could be specified with binlog filename and position, or a GTID set if GTID is enabled on server.</p>
+<li>
+<p><code>specific-offset</code> : Skip snapshot phase and start reading binlog events from a specific offset. The offset could be specified with binlog filename and position, or a GTID set if GTID is enabled on server.</p>
 </li>
-<li><p><code>timestamp</code> : Skip snapshot phase and start reading binlog events from a specific timestamp.</p>
+<li>
+<p><code>timestamp</code> : Skip snapshot phase and start reading binlog events from a specific timestamp.</p>
 </li>
 </ul>
 </div><div class="article-licensing box"><div class="licensing-title"><p>Flink CDC 提取记录变更时间作为事件时间和 Hudi 表的 precombine.field 以及1970-01-01 取值问题</p><p><a href="https://laurence.enlightgram.com/hudi/flink-cdc-hudi-precombine-field/">https://laurence.enlightgram.com/hudi/flink-cdc-hudi-precombine-field/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2024-02-27</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Flink/">Flink</a><a class="link-muted mr-2" rel="tag" href="/tags/CDC/">CDC</a><a class="link-muted mr-2" rel="tag" href="/tags/%E4%BA%8B%E4%BB%B6%E6%97%B6%E9%97%B4/">事件时间</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/flink/flink-table-concepts/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Flink：动态表 / 时态表 / 版本表 / 普通表 概念区别澄清</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/flink/flink-sql-stateful-operators/"><span class="level-item">Flink SQL 中的流式概念：状态算子</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {

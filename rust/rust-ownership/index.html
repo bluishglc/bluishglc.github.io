@@ -43,141 +43,174 @@
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">深入理解 Rust 所有权</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Rust/">Rust</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2026-05-12T16:17:01.000Z" title="2026-05-12 09:17:01">2026-05-12</time></span><span class="level-item is-hidden-mobile">阅读用时：1 小时 (约 7179 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/rust/rust-ownership/1.jpeg" alt="深入理解 Rust 所有权" fetchpriority="high"></figure><div class="content"><p>Rust 的“所有权”据称是导致 Rust 学习曲线陡峭的一个重要原因。本文我们以《Rust 程序设计语言》一书的第 4 章节作为蓝本介绍一下这部分知识，在介绍的过程中会补充一些重要的解读便于读者更好地理解。阅读完此文，可前往下一层级 <a href="/rust/rust-rc-shared-ownership/">《Rust 所有权进阶必读：为什么 Rc 共享所有权是个伪概念？》</a> 继续深入学习。</p>
-<h2 id="1-知识储备：堆-栈"><a href="#1-知识储备：堆-栈" class="headerlink" title="1. 知识储备：堆 &amp; 栈"></a>1. 知识储备：堆 &amp; 栈</h2><p>先解释一下：为什么了解所有权需要储备堆栈的知识？这一点，《Rust 程序设计语言》一书并没有给读者一个“前情提要”式的解释，而是一上来就介绍堆栈的工作原理，从讲解的角度看这做得不够好。</p>
-<p>实际上，通过后续的学习我们会发现：在 Rust 语言层面上，一个变量在离开作用域时是否会自动释放，以及所有权的 move 与变量是在栈上还是堆上没有必然的关系，但是，如果不从更底层去了解变量创建和销毁的过程很难理<br>解建立这些机制的动机以及它们能发挥作用的根本原因。这就是为什么所有介绍 Rust 所有权的文章都要求读者具备一定堆栈知识的原因。</p>
-<p>关于堆栈，对于 C&#x2F;C++ 程序员来说会比较熟悉，因为 C&#x2F;C++ 中的指针、智能指针、对象的创建和销毁等机制都要求开发者必须了解堆栈，对于 Rust 也是一样的。而对于 Java、 Python 等语言的程序员来说，由于这些语言拥有 GC 机制，不需要开发者负责对象释放时的资源清理工作，所以对堆栈的了解可能就薄弱一些。</p>
+<h2 id="1-知识储备：堆-栈">1. 知识储备：堆 &amp; 栈</h2>
+<p>先解释一下：为什么了解所有权需要储备堆栈的知识？这一点，《Rust 程序设计语言》一书并没有给读者一个“前情提要”式的解释，而是一上来就介绍堆栈的工作原理，从讲解的角度看这做得不够好。</p>
+<p>实际上，通过后续的学习我们会发现：在 Rust 语言层面上，一个变量在离开作用域时是否会自动释放，以及所有权的 move 与变量是在栈上还是堆上没有必然的关系，但是，如果不从更底层去了解变量创建和销毁的过程很难理<br>
+解建立这些机制的动机以及它们能发挥作用的根本原因。这就是为什么所有介绍 Rust 所有权的文章都要求读者具备一定堆栈知识的原因。</p>
+<p>关于堆栈，对于 C/C++ 程序员来说会比较熟悉，因为 C/C++ 中的指针、智能指针、对象的创建和销毁等机制都要求开发者必须了解堆栈，对于 Rust 也是一样的。而对于 Java、 Python 等语言的程序员来说，由于这些语言拥有 GC 机制，不需要开发者负责对象释放时的资源清理工作，所以对堆栈的了解可能就薄弱一些。</p>
 <p>由于堆栈是一个比较大的话题，我们不能在本文展开介绍，这会让读者失去本文关注的焦点。好在，此前的 <a href="/cpp/virtual-memory-stack-frame-heap/">《编程底层概念回顾：虚拟内存、栈、栈帧、堆》</a> 一文已经对堆栈进行了必要的介绍，这篇文章中的堆栈知识足以支撑读者理解本文的内容。如果你认为有必要补习一下堆栈知识，可以先阅读一下此文，然后再回来。</p>
 <p>另外，本文还会高频提及一个术语：按位复制 ( bitwise copy )，这里提前解释一下，在别的语言里似乎不怎么使用这个词，其实它就是我们常说的“浅拷贝”。按位 复制的 意思是：按比特位复制，就是 C 语言里的 memcpy 函数的行为：纯纯地内存字节复制，与之对应的就是“深拷贝”。如果没有特别说明，本文所有说的“复制”一般是指“按位复制”。</p>
-<h2 id="2-“所有权”的由来"><a href="#2-“所有权”的由来" class="headerlink" title="2. “所有权”的由来"></a>2. “所有权”的由来</h2><h3 id="2-1-问题的产生"><a href="#2-1-问题的产生" class="headerlink" title="2.1 问题的产生"></a>2.1 问题的产生</h3><p>考虑以下代码，不管在什么语言里，它们的行为基本上一致：</p>
+<h2 id="2-“所有权”的由来">2. “所有权”的由来</h2>
+<h3 id="2-1-问题的产生">2.1 问题的产生</h3>
+<p>考虑以下代码，不管在什么语言里，它们的行为基本上一致：</p>
 <figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> <span class="variable">x</span> = <span class="number">5</span>;</span><br><span class="line"><span class="keyword">let</span> <span class="variable">y</span> = x;</span><br><span class="line"><span class="built_in">println!</span>(<span class="string">&quot;&#123;x&#125;&quot;</span>);</span><br></pre></td></tr></table></figure>
-
 <p>变量 x 被赋予了整型值 <code>5</code> ，x 的值“复制”了一份给到了 y，y 的值也变成了 <code>5</code> ， x 和 y 都在栈上，这很平常，无需过多解释。在 Rust 中，“事情开始变得有趣起来”是从下面这个例子开始的：</p>
 <figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> <span class="variable">s1</span> = <span class="type">String</span>::<span class="title function_ invoke__">from</span>(<span class="string">&quot;hello&quot;</span>);</span><br><span class="line"><span class="keyword">let</span> <span class="variable">s2</span> = s1;</span><br><span class="line"><span class="built_in">println!</span>(<span class="string">&quot;&#123;s1&#125;&quot;</span>); <span class="comment">// 该行程序报错！</span></span><br></pre></td></tr></table></figure>
-
 <p>几乎和上面是一样的代码，只是类型从 i32 变成了 String，程序就报错了！因为 s1 已不再是一个有效的变量！当执行完 <code>let s2 = s1</code> 时，s1 就已失去了 “hello” 字符串的所有权，而不再可用！这是怎么发生的呢？以及为什么要这样处理呢？</p>
-<p>首先，作为一个字符串对象，s1 的值（对象实例）是分配在堆上的！无论是在 C&#x2F;C++ 还是 Java 中，都是如此，Rust 也是这样，因为：String 类型的长度不固定且无法预知，你无法将其分配到栈上，所以 <code>String::from</code> 函数会向堆上申请空间来存放字符串 “hello” ，与此同时，在栈上有一个指针会存放字符串 “hello” 在堆上的地址，以便程序可以获取到字符串，到这里，Rust 的处理与 C++ 是非常像的，以下是 s1 被赋值 “hello” 字符串后内存中的情形：</p>
-<p><img src="/../../images/rust/rust-ownership/2.png" alt="在这里插入图片描述"></p>
+<p>首先，作为一个字符串对象，s1 的值（对象实例）是分配在堆上的！无论是在 C/C++ 还是 Java 中，都是如此，Rust 也是这样，因为：String 类型的长度不固定且无法预知，你无法将其分配到栈上，所以 <code>String::from</code> 函数会向堆上申请空间来存放字符串 “hello” ，与此同时，在栈上有一个指针会存放字符串 “hello” 在堆上的地址，以便程序可以获取到字符串，到这里，Rust 的处理与 C++ 是非常像的，以下是 s1 被赋值 “hello” 字符串后内存中的情形：</p>
+<p><img src="../../images/rust/rust-ownership/2.png" alt="在这里插入图片描述"></p>
 <p>此时，s1 与 C++ 中的指针极为类似，只是它除了记录地址外，还额外记录了字符串的长度以及当前从分配器获得了多少字节的空间（即 capacity）。</p>
 <p>当出现第二个变量 s2 时，我们有两种选择，第一种选择是在栈上复制 s1（指针） 的同时也把它指向的字符串复制一份，形成两个完全独立的变量：</p>
-<p><img src="/../../images/rust/rust-ownership/3.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/rust/rust-ownership/3.png" alt="在这里插入图片描述"></p>
 <p>一般，大家把这种处理方式称为“深拷贝”。深度拷贝所有权清晰明确，但成本却很高，不管是内存还是复制动作都很消耗资源，以至于它在所有语言里都不是“默认”的复制行为。第二种选择是复制 s1 栈上的部分（复制一个指针），但不复制字符串，让复制出的指针指向同一个字符串（同一个地址），也就是下面这样：</p>
-<p><img src="/../../images/rust/rust-ownership/4.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/rust/rust-ownership/4.png" alt="在这里插入图片描述"></p>
 <p>一般，大家把这种处理方式称为“浅拷贝”，也就是按位复制，这和 C++ 中复制一个指针变量的处理方式是一样的，也是大多数语言对于分配在堆上的对象默认的处理方式。不过， <strong>这种处理方式会带来很多麻烦，那就是：由于现在有两个“指针”指向了同一个位于堆上的“值”，程序应该在什么时候销毁它才是“恰当”的？以及以其中一个变量的“名义”销毁之后，另一个变量会怎样？会不会还在别处正被使用着？你看，问题一下就变得复杂起来</strong> 。</p>
-<p><img src="/../../images/rust/rust-ownership/5.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/rust/rust-ownership/5.png" alt="在这里插入图片描述"></p>
 <p>针对这个问题，主流编程语言使用了两种完全不同的处理方式：一种是以 Java 为代表的 “GC 派”，由语言自己（jvm）追踪和分析变量的使用情况，并在适当的时机销毁它们，这样做的好处是完全不需要程序员操心，不会出现内存泄漏，另一种则是以 C++ 为代表的 “责任越大能力越大”派，即完全依靠程序员自己在代码中管理对象的释放，但这并不是一件简单的事情，C++ 应用中的大量 bug 皆因此而起。</p>
-<h3 id="2-2-Rust-给出的方案"><a href="#2-2-Rust-给出的方案" class="headerlink" title="2.2 Rust 给出的方案"></a>2.2 Rust 给出的方案</h3><p>Rust 选择了自己独有的“第三种”方案：基于所有权的内存管理。这个方案制定了一系列严格的规则，靠编译期的严格检查“硬控”变量的内存使用，这规避了纯手工管理内存的各种潜在内存安全问题，同时又保证了极高的效率。这些规则都是围绕“所有权”这一概念构建的，官方给出的是三条核心原则：</p>
+<h3 id="2-2-Rust-给出的方案">2.2 Rust 给出的方案</h3>
+<p>Rust 选择了自己独有的“第三种”方案：基于所有权的内存管理。这个方案制定了一系列严格的规则，靠编译期的严格检查“硬控”变量的内存使用，这规避了纯手工管理内存的各种潜在内存安全问题，同时又保证了极高的效率。这些规则都是围绕“所有权”这一概念构建的，官方给出的是三条核心原则：</p>
 <ol>
-<li><p>Rust 中的每一个值都有一个所有者。</p>
+<li>
+<p>Rust 中的每一个值都有一个所有者。</p>
 </li>
-<li><p>值在任一时刻有且只有一个所有者。</p>
+<li>
+<p>值在任一时刻有且只有一个所有者。</p>
 </li>
-<li><p>当所有者离开作用域，这个值会被自动销毁 (drop)。</p>
+<li>
+<p>当所有者离开作用域，这个值会被自动销毁 (drop)。</p>
 </li>
 </ol>
 <p>但其实可以浓缩成 <strong>两个核心原则</strong> ：</p>
 <ol>
-<li><p><strong>每个值都有且只有一个所有者</strong></p>
+<li>
+<p><strong>每个值都有且只有一个所有者</strong></p>
 </li>
-<li><p><strong>所有者离开作用域，值会被自动销毁 (drop)</strong></p>
+<li>
+<p><strong>所有者离开作用域，值会被自动销毁 (drop)</strong></p>
 </li>
 </ol>
 <p>这种处理模式深受 C++ 的 RAII（资源获取即初始化）思想的影响，我们详细解释一下。回看前面的示例：</p>
-<p><img src="/../../images/rust/rust-ownership/6.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/rust/rust-ownership/6.png" alt="在这里插入图片描述"></p>
 <p>由 <code>{}</code> 包裹起来的部分构成了一个作用域（更多的场景是在一个函数体内），基于第一个规则，“hello” 字符串一开始的所有者是 <code>s1</code> ，当执行到 <code>let s2 = s1</code> 时，发生了所有权的转移， <code>s2</code> 成了 “hello” 字符串的唯一所有者，此时 <code>s1</code> 已不再可用！所以程序才会报错。注意，此时 <code>s1</code> 是无效，不是被销毁，真正的销毁（drop）只会在作用域结束时发生，是发生在 <code>s2</code> 上。最后，在离开作用域时，Rust 会自动调用一个 <code>drop</code> 函数来释放 <code>s2</code> 拥有的值。</p>
-<h2 id="3-支撑“所有权”的语言机制"><a href="#3-支撑“所有权”的语言机制" class="headerlink" title="3. 支撑“所有权”的语言机制"></a>3. 支撑“所有权”的语言机制</h2><p>Rust 所有权的两个核心原则需要靠语言层面上的硬核支撑才能“落地”，我们来深入了解一下这些相关机制。</p>
-<h3 id="3-1-自动析构：保证所有者离开作用域时值能被自动释放"><a href="#3-1-自动析构：保证所有者离开作用域时值能被自动释放" class="headerlink" title="3.1 自动析构：保证所有者离开作用域时值能被自动释放"></a>3.1 自动析构：保证所有者离开作用域时值能被自动释放</h3><p>Rust 编译器保证：当一个变量离开它的作用域时，会自动对其执行析构操作（Copy 类型除外），有以下几个重要的规则：</p>
+<h2 id="3-支撑“所有权”的语言机制">3. 支撑“所有权”的语言机制</h2>
+<p>Rust 所有权的两个核心原则需要靠语言层面上的硬核支撑才能“落地”，我们来深入了解一下这些相关机制。</p>
+<h3 id="3-1-自动析构：保证所有者离开作用域时值能被自动释放">3.1 自动析构：保证所有者离开作用域时值能被自动释放</h3>
+<p>Rust 编译器保证：当一个变量离开它的作用域时，会自动对其执行析构操作（Copy 类型除外），有以下几个重要的规则：</p>
 <ul>
-<li><p><strong>如果变量的类型实现了 Drop trait，则调用它的 Drop::drop 方法，但这并不妨碍自动析构机制按自己的方式递归销毁它的字段</strong> 。</p>
+<li>
+<p><strong>如果变量的类型实现了 Drop trait，则调用它的 Drop::drop 方法，但这并不妨碍自动析构机制按自己的方式递归销毁它的字段</strong> 。</p>
 </li>
-<li><p><strong>如果变量的类型没有实现 Drop trait，则自动生成析构代码 (drop glue)， 递归地销毁变量的所有字段</strong> 。</p>
+<li>
+<p><strong>如果变量的类型没有实现 Drop trait，则自动生成析构代码 (drop glue)， 递归地销毁变量的所有字段</strong> 。</p>
 </li>
-<li><p><strong>不管有没有实现 Drop trait，Rust 编译器始终都会自动生成析构代码并执行，这是一个托底机制</strong> 。</p>
+<li>
+<p><strong>不管有没有实现 Drop trait，Rust 编译器始终都会自动生成析构代码并执行，这是一个托底机制</strong> 。</p>
 </li>
-<li><p><strong>你不需要（也不应该）在 Drop::drop 里手动 drop 字段，只需专注编写释放资源（文件、连接、套接字等）的代码</strong> 。</p>
+<li>
+<p><strong>你不需要（也不应该）在 Drop::drop 里手动 drop 字段，只需专注编写释放资源（文件、连接、套接字等）的代码</strong> 。</p>
 </li>
 </ul>
 <p>解释几个地方：</p>
 <ul>
-<li><p><code>Drop</code> 特质有一个 <code>drop</code> 方法，在变量离开作用域时会被 Rust 编译器自动调用，所以， <code>drop</code> 方法其实就是一种特定的析构函数。由于有自动析构机制兜底，实际上，大多数情况下，我们都不需要实现 Drop，真需要自己手写 drop 逻辑的场景一般都是需要释放某种类型的资源，比如：关闭文件、数据库连接、网络套接字等。这是很典型的应用析构函数的场景，在 C++ 中也是如此。</p>
+<li>
+<p><code>Drop</code> 特质有一个 <code>drop</code> 方法，在变量离开作用域时会被 Rust 编译器自动调用，所以， <code>drop</code> 方法其实就是一种特定的析构函数。由于有自动析构机制兜底，实际上，大多数情况下，我们都不需要实现 Drop，真需要自己手写 drop 逻辑的场景一般都是需要释放某种类型的资源，比如：关闭文件、数据库连接、网络套接字等。这是很典型的应用析构函数的场景，在 C++ 中也是如此。</p>
 </li>
-<li><p>Drop Glue 是指：自动生成的析构代码，是代码，不是机制，对应它的机制是：自动析构。</p>
+<li>
+<p>Drop Glue 是指：自动生成的析构代码，是代码，不是机制，对应它的机制是：自动析构。</p>
 </li>
-<li><p>即使变量的类型实现了 Drop trait 但什么都没写，编译器依然会递归地 drop 所有字段，也就是说 drop glue 与 开发者在 drop 函数中自定义的代码无关，只是如果有 drop 函数，在自动析构的时候会“顺带”调用一下。</p>
+<li>
+<p>即使变量的类型实现了 Drop trait 但什么都没写，编译器依然会递归地 drop 所有字段，也就是说 drop glue 与 开发者在 drop 函数中自定义的代码无关，只是如果有 drop 函数，在自动析构的时候会“顺带”调用一下。</p>
 </li>
 </ul>
-<h3 id="3-2-编译期检查：保证所有权的转移"><a href="#3-2-编译期检查：保证所有权的转移" class="headerlink" title="3.2 编译期检查：保证所有权的转移"></a>3.2 编译期检查：保证所有权的转移</h3><p>不像自动析构机制那样有很多的隐式行为，所有权的转移仅从代码上就可以判断出来。所以，自动析构机制是一种运行期机制，而所有权转移则是在编译期就可以检查和确定下来的。这不难理解，在一个作用域中，一个变量被用于二次赋值时，是很容易判断的，编译器直接报错终止编译即可。</p>
+<h3 id="3-2-编译期检查：保证所有权的转移">3.2 编译期检查：保证所有权的转移</h3>
+<p>不像自动析构机制那样有很多的隐式行为，所有权的转移仅从代码上就可以判断出来。所以，自动析构机制是一种运行期机制，而所有权转移则是在编译期就可以检查和确定下来的。这不难理解，在一个作用域中，一个变量被用于二次赋值时，是很容易判断的，编译器直接报错终止编译即可。</p>
 <p>并不是什么类型的变量在复制时都会遵循 move 语义，文章开头的 x、y 两个整型变量的复制遵循的就是 copy 语义。导致这种差异的原因是：整型实现了 Copy trait，而 String 类型没有。在 Rust 中，如果一个类型实现了 Copy trait，在复制时执行的就是 copy 语义，如果没有，则执行默认的 move 语义。关于 Copy trait 下文会详细介绍。此外，所有权的转移并不只发生在复制时，在向函数传递参数和接收函数返回值时，也会涉及所有权的转移，这部分内容也会在下文单独介绍。</p>
-<h3 id="3-3-两者的关系"><a href="#3-3-两者的关系" class="headerlink" title="3.3 两者的关系"></a>3.3 两者的关系</h3><p>“转移所有权”和“所有者离开作用域时值被自动释放”可以认为是两种独立的语言机制，但是，它们必须联合起来才能实现 Rust 追求的“基于所有权”的内存管理。其中最主要的一个关系链条是： <strong>只有通过 move 始终保持一个值只有一个所有者，才能在让所有者离开作用域时自动释放它所持有的值，否则就会有 double free 的问题</strong> 。</p>
-<h2 id="4-将所有权语义和类型绑定"><a href="#4-将所有权语义和类型绑定" class="headerlink" title="4. 将所有权语义和类型绑定"></a>4. 将所有权语义和类型绑定</h2><p>让我们重新梳理一下 Copy 特质的作用：实现了 Copy 特质的类型在复制时执行的是 copy ( 按位复制 ) 语义，没有实现 Copy 特质的类型在复制时执行的是 move 语义，也就是说： <strong>Rust 把所有权的 move &#x2F; copy 语义绑定到了“类型”上</strong> ，这是很需要认真思考的问题：为什么所有权的语义和类型是强相关的？原因是： <strong>Rust 认为：“对一个类型做一次按位复制（memcpy），能否得到一个完全合法、独立、语义等价的值”是类型的内在性质，而不是某一次使用时的临时选择</strong> 。</p>
-<p><strong>观察不同的数据类型可以发现：不同的类型在进行”按位复制（memcpy）”后表现是不同的。像整型、浮点、布尔这些数据类型，它们”按位复制（memcpy）”就是没有问题，这很直观，很难再进一步解释了，你可以理解为它们在内存中的”形态”太简单了，”按位复制（memcpy）“就是复制了它们的”全部”，干脆且纯粹；但换成 String 类型，”按位复制（memcpy）“就会带来问题：因为没有完整地复制全部数据（分配在堆上的字符串），破坏了复制出来的两个变量的”完整性”和”独立性”，使得它们始终相互耦合，相互影响（指针悬空、二次释放等）。正是基于这样的一种根源性认识，Rust 认为：那就索性追加一个”所有权”的语义，把 String 类型的值始终牢牢地绑定在一个变量上，允许将它从一个变量转移给另一个变量，但绝不允许两个以上的变量同时拥有，问题不就解决了吗？这就是为什么 Rust 把所有权的 move &#x2F; copy 语义绑定到了”类型”上而且能绑定到类型上的根本原因！</strong> </p>
-<h2 id="5-Copy-和-Drop-之间的关系"><a href="#5-Copy-和-Drop-之间的关系" class="headerlink" title="5. Copy 和 Drop 之间的关系"></a>5. Copy 和 Drop 之间的关系</h2><p><strong>“是否会进行自动析构”和“赋值时是 copy 还是 move”是两个相互独立但又有交叉的维度</strong> ，其中在交叉处的逻辑非常烧脑，这个要仔细分析，但跳过这部分内容其实对编程影响不大，只需记住结论就可以：</p>
+<h3 id="3-3-两者的关系">3.3 两者的关系</h3>
+<p>“转移所有权”和“所有者离开作用域时值被自动释放”可以认为是两种独立的语言机制，但是，它们必须联合起来才能实现 Rust 追求的“基于所有权”的内存管理。其中最主要的一个关系链条是： <strong>只有通过 move 始终保持一个值只有一个所有者，才能在让所有者离开作用域时自动释放它所持有的值，否则就会有 double free 的问题</strong> 。</p>
+<h2 id="4-将所有权语义和类型绑定">4. 将所有权语义和类型绑定</h2>
+<p>让我们重新梳理一下 Copy 特质的作用：实现了 Copy 特质的类型在复制时执行的是 copy ( 按位复制 ) 语义，没有实现 Copy 特质的类型在复制时执行的是 move 语义，也就是说： <strong>Rust 把所有权的 move / copy 语义绑定到了“类型”上</strong> ，这是很需要认真思考的问题：为什么所有权的语义和类型是强相关的？原因是： <strong>Rust 认为：“对一个类型做一次按位复制（memcpy），能否得到一个完全合法、独立、语义等价的值”是类型的内在性质，而不是某一次使用时的临时选择</strong> 。</p>
+<p><strong>观察不同的数据类型可以发现：不同的类型在进行&quot;按位复制（memcpy）&quot;后表现是不同的。像整型、浮点、布尔这些数据类型，它们&quot;按位复制（memcpy）&quot;就是没有问题，这很直观，很难再进一步解释了，你可以理解为它们在内存中的&quot;形态&quot;太简单了，&quot;按位复制（memcpy）“就是复制了它们的&quot;全部”，干脆且纯粹；但换成 String 类型，&quot;按位复制（memcpy）“就会带来问题：因为没有完整地复制全部数据（分配在堆上的字符串），破坏了复制出来的两个变量的&quot;完整性&quot;和&quot;独立性”，使得它们始终相互耦合，相互影响（指针悬空、二次释放等）。正是基于这样的一种根源性认识，Rust 认为：那就索性追加一个&quot;所有权&quot;的语义，把 String 类型的值始终牢牢地绑定在一个变量上，允许将它从一个变量转移给另一个变量，但绝不允许两个以上的变量同时拥有，问题不就解决了吗？这就是为什么 Rust 把所有权的 move / copy 语义绑定到了&quot;类型&quot;上而且能绑定到类型上的根本原因！</strong></p>
+<h2 id="5-Copy-和-Drop-之间的关系">5. Copy 和 Drop 之间的关系</h2>
+<p><strong>“是否会进行自动析构”和“赋值时是 copy 还是 move”是两个相互独立但又有交叉的维度</strong> ，其中在交叉处的逻辑非常烧脑，这个要仔细分析，但跳过这部分内容其实对编程影响不大，只需记住结论就可以：</p>
 <ul>
-<li><p><strong>实现了 Drop 的复合类型：允许其字段是任何类型（ Copy 或非 Copy均可 ）</strong></p>
+<li>
+<p><strong>实现了 Drop 的复合类型：允许其字段是任何类型（ Copy 或非 Copy均可 ）</strong></p>
 </li>
-<li><p><strong>实现了 Copy 的复合类型：其所有字段必须全是 Copy 类型</strong></p>
+<li>
+<p><strong>实现了 Copy 的复合类型：其所有字段必须全是 Copy 类型</strong></p>
 </li>
 </ul>
 <p>这里面的关键逻辑是： <strong>“复合类型里面有没有任何字段在离开作用域时需要被清理？”只要有一个，那整个类型就得进行自动析构</strong> 。</p>
-<h2 id="6-参数与返回值的“所有权”转移"><a href="#6-参数与返回值的“所有权”转移" class="headerlink" title="6. 参数与返回值的“所有权”转移"></a>6. 参数与返回值的“所有权”转移</h2><p>向函数传递参数以及接收函数的返回值也是一种变量复制的过程，也必然会涉及到“所有权”转移。这部分不复杂，看几个示例就清楚了。</p>
-<h3 id="6-1-作为参数传递给函数时"><a href="#6-1-作为参数传递给函数时" class="headerlink" title="6.1 作为参数传递给函数时"></a>6.1 作为参数传递给函数时</h3><p>当变量作为实参以“按值传递”的方式传给一个函数时，也是一个“复制”的过程，所以会遵循相同的 move &#x2F; copy 语义规则，下面的示例代码已经阐述的非常直白了：</p>
+<h2 id="6-参数与返回值的“所有权”转移">6. 参数与返回值的“所有权”转移</h2>
+<p>向函数传递参数以及接收函数的返回值也是一种变量复制的过程，也必然会涉及到“所有权”转移。这部分不复杂，看几个示例就清楚了。</p>
+<h3 id="6-1-作为参数传递给函数时">6.1 作为参数传递给函数时</h3>
+<p>当变量作为实参以“按值传递”的方式传给一个函数时，也是一个“复制”的过程，所以会遵循相同的 move / copy 语义规则，下面的示例代码已经阐述的非常直白了：</p>
 <figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">  <span class="keyword">let</span> <span class="variable">s</span> = <span class="type">String</span>::<span class="title function_ invoke__">from</span>(<span class="string">&quot;hello&quot;</span>);  <span class="comment">// s 进入作用域</span></span><br><span class="line"></span><br><span class="line">  <span class="title function_ invoke__">takes_ownership</span>(s);             <span class="comment">// s 的值移动到函数里 ...</span></span><br><span class="line">                                  <span class="comment">// ... 所以到这里不再有效</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">let</span> <span class="variable">x</span> = <span class="number">5</span>;                      <span class="comment">// x 进入作用域</span></span><br><span class="line"></span><br><span class="line">  <span class="title function_ invoke__">makes_copy</span>(x);                  <span class="comment">// x 应该移动函数里，</span></span><br><span class="line">                                  <span class="comment">// 但 i32 是 Copy 的，所以在后面可继续使用 x</span></span><br><span class="line"></span><br><span class="line">&#125; <span class="comment">// 这里, x 先移出了作用域，然后是 s。但因为 s 的值已被移走，</span></span><br><span class="line">  <span class="comment">// 所以不会有特殊操作</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">takes_ownership</span>(some_string: <span class="type">String</span>) &#123; <span class="comment">// some_string 进入作用域</span></span><br><span class="line">  <span class="built_in">println!</span>(<span class="string">&quot;&#123;&#125;&quot;</span>, some_string);</span><br><span class="line">&#125; <span class="comment">// 这里，some_string 移出作用域并调用 `drop` 方法。占用的内存被释放</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">makes_copy</span>(some_integer: <span class="type">i32</span>) &#123; <span class="comment">// some_integer 进入作用域</span></span><br><span class="line">  <span class="built_in">println!</span>(<span class="string">&quot;&#123;&#125;&quot;</span>, some_integer);</span><br><span class="line">&#125; <span class="comment">// 这里，some_integer 移出作用域。不会有特殊操作</span></span><br></pre></td></tr></table></figure>
-
-<h3 id="6-2-作为返回值从函数返回时"><a href="#6-2-作为返回值从函数返回时" class="headerlink" title="6.2 作为返回值从函数返回时"></a>6.2 作为返回值从函数返回时</h3><p>当返回值从函数返回时同样如此。但是，有一个细节需要注意，下面的代码中， <code>takes_and_gives_back()</code> 函数中的 <code>a_string</code> 在离开函数体时，是移交了所有权，不要错误地理解成它将被自动析构， <strong>它不是函数体中的中间变量，它是返回值！作为返回值它要执行 move 语义，把所有权移交出去，而不是被自动析构掉</strong> 。</p>
+<h3 id="6-2-作为返回值从函数返回时">6.2 作为返回值从函数返回时</h3>
+<p>当返回值从函数返回时同样如此。但是，有一个细节需要注意，下面的代码中， <code>takes_and_gives_back()</code> 函数中的 <code>a_string</code> 在离开函数体时，是移交了所有权，不要错误地理解成它将被自动析构， <strong>它不是函数体中的中间变量，它是返回值！作为返回值它要执行 move 语义，把所有权移交出去，而不是被自动析构掉</strong> 。</p>
 <figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">  <span class="keyword">let</span> <span class="variable">s1</span> = <span class="title function_ invoke__">gives_ownership</span>();         <span class="comment">// gives_ownership 将返回值</span></span><br><span class="line">                                      <span class="comment">// 移给 s1</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">let</span> <span class="variable">s2</span> = <span class="type">String</span>::<span class="title function_ invoke__">from</span>(<span class="string">&quot;hello&quot;</span>);     <span class="comment">// s2 进入作用域</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">let</span> <span class="variable">s3</span> = <span class="title function_ invoke__">takes_and_gives_back</span>(s2);  <span class="comment">// s2 被移动到</span></span><br><span class="line">                                      <span class="comment">// takes_and_gives_back 中,</span></span><br><span class="line">                                      <span class="comment">// 它也将返回值移给 s3</span></span><br><span class="line">&#125; <span class="comment">// 这里, s3 移出作用域并被丢弃。s2 也移出作用域，但已被移走，</span></span><br><span class="line">  <span class="comment">// 所以什么也不会发生。s1 移出作用域并被丢弃</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">gives_ownership</span>() <span class="punctuation">-&gt;</span> <span class="type">String</span> &#123;           <span class="comment">// gives_ownership 将返回值移动给</span></span><br><span class="line">                                           <span class="comment">// 调用它的函数</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">let</span> <span class="variable">some_string</span> = <span class="type">String</span>::<span class="title function_ invoke__">from</span>(<span class="string">&quot;yours&quot;</span>); <span class="comment">// some_string 进入作用域</span></span><br><span class="line"></span><br><span class="line">  some_string                              <span class="comment">// 返回 some_string 并移出给调用的函数</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// takes_and_gives_back 将传入字符串并返回该值</span></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">takes_and_gives_back</span>(a_string: <span class="type">String</span>) <span class="punctuation">-&gt;</span> <span class="type">String</span> &#123; <span class="comment">// a_string 进入作用域</span></span><br><span class="line"></span><br><span class="line">  a_string  <span class="comment">// 返回 a_string 并移出给调用的函数</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="7-引用与借用"><a href="#7-引用与借用" class="headerlink" title="7. 引用与借用"></a>7. 引用与借用</h2><h3 id="7-1-引用"><a href="#7-1-引用" class="headerlink" title="7.1 引用"></a>7.1 引用</h3><p>考虑上一节函数的传参与返回，由于有了“所有权”的概念，一个变量从当前作用域以参数形式传给一个函数时，当前作用域中的变量随即失去了所有权，但很多时候，我们并不想这样，因为在接下来的处理中，我们还需要继续使用它，这时候，你只能把它作为“返回值”从执行完的函数重新取回来，而如果这个函数还有别的结果要返回，你就得使用一个元组来封装这个变量和其他的返回值，这就很“扭曲”了，正常编写程序没人会这么干。为了解决这类问题，Rust 引入了“引用”：</p>
+<h2 id="7-引用与借用">7. 引用与借用</h2>
+<h3 id="7-1-引用">7.1 引用</h3>
+<p>考虑上一节函数的传参与返回，由于有了“所有权”的概念，一个变量从当前作用域以参数形式传给一个函数时，当前作用域中的变量随即失去了所有权，但很多时候，我们并不想这样，因为在接下来的处理中，我们还需要继续使用它，这时候，你只能把它作为“返回值”从执行完的函数重新取回来，而如果这个函数还有别的结果要返回，你就得使用一个元组来封装这个变量和其他的返回值，这就很“扭曲”了，正常编写程序没人会这么干。为了解决这类问题，Rust 引入了“引用”：</p>
 <blockquote>
-<p>let s1 &#x3D; String::from(“hello”);<br>let s &#x3D; &s1; &#x2F;&#x2F; s 是 s1 的一个引用</p>
+<p>let s1 = String::from(“hello”);<br>
+let s = &amp;s1; // s 是 s1 的一个引用</p>
 </blockquote>
 <p>考虑一个“求字符串长度”的函数，仅从函数的设计目标就可以推断出：</p>
 <ol>
-<li><p>函数仅需以只读方式使用字符串</p>
+<li>
+<p>函数仅需以只读方式使用字符串</p>
 </li>
-<li><p>求出字符串长度后，这个字符串肯定在别处还要使用（你不能仅仅因为计算了一下长度就把它销毁了）</p>
+<li>
+<p>求出字符串长度后，这个字符串肯定在别处还要使用（你不能仅仅因为计算了一下长度就把它销毁了）</p>
 </li>
 </ol>
 <p>这个以参数形式传进函数的字符串就是一个典型“引用”类型，也就是下面代码中的 <code>&amp;s1</code> ：</p>
 <figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">fn</span> <span class="title function_">main</span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">s1</span> = <span class="type">String</span>::<span class="title function_ invoke__">from</span>(<span class="string">&quot;hello&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">len</span> = <span class="title function_ invoke__">calculate_length</span>(&amp;s1); <span class="comment">// 将引用而不是变量本身传到函数中</span></span><br><span class="line"></span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">&quot;The length of &#x27;&#123;&#125;&#x27; is &#123;&#125;.&quot;</span>, s1, len);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">calculate_length</span>(s: &amp;<span class="type">String</span>) <span class="punctuation">-&gt;</span> <span class="type">usize</span> &#123;</span><br><span class="line">    s.<span class="title function_ invoke__">len</span>()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
 <p>其在内存中的形态如下图所示：</p>
-<p><img src="/../../images/rust/rust-ownership/7.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/rust/rust-ownership/7.png" alt="在这里插入图片描述"></p>
 <p><strong>引用不同于一般变量的关键在于：它并不获得值的“所有权”，所以当一个引用离开作用域时并不会导致值被自动销毁</strong> ！下面的代码说明了这一点：</p>
 <figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">fn</span> <span class="title function_">calculate_length</span>(s: &amp;<span class="type">String</span>) <span class="punctuation">-&gt;</span> <span class="type">usize</span> &#123; <span class="comment">// s 是对 String 的引用</span></span><br><span class="line">    s.<span class="title function_ invoke__">len</span>()</span><br><span class="line">&#125; <span class="comment">// 这里，s 离开了作用域。但因为它并不拥有引用值的所有权，</span></span><br><span class="line">  <span class="comment">// 所以什么也不会发生</span></span><br></pre></td></tr></table></figure>
-
 <p>最后，连带性的解释一下“借用”（borrowing）， <strong>使用引用的过程和动作就是借用</strong> 。当一个函数声明了一个引用类型的参数，而当你想调用它时，就得把变量的引用传给它，从函数的视角看：它是“借用”了这变量，变量的所有权还在你（调用方）的手里。</p>
-<h3 id="7-2-可变引用"><a href="#7-2-可变引用" class="headerlink" title="7.2 可变引用"></a>7.2 可变引用</h3><p>通过引用只能读取值，不能修改值，这是出于安全的考量，不过，有时候，这确实不太方便，所以 Rust 引入了“可变引用”，但追加了很限制条件以保证内存安全。</p>
+<h3 id="7-2-可变引用">7.2 可变引用</h3>
+<p>通过引用只能读取值，不能修改值，这是出于安全的考量，不过，有时候，这确实不太方便，所以 Rust 引入了“可变引用”，但追加了很限制条件以保证内存安全。</p>
 <blockquote>
-<p>let mut s1 &#x3D; String::from(“hello”);<br>let s &#x3D; &amp;mut s1; &#x2F;&#x2F; s 是 s1 的一个可变引用</p>
+<p>let mut s1 = String::from(“hello”);<br>
+let s = &amp;mut s1; // s 是 s1 的一个可变引用</p>
 </blockquote>
 <ul>
 <li><strong>限制规则一：在同一时间，一个值只能有一个可变引用</strong></li>
 </ul>
 <p>如果你认为 Rust 给了你“可变引用”你就可以放飞自我了，那就错了，很快，我们会遇到这样的麻烦：</p>
-<p> <img src="/../../images/rust/rust-ownership/8.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/rust/rust-ownership/8.png" alt="在这里插入图片描述"></p>
 <p>如果在同一个作用域里，针对同一个值创建了两个或两个以上可变引用，Rust 就会报错。Rust 引入这个限制的初衷就是要：避免“数据竞争”（data race），这是多线程编程中的经典问题。在多线程环境下，如果有两个以上的指针指向同一个数据，且至少有一个指针会写数据，在没有加 synchronized 保护的情况下就会出现这个问题。在多线程中执行转账操作时，“账户余额”就是一个典型的“被竞争的数据”，如果不对“账户余额”施加同步保护，经过多轮的相互转账，最后所有账户的金额总和会改变，这种情况叫“数据腐蚀”，是数据竞争导致的一种错误。所以，Rust 直接“一刀切”，索性不允许两个以上的可变引用同时存在。</p>
 <ul>
 <li><strong>限制规则二：如果一个值已经有了不可变引用，就不能再声明可变引用，除非声明可变引用前所有不可变引用已不再使用</strong></li>
 </ul>
 <p>这个原则的前半部分非常苛刻，好在后半部分给了一些“回旋余地”，关键是什么叫：“引用已不再使用”？看下面的例子，在这个例子中，编译报错其实是由于接连犯了两个错误导致的，首先，程序在同一个作用域中创建了两个不可变引用后又继续创建了一个可变引用，应该说，这时候就应该警觉了，但还不会报错，直到声明了可变引用之后，又再次回头使用前面声明的不可变应用时，就“踩了红线”。</p>
-<p> <img src="/../../images/rust/rust-ownership/9.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/rust/rust-ownership/9.png" alt="在这里插入图片描述"></p>
 <p>如果调整为下面的写法就不会报错，这是对补充条件：“除非声明可变引用前所有不可变引用已不再使用”很好的诠释：</p>
-<p> <img src="/../../images/rust/rust-ownership/10.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/rust/rust-ownership/10.png" alt="在这里插入图片描述"></p>
 <p>代码中一共有两个不可变引用和一个可变引用，但这是允许的，关键就在于：在声明了可变引用 <code>r3</code> 后，两个不可变引用 <code>r1</code> 、 <code>r2</code> 再也没有出现过，它们“最后一次使用”是程序的第 5 行，是在创建 <code>r3</code> 之前。Rust 的编译器有能力判断出这种情况，这种情况叫：非词法作用域生命周期（Non-Lexical Lifetimes，简称 NLL），就是判断一个引用在作用域结束之前是否还在使用。</p>
-<h2 id="7-3-悬垂引用"><a href="#7-3-悬垂引用" class="headerlink" title="7.3 悬垂引用"></a>7.3 悬垂引用</h2><p>悬垂引用和 C++ 中的悬空指针是一个意思，就是引用所指的值已在别处被释放了，而引用还在继续被使用。由于 Rust 在引用上施加了前面介绍的严苛规则，使得编译器可以判断出这种情形，进而可以通过编译检查来杜绝悬垂引用的发生。看下面的例子：</p>
-<p> <img src="/../../images/rust/rust-ownership/11.png" alt="在这里插入图片描述"></p>
-<p>错误的原因并不难理解， <code>dangle()</code> 企图返回一个 <code>s</code> 的引用，传给 <code>reference_to_nothing</code> ，由于 <code>s</code> 是在 <code>dangle()</code> 函数内创建的，在函数的作用域结束时，它将被自动销毁（返回的是引用，没有转移所有权），那么返回的这个引用 <code>&amp;s</code> 就指向了一个已失效的位置，而 Rust 是可以检查出这种情形的，然后就报了错。实际上，这正是错误使用引用的一个例子。如果想正确实现这个例子，应该返回的是函数中创建的值，而不是它的引用，因为当返回的是一个值时，会触发 move 语义，把它的所有权转移给调用方，也就是转移到函数外面去，这样就不会导致 s 被销毁了：<br> <img src="/../../images/rust/rust-ownership/12.png" alt="在这里插入图片描述"></p>
-<h2 id="8-Slice-类型：只引用一部分数据但也占用一个引用“名额”"><a href="#8-Slice-类型：只引用一部分数据但也占用一个引用“名额”" class="headerlink" title="8. Slice 类型：只引用一部分数据但也占用一个引用“名额”"></a>8. Slice 类型：只引用一部分数据但也占用一个引用“名额”</h2><h3 id="8-1-Slice-是一种什么类型？"><a href="#8-1-Slice-是一种什么类型？" class="headerlink" title="8.1 Slice 是一种什么类型？"></a>8.1 Slice 是一种什么类型？</h3><p>我们关于所有权的介绍只剩下最后一个话题了：Slice 类型。在初次接触这部分内容时，很多人会产生一个错误的认知：把 Rust 中的 Slice 理解成其他语言里与集合有关的那种 slice，比如在 Python 和 Scala 里都有 slice，把它认为是一种操作或是集合类型，但是 <strong>只要你注意到：可以有字符串切片、数组切片等不同类型的切片时，你就应该意识到，Rust 中的 Slice 不是一个简单的东西，也许你会联想到 C++ 中的模板函数，但它不是函数，它是一种数据抽象，而不是行为抽象，所以它更偏向是一种类型而不是函数</strong> 。</p>
+<h2 id="7-3-悬垂引用">7.3 悬垂引用</h2>
+<p>悬垂引用和 C++ 中的悬空指针是一个意思，就是引用所指的值已在别处被释放了，而引用还在继续被使用。由于 Rust 在引用上施加了前面介绍的严苛规则，使得编译器可以判断出这种情形，进而可以通过编译检查来杜绝悬垂引用的发生。看下面的例子：</p>
+<p><img src="../../images/rust/rust-ownership/11.png" alt="在这里插入图片描述"></p>
+<p>错误的原因并不难理解， <code>dangle()</code> 企图返回一个 <code>s</code> 的引用，传给 <code>reference_to_nothing</code> ，由于 <code>s</code> 是在 <code>dangle()</code> 函数内创建的，在函数的作用域结束时，它将被自动销毁（返回的是引用，没有转移所有权），那么返回的这个引用 <code>&amp;s</code> 就指向了一个已失效的位置，而 Rust 是可以检查出这种情形的，然后就报了错。实际上，这正是错误使用引用的一个例子。如果想正确实现这个例子，应该返回的是函数中创建的值，而不是它的引用，因为当返回的是一个值时，会触发 move 语义，把它的所有权转移给调用方，也就是转移到函数外面去，这样就不会导致 s 被销毁了：<br>
+<img src="../../images/rust/rust-ownership/12.png" alt="在这里插入图片描述"></p>
+<h2 id="8-Slice-类型：只引用一部分数据但也占用一个引用“名额”">8. Slice 类型：只引用一部分数据但也占用一个引用“名额”</h2>
+<h3 id="8-1-Slice-是一种什么类型？">8.1 Slice 是一种什么类型？</h3>
+<p>我们关于所有权的介绍只剩下最后一个话题了：Slice 类型。在初次接触这部分内容时，很多人会产生一个错误的认知：把 Rust 中的 Slice 理解成其他语言里与集合有关的那种 slice，比如在 Python 和 Scala 里都有 slice，把它认为是一种操作或是集合类型，但是 <strong>只要你注意到：可以有字符串切片、数组切片等不同类型的切片时，你就应该意识到，Rust 中的 Slice 不是一个简单的东西，也许你会联想到 C++ 中的模板函数，但它不是函数，它是一种数据抽象，而不是行为抽象，所以它更偏向是一种类型而不是函数</strong> 。</p>
 <p>在《C++ Primer》一书中，把引用和指针归为 <strong>Compound Type</strong> ，意思是：它们是基于另一个类型构造出来的类型，稍微想一下指针或引用的声明形式就能理解这个说法的意思， <strong>在入门阶段，我们可以把 Rust 中的 Slice 类型理解成是 C++ 中的 Compound Type，也就是基于另一个类型构造出来的类型，是与指针、引用平行的一种类型</strong> 。当然，Slice 类型的真实情况会更复杂，因为涉及到 DST 和 胖指针等机制，我们暂时先不展开。</p>
 <p>我们以 “字符串 slice” 为例来了解一下 Slice 类型。从一个字符串中截取一部分内容是很常见的一种操作，在其他语言里都有对应的模板函数，在 Rust 里，有字符串 slice:</p>
 <figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> <span class="variable">s</span> = <span class="type">String</span>::<span class="title function_ invoke__">from</span>(<span class="string">&quot;hello world&quot;</span>);</span><br><span class="line"><span class="keyword">let</span> <span class="variable">world</span> = &amp;s[<span class="number">6</span>..<span class="number">11</span>];</span><br></pre></td></tr></table></figure>
-
 <p>代码很容易理解，麻烦的是这个 world： <code>world</code> 是一个 slice，它包含一个指向 s 第 6 个字节处的指针和一个长度值 5。它在内存中的结构如下图所示：</p>
-<p><img src="/../../images/rust/rust-ownership/13.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/rust/rust-ownership/13.png" alt="在这里插入图片描述"></p>
 <p>初看上图时，你会觉得很合理，但是如果和前面 7.1 节关于引用 s 的图示进行对比，你会发现一个显著的不同，world 直接指向了堆上的字符串，从这个角度上看它像 s ，但同时，它又确确实实是一种引用类型，它并不拥有对字符串的所有权。这样看， <code>&amp;str</code> 类型就很特别了：</p>
-<p><img src="/../../images/rust/rust-ownership/14.png" alt="在这里插入图片描述"></p>
+<p><img src="../../images/rust/rust-ownership/14.png" alt="在这里插入图片描述"></p>
 <p>对于 <code>&amp;str</code> 更深度的解释要牵涉 DST（动态大小类型）、胖指针（Fat Pointer）等其他概念，后续，我们会在单独的文章中专门讨论。现阶段，只要清晰地记住： <strong>&amp;str 是一种自带引用语义的独立类型</strong> 。</p>
-<h3 id="8-2-局部引用也是一个引用"><a href="#8-2-局部引用也是一个引用" class="headerlink" title="8.2 局部引用也是一个引用"></a>8.2 局部引用也是一个引用</h3><p>slice 的功能是很直白的，上面的例子一清二楚，需要特别注意是：虽然它是对一个值的“某一部分”的引用，但是 Rust 会将其与一个值的整体引用同等对待！这一点在应用 7.2 节介绍的规则时，体现的尤为明显。我们来看一个示例。有一个 <code>fist_word</code> 函数，它接收一个字符串的引用，查找到第一个单词后以“字符串 slice”的形式（&amp;str）返回这个单词。下面的函数是调用这个 <code>fist_word</code> 函数查找 “hello world” 字符串第一个单词并打印的代码：</p>
-<p><img src="/../../images/rust/rust-ownership/15.png" alt="在这里插入图片描述"></p>
+<h3 id="8-2-局部引用也是一个引用">8.2 局部引用也是一个引用</h3>
+<p>slice 的功能是很直白的，上面的例子一清二楚，需要特别注意是：虽然它是对一个值的“某一部分”的引用，但是 Rust 会将其与一个值的整体引用同等对待！这一点在应用 7.2 节介绍的规则时，体现的尤为明显。我们来看一个示例。有一个 <code>fist_word</code> 函数，它接收一个字符串的引用，查找到第一个单词后以“字符串 slice”的形式（&amp;str）返回这个单词。下面的函数是调用这个 <code>fist_word</code> 函数查找 “hello world” 字符串第一个单词并打印的代码：</p>
+<p><img src="../../images/rust/rust-ownership/15.png" alt="在这里插入图片描述"></p>
 <p>上述代码会在 <code>s.clear()</code> 一行报错。因为： <code>s.clear()</code> 方法需要一个匿名的参数 <code>&amp;mut self</code> ，这和 C++ 中的类成员函数是一样的，此处调用这个方法势必就会创建这个 s 的可变引用，但是，在这之前已经有了 s 的一个 slice，我们说过，局部引用也是一个引用，所以，word 相当于占用了一个 s 的不可变引用名额，因此，当执行到第 8 行再次使用到这个不可变引用时，就会违反规则二。</p>
 <p>这个示例主要想传达的是：虽然 Slice 只是对一个值的“局部”引用，但是，对于这个值来说它也是一个实实在在的引用，在地位上和这个值的直接引用是一样的，所以它才会触犯到规则二。也就是说：Rust 不区分“部分借用”和“整体借用”的安全等级，只要某个引用能观察到底层数据，不管是整体还是局部，Rust 就必须防止别人以可能破坏该数据的方式修改它。</p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>深入理解 Rust 所有权</p><p><a href="https://laurence.enlightgram.com/rust/rust-ownership/">https://laurence.enlightgram.com/rust/rust-ownership/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-05-12</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Rust/">Rust</a><a class="link-muted mr-2" rel="tag" href="/tags/%E6%89%80%E6%9C%89%E6%9D%83/">所有权</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%80%9F%E7%94%A8%E6%A3%80%E6%9F%A5/">借用检查</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/rust/rust-generics/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Rust 语言特性：泛型</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/rust/rust-enum/"><span class="level-item">Rust 语言特性：枚举</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {

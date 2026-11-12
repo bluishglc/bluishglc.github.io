@@ -43,20 +43,168 @@
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Hibernate的抓取策略</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Java/">Java</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2010-05-06T01:07:00.000Z" title="2010-05-05 18:07:00">2010-05-05</time></span><span class="level-item is-hidden-mobile">阅读用时：8 分钟 (约 1249 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>1.制定合理的抓取策略对系统性能的提升有很大的作用。</p>
-<p>Hibernate推荐的原则是：通常情况下，我们并不使用映射文档进行抓取策略的定制。更多的是，保持其默认值，然后在特<br>定的事务中， 使用 HQL 的左连接抓取（left join fetch） 对其进行重载。</p>
-<p>hibernate推荐的做法也是最佳实践： <strong>把所有对象关联的抓取都设为lazy!然后在特定事务中重载！</strong> </p>
+<p>Hibernate推荐的原则是：通常情况下，我们并不使用映射文档进行抓取策略的定制。更多的是，保持其默认值，然后在特<br>
+定的事务中， 使用 HQL 的左连接抓取（left join fetch） 对其进行重载。</p>
+<p>hibernate推荐的做法也是最佳实践： <strong>把所有对象关联的抓取都设为lazy!然后在特定事务中重载！</strong></p>
 <p>这种考虑是基于：对象图是错综复杂的，有时候哪怕我们只是eager load了一个对象也可能会导致很多对象被load出来！</p>
 <p>在Hibernate中，所有对象关联都是lazy的，但是JPA有所不同，one-to-one和many-to-one对象的默认抓取策略是eager!因此在使用JPA @annotation时务必要把这些默认是eager的映射都改成lazy!</p>
 <p>以下摘自JPwH一书571页：</p>
-<p>in Hibernate:<br>the associated entity instance must be fetched eagerly, not lazily. We already mentioned that Java Persistence has a different default fetch plan than Hibernate. Although all associations in Hibernate are completely lazy, all @ManyToOne <a href="mailto:&#97;&#110;&#100;&#x40;&#79;&#110;&#x65;&#x54;&#111;&#79;&#110;&#101;">and@OneToOne</a> associations default to FetchType.EAGER! This default was standardized to allow Java Persistence provider implementations without lazy loading (in practice, such a persistence provider wouldn’t be very useful). We recommend that you default to the Hibernate lazy loading fetch plan by setting FetchType. LAZY in your to-one association mappings and only override it when necessary！</p>
+<p>in Hibernate:<br>
+the associated entity instance must be fetched eagerly, not lazily. We already mentioned that Java Persistence has a different default fetch plan than Hibernate. Although all associations in Hibernate are completely lazy, all @ManyToOne <a href="mailto:and@OneToOne">and@OneToOne</a> associations default to FetchType.EAGER! This default was standardized to allow Java Persistence provider implementations without lazy loading (in practice, such a persistence provider wouldn’t be very useful). We recommend that you default to the Hibernate lazy loading fetch plan by setting FetchType. LAZY in your to-one association mappings and only override it when necessary！</p>
 <p>关于N+1次查询与使用抓取策略进行调优</p>
 <p>首先明确一点：</p>
 <p>lazy的集合是在第一次访问时通过一个select一次性加载出来的（不是在迭代时迭代一条select一条）。这就是N+1中的1。</p>
 <p>在迭代过程中，如果要访问迭代元素依赖的其他对象或集合时，若它们是lazyload的，那么hibernate会生成一个select从数据库中加载出这个对象。N次循环就会生成n个select，这就是N+1中的N.</p>
 <p>如上面所说，在映射时，我们应该遵从hibernate的默认抓取设置，即所有关联对象都是lazyload的。然后，我们应该在具体的事务中定制抓取策略，使得每次load的数据刚刚好，不多也不少，使得性能最优化。以下是Forum和Thread的一个典型例子：</p>
 <p>1.未制定抓取计划。所有抓取按映射文档中的定义执行。（文档中定义的全部是lazy)</p>
-<p>根据映射文档定义的抓取策略（所有关联对象，不管是单端还是集合都映射为fetch&#x3D;lazy）生成的SQL.从SQL中可以看出：一开始只加载了Forum的基本信息，无任何关联对象。然后访问到Forum的Thread集合时，生成一条select，加载出全部的集合元素。然后再迭代集合的过程中生成一条一条的select查出每一个thread的subject post和author!<br>这也就是典型的N+1次查询问题。<br>Hibernate:<br>&#x2F;* Get Forum_1 <em>&#x2F;<br>select<br>this_.id as id2_0_,<br>this_.creationTime as creation2_2_0_,<br>this_.description as descript3_2_0_,<br>this_.groupId as groupId2_0_,<br>this_.modifiedTime as modified4_2_0_,<br>this_.name as name2_0_<br>from<br>Forum this_<br>where<br>this_.id&#x3D;?<br>Hibernate:<br>&#x2F;</em>  Get all threads of Forum_1.(Only thread’s basic fields)<em>&#x2F;<br>select<br>threads0_.forumId as forumId1_,<br>threads0_.id as id1_,<br>threads0_.id as id5_0_,<br>threads0_.creationTime as creation2_5_0_,<br>threads0_.forumId as forumId5_0_,<br>threads0_.modifiedTime as modified3_5_0_,<br>threads0_1_.subjectId as subjectId6_0_<br>from<br>Thread threads0_<br>left outer join<br>Thread_Subject threads0_1_<br>on threads0_.id&#x3D;threads0_1_.threadId<br>where<br>threads0_.forumId&#x3D;?<br>&#x2F;</em> Below is N+1 select! <em>&#x2F;<br>Hibernate:<br>&#x2F;</em> Select Thread_1’s subject post <em>&#x2F;<br>select<br>post0_.id as id4_0_,<br>post0_.authorId as authorId4_0_,<br>post0_.creationTime as creation2_4_0_,<br>post0_.isSubject as isSubject4_0_,<br>post0_.messageBody as messageB4_4_0_,<br>post0_.modifiedTime as modified5_4_0_,<br>post0_.quotedPostId as quotedPo7_4_0_,<br>post0_.threadId as threadId4_0_,<br>post0_.title as title4_0_<br>from<br>Post post0_<br>where<br>post0_.id&#x3D;?<br>Hibernate:<br>&#x2F;</em> Select Thread_1’s subject post’s author. <em>&#x2F;<br>select<br>user0_.id as id0_0_,<br>user0_.accountNonExpired as accountN2_0_0_,<br>user0_.accountNonLocked as accountN3_0_0_,<br>user0_.credentialsNonExpired as credenti4_0_0_,<br>user0_.email as email0_0_,<br>user0_.enabled as enabled0_0_,<br>user0_.password as password0_0_,<br>user0_.username as username0_0_,<br>user0_.version as version0_0_<br>from<br>User user0_<br>where<br>user0_.id&#x3D;?<br>Hibernate:<br>&#x2F;</em> Select Thread_2’s subject post <em>&#x2F;<br>select<br>post0_.id as id4_0_,<br>post0_.authorId as authorId4_0_,<br>post0_.creationTime as creation2_4_0_,<br>post0_.isSubject as isSubject4_0_,<br>post0_.messageBody as messageB4_4_0_,<br>post0_.modifiedTime as modified5_4_0_,<br>post0_.quotedPostId as quotedPo7_4_0_,<br>post0_.threadId as threadId4_0_,<br>post0_.title as title4_0_<br>from<br>Post post0_<br>where<br>post0_.id&#x3D;?<br>Hibernate:<br>&#x2F;</em> Select Thread_2’s subject post’s author. *&#x2F;<br>select<br>user0_.id as id0_0_,<br>user0_.accountNonExpired as accountN2_0_0_,<br>user0_.accountNonLocked as accountN3_0_0_,<br>user0_.credentialsNonExpired as credenti4_0_0_,<br>user0_.email as email0_0_,<br>user0_.enabled as enabled0_0_,<br>user0_.password as password0_0_,<br>user0_.username as username0_0_,<br>user0_.version as version0_0_<br>from<br>User user0_<br>where<br>user0_.id&#x3D;?</p>
-<p>2.下面是通过join fetch重新制定了抓取计划后生成的sql。<br>Hibernate:<br>&#x2F;* Fetch all threads with subject post and author by left out join.*&#x2F;<br>select<br>this_.id as id2_3_,<br>this_.creationTime as creation2_2_3_,<br>this_.description as descript3_2_3_,<br>this_.groupId as groupId2_3_,<br>this_.modifiedTime as modified4_2_3_,<br>this_.name as name2_3_,<br>threads2_.forumId as forumId5_,<br>threads2_.id as id5_,<br>threads2_.id as id5_0_,<br>threads2_.creationTime as creation2_5_0_,<br>threads2_.forumId as forumId5_0_,<br>threads2_.modifiedTime as modified3_5_0_,<br>threads2_1_.subjectId as subjectId6_0_,<br>post3_.id as id4_1_,<br>post3_.authorId as authorId4_1_,<br>post3_.creationTime as creation2_4_1_,<br>post3_.isSubject as isSubject4_1_,<br>post3_.messageBody as messageB4_4_1_,<br>post3_.modifiedTime as modified5_4_1_,<br>post3_.quotedPostId as quotedPo7_4_1_,<br>post3_.threadId as threadId4_1_,<br>post3_.title as title4_1_,<br>user4_.id as id0_2_,<br>user4_.accountNonExpired as accountN2_0_2_,<br>user4_.accountNonLocked as accountN3_0_2_,<br>user4_.credentialsNonExpired as credenti4_0_2_,<br>user4_.email as email0_2_,<br>user4_.enabled as enabled0_2_,<br>user4_.password as password0_2_,<br>user4_.username as username0_2_,<br>user4_.version as version0_2_<br>from<br>Forum this_<br>left outer join<br>Thread threads2_<br>on this_.id&#x3D;threads2_.forumId<br>left outer join<br>Thread_Subject threads2_1_<br>on threads2_.id&#x3D;threads2_1_.threadId<br>left outer join<br>Post post3_<br>on threads2_1_.subjectId&#x3D;post3_.id<br>left outer join<br>User user4_<br>on post3_.authorId&#x3D;user4_.id<br>where<br>this_.id&#x3D;?</p>
+<p>根据映射文档定义的抓取策略（所有关联对象，不管是单端还是集合都映射为fetch=lazy）生成的SQL.从SQL中可以看出：一开始只加载了Forum的基本信息，无任何关联对象。然后访问到Forum的Thread集合时，生成一条select，加载出全部的集合元素。然后再迭代集合的过程中生成一条一条的select查出每一个thread的subject post和author!<br>
+这也就是典型的N+1次查询问题。<br>
+Hibernate:<br>
+/* Get Forum_1 <em>/<br>
+select<br>
+this_.id as id2_0_,<br>
+this_.creationTime as creation2_2_0_,<br>
+this_.description as descript3_2_0_,<br>
+this_.groupId as groupId2_0_,<br>
+this_.modifiedTime as modified4_2_0_,<br>
+this_.name as name2_0_<br>
+from<br>
+Forum this_<br>
+where<br>
+this_.id=?<br>
+Hibernate:<br>
+/</em>  Get all threads of Forum_1.(Only thread’s basic fields)<em>/<br>
+select<br>
+threads0_.forumId as forumId1_,<br>
+threads0_.id as id1_,<br>
+threads0_.id as id5_0_,<br>
+threads0_.creationTime as creation2_5_0_,<br>
+threads0_.forumId as forumId5_0_,<br>
+threads0_.modifiedTime as modified3_5_0_,<br>
+threads0_1_.subjectId as subjectId6_0_<br>
+from<br>
+Thread threads0_<br>
+left outer join<br>
+Thread_Subject threads0_1_<br>
+on threads0_.id=threads0_1_.threadId<br>
+where<br>
+threads0_.forumId=?<br>
+/</em> Below is N+1 select! <em>/<br>
+Hibernate:<br>
+/</em> Select Thread_1’s subject post <em>/<br>
+select<br>
+post0_.id as id4_0_,<br>
+post0_.authorId as authorId4_0_,<br>
+post0_.creationTime as creation2_4_0_,<br>
+post0_.isSubject as isSubject4_0_,<br>
+post0_.messageBody as messageB4_4_0_,<br>
+post0_.modifiedTime as modified5_4_0_,<br>
+post0_.quotedPostId as quotedPo7_4_0_,<br>
+post0_.threadId as threadId4_0_,<br>
+post0_.title as title4_0_<br>
+from<br>
+Post post0_<br>
+where<br>
+post0_.id=?<br>
+Hibernate:<br>
+/</em> Select Thread_1’s subject post’s author. <em>/<br>
+select<br>
+user0_.id as id0_0_,<br>
+user0_.accountNonExpired as accountN2_0_0_,<br>
+user0_.accountNonLocked as accountN3_0_0_,<br>
+user0_.credentialsNonExpired as credenti4_0_0_,<br>
+user0_.email as email0_0_,<br>
+user0_.enabled as enabled0_0_,<br>
+user0_.password as password0_0_,<br>
+user0_.username as username0_0_,<br>
+user0_.version as version0_0_<br>
+from<br>
+User user0_<br>
+where<br>
+user0_.id=?<br>
+Hibernate:<br>
+/</em> Select Thread_2’s subject post <em>/<br>
+select<br>
+post0_.id as id4_0_,<br>
+post0_.authorId as authorId4_0_,<br>
+post0_.creationTime as creation2_4_0_,<br>
+post0_.isSubject as isSubject4_0_,<br>
+post0_.messageBody as messageB4_4_0_,<br>
+post0_.modifiedTime as modified5_4_0_,<br>
+post0_.quotedPostId as quotedPo7_4_0_,<br>
+post0_.threadId as threadId4_0_,<br>
+post0_.title as title4_0_<br>
+from<br>
+Post post0_<br>
+where<br>
+post0_.id=?<br>
+Hibernate:<br>
+/</em> Select Thread_2’s subject post’s author. */<br>
+select<br>
+user0_.id as id0_0_,<br>
+user0_.accountNonExpired as accountN2_0_0_,<br>
+user0_.accountNonLocked as accountN3_0_0_,<br>
+user0_.credentialsNonExpired as credenti4_0_0_,<br>
+user0_.email as email0_0_,<br>
+user0_.enabled as enabled0_0_,<br>
+user0_.password as password0_0_,<br>
+user0_.username as username0_0_,<br>
+user0_.version as version0_0_<br>
+from<br>
+User user0_<br>
+where<br>
+user0_.id=?</p>
+<p>2.下面是通过join fetch重新制定了抓取计划后生成的sql。<br>
+Hibernate:<br>
+/* Fetch all threads with subject post and author by left out join.*/<br>
+select<br>
+this_.id as id2_3_,<br>
+this_.creationTime as creation2_2_3_,<br>
+this_.description as descript3_2_3_,<br>
+this_.groupId as groupId2_3_,<br>
+this_.modifiedTime as modified4_2_3_,<br>
+this_.name as name2_3_,<br>
+threads2_.forumId as forumId5_,<br>
+threads2_.id as id5_,<br>
+threads2_.id as id5_0_,<br>
+threads2_.creationTime as creation2_5_0_,<br>
+threads2_.forumId as forumId5_0_,<br>
+threads2_.modifiedTime as modified3_5_0_,<br>
+threads2_1_.subjectId as subjectId6_0_,<br>
+post3_.id as id4_1_,<br>
+post3_.authorId as authorId4_1_,<br>
+post3_.creationTime as creation2_4_1_,<br>
+post3_.isSubject as isSubject4_1_,<br>
+post3_.messageBody as messageB4_4_1_,<br>
+post3_.modifiedTime as modified5_4_1_,<br>
+post3_.quotedPostId as quotedPo7_4_1_,<br>
+post3_.threadId as threadId4_1_,<br>
+post3_.title as title4_1_,<br>
+user4_.id as id0_2_,<br>
+user4_.accountNonExpired as accountN2_0_2_,<br>
+user4_.accountNonLocked as accountN3_0_2_,<br>
+user4_.credentialsNonExpired as credenti4_0_2_,<br>
+user4_.email as email0_2_,<br>
+user4_.enabled as enabled0_2_,<br>
+user4_.password as password0_2_,<br>
+user4_.username as username0_2_,<br>
+user4_.version as version0_2_<br>
+from<br>
+Forum this_<br>
+left outer join<br>
+Thread threads2_<br>
+on this_.id=threads2_.forumId<br>
+left outer join<br>
+Thread_Subject threads2_1_<br>
+on threads2_.id=threads2_1_.threadId<br>
+left outer join<br>
+Post post3_<br>
+on threads2_1_.subjectId=post3_.id<br>
+left outer join<br>
+User user4_<br>
+on post3_.authorId=user4_.id<br>
+where<br>
+this_.id=?</p>
 <p>调优后的只生成一条sql，性能调优效果明显！</p>
 <p>成lazy</p>
 <p>1</p>

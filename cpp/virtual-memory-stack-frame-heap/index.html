@@ -43,132 +43,157 @@
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">编程底层概念回顾：虚拟内存、栈、栈帧、堆</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/cpp/">C++</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2026-08-28T20:21:57.000Z" title="2026-08-28 13:21:57">2026-08-28</time></span><span class="level-item is-hidden-mobile">阅读用时：26 分钟 (约 3844 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/cpp/virtual-memory-stack-frame-heap/1.png" alt="编程底层概念回顾：虚拟内存、栈、栈帧、堆" fetchpriority="high"></figure><div class="content"><p>不得不承认，在 Java 、Python、Scala 等拥有内存自动回收机制的语言上工作久了，关于堆、栈的知识就淡忘了。本文是了解 C++ 智能指针、对象创建与析构的前期储备知识，想要透彻了解这些语言机制必须要对栈、栈帧、堆有清晰的认知。了解文本内容后，可延伸阅读 <a href="/cpp/cpp-smart-pointers/">《C++ 智能指针：示例、原理、适用场景全方位解读》</a> 、 <a href="/cpp/cpp-shared-ptr-cycles/">《C++ 共享指针“循环依赖”问题深度剖析》</a> 和 <a href="/cpp/cpp-nested-object-lifecycle/">《C++ 对象和嵌套对象的创建与销毁》</a> 三篇关联文章。</p>
-<h2 id="1-虚拟内存"><a href="#1-虚拟内存" class="headerlink" title="1. 虚拟内存"></a>1. 虚拟内存</h2><p>操作系统为了防止多进程运行时造成的内存地址冲突，引入了虚拟内存地址，为每个进程提供了一个独立的虚拟内存空间， <strong>使得进程以为自己独占全部内存资源</strong> 。在现代操作系统（ Linux &#x2F; Windows &#x2F; macOS）中，每个进程都有独立的虚拟地址空间，地址范围通常是：</p>
+<h2 id="1-虚拟内存">1. 虚拟内存</h2>
+<p>操作系统为了防止多进程运行时造成的内存地址冲突，引入了虚拟内存地址，为每个进程提供了一个独立的虚拟内存空间， <strong>使得进程以为自己独占全部内存资源</strong> 。在现代操作系统（ Linux / Windows / macOS）中，每个进程都有独立的虚拟地址空间，地址范围通常是：</p>
 <ul>
-<li><p>32 位机器：4GB（常见 3GB 用户态 + 1GB 内核态）</p>
+<li>
+<p>32 位机器：4GB（常见 3GB 用户态 + 1GB 内核态）</p>
 </li>
-<li><p>64 位机器：理论 16EB，但常见实现为 48 位有效地址 → 256TB，其中用户态常见 128TB</p>
+<li>
+<p>64 位机器：理论 16EB，但常见实现为 48 位有效地址 → 256TB，其中用户态常见 128TB</p>
 </li>
 </ul>
 <p>这里有一个关键点：每个进程看到的都是自己 <strong>独占全部的 3GB 或 128TB 虚拟地址空间</strong> ！也就独享机器的全部内存，而不是切分出的一小块，每个进程都有自己的一套“虚拟宇宙”，这正是虚拟内存的设计初衷，至于实际是占用的物理内存是怎样的，这是操作系统要搞定的事情，我们不再往下深究。下图引用自 <a target="_blank" rel="noopener" href="https://blog.csdn.net/weixin_42482191/article/details/130593563">《Linux内存管理1——虚拟内存空间》</a> ，分别展示的是 32 位和64 位机器的虚拟内存空间模型，它们的结构基本上是一样的，只是大小不同：</p>
-<p> <img src="/../../images/cpp/virtual-memory-stack-frame-heap/2.png"></p>
+<p><img src="../../images/cpp/virtual-memory-stack-frame-heap/2.png" alt=""></p>
 <p>上图我们着重关注一下堆和栈的位置，你可以看到，栈在“高地址”区段，堆在“低地址”区段，它们中间有可再分配的区域，所以，它们是“往中间扩展”的，对应到栈就是“向下”扩展，对应到堆就是“向上”扩展。</p>
-<p>虚拟内存是一个很复杂的话题，我们不能展开太多，这样会会让我们失去关注的焦点，我们真正要关注的是上图中出现的“堆”和“栈”，这是程序员，特别是 C&#x2F;C++ 程序员经常会提及的，这和我们要介绍的 delete 操作以及 C++ 的内存管理是息息相关的。</p>
-<h2 id="2-堆和栈"><a href="#2-堆和栈" class="headerlink" title="2. 堆和栈"></a>2. 堆和栈</h2><p>在介绍“堆”和“栈”之前要说明的是：在 C++ 标准中，是没有“堆”和“栈”这两个概念的，C++ 中有的是“动态存储期”和“自动存储期”这样的概念，C++ 标准只会说“自动存储期对象在作用域结束时销毁”并不会说“自动对象必须放在栈里”，但大多讲解语言内存管理的文章往往都是直接说成在“堆”和“栈”上会发生什么什么，为了方便理解，我觉得这样解释没有问题，只是要清楚地知道，“堆”和“栈”不是语言规范，更像是实现语言标准（例如“动态存储期”和“自动存储期”）的具体实现细节。下面是展开说说：</p>
+<p>虚拟内存是一个很复杂的话题，我们不能展开太多，这样会会让我们失去关注的焦点，我们真正要关注的是上图中出现的“堆”和“栈”，这是程序员，特别是 C/C++ 程序员经常会提及的，这和我们要介绍的 delete 操作以及 C++ 的内存管理是息息相关的。</p>
+<h2 id="2-堆和栈">2. 堆和栈</h2>
+<p>在介绍“堆”和“栈”之前要说明的是：在 C++ 标准中，是没有“堆”和“栈”这两个概念的，C++ 中有的是“动态存储期”和“自动存储期”这样的概念，C++ 标准只会说“自动存储期对象在作用域结束时销毁”并不会说“自动对象必须放在栈里”，但大多讲解语言内存管理的文章往往都是直接说成在“堆”和“栈”上会发生什么什么，为了方便理解，我觉得这样解释没有问题，只是要清楚地知道，“堆”和“栈”不是语言规范，更像是实现语言标准（例如“动态存储期”和“自动存储期”）的具体实现细节。下面是展开说说：</p>
 <ul>
-<li><p>栈</p>
+<li>
+<p>栈</p>
 <p>是用于管理函数调用和自动变量的一块连续内存区域。栈中的对象会：在作用域结束时 → 自动调用析构函数，并在离开作用域后由栈自动释放内存（简单地移动栈指针就完成了）</p>
 </li>
-<li><p>堆</p>
+<li>
+<p>堆</p>
 <p>是由程序员手动申请和释放的一块动态内存区域，再具体地说就是通过 new 和 delete 申请与释放空间都是在堆上。不会自动析构，也不会自动释放空间！必须由程序员手动控制</p>
 </li>
 </ul>
-<p>下图非常地直观展示了 C&#x2F;C++ 程序代码中各种变量与堆和栈的对应关系（引用自 <a target="_blank" rel="noopener" href="https://www.51cto.com/article/770253.html">《进程的虚拟内存布局是怎样的？》</a> ：</p>
-<p> <img src="/../../images/cpp/virtual-memory-stack-frame-heap/3.png"></p>
+<p>下图非常地直观展示了 C/C++ 程序代码中各种变量与堆和栈的对应关系（引用自 <a target="_blank" rel="noopener" href="https://www.51cto.com/article/770253.html">《进程的虚拟内存布局是怎样的？》</a> ：</p>
+<p><img src="../../images/cpp/virtual-memory-stack-frame-heap/3.png" alt=""></p>
 <p>你会看到：函数中普通的局部变量（非 new 初始化的变量）是自动驻留在栈里的，你从来不会关心如何释放它们，因为在离开了当前作用域（栈帧）后，它会被栈自动清空，这里还要再深入一层解释：针对一个函数，它在栈上到底是怎样一种形式存在的？为什么在其执行结束后，它的局部变量能自动释放？我们要看进一步了解“栈”和“栈帧”。</p>
-<h2 id="3-栈和栈帧"><a href="#3-栈和栈帧" class="headerlink" title="3. 栈和栈帧"></a>3. 栈和栈帧</h2><p>深入了解栈的话，就会遇到“栈帧”的概念，栈帧是栈的内部结构单元，“栈”和“栈帧”是有非常具象化的映射物的，它们分别对应程序运行时的“调用栈”和栈中的一个“方法”，从这个角度理解“栈”和“栈帧”一切会变得清晰合理起来，回想一下我们在 IDE 中的看到的 Debug 视图，从视图是可以直接“映射”到“栈”结构上的，可以说是对“栈”最直观的表现形式了：</p>
-<p> <img src="/../../images/cpp/virtual-memory-stack-frame-heap/4.png"></p>
+<h2 id="3-栈和栈帧">3. 栈和栈帧</h2>
+<p>深入了解栈的话，就会遇到“栈帧”的概念，栈帧是栈的内部结构单元，“栈”和“栈帧”是有非常具象化的映射物的，它们分别对应程序运行时的“调用栈”和栈中的一个“方法”，从这个角度理解“栈”和“栈帧”一切会变得清晰合理起来，回想一下我们在 IDE 中的看到的 Debug 视图，从视图是可以直接“映射”到“栈”结构上的，可以说是对“栈”最直观的表现形式了：</p>
+<p><img src="../../images/cpp/virtual-memory-stack-frame-heap/4.png" alt=""></p>
 <p><strong>在操作系统给每个进程划分的虚拟内存布局里那个叫“栈（Stack）”的内存段就是函数“调用栈（Call Stack）”，栈内部的组成单元 “栈帧 (Stack Frame)” 对应调用栈中的一个“方法”</strong> ，它们只是抽象级别和上下文不同，实质上指的是同一件事，借助调用栈，我们就能比较“形象”的理解栈和栈帧的工作方式，下图是对栈和栈帧更“真实”的一层描述：</p>
-<p> <img src="/../../images/cpp/virtual-memory-stack-frame-heap/5.png"></p>
+<p><img src="../../images/cpp/virtual-memory-stack-frame-heap/5.png" alt=""></p>
 <p>程序运行时，操作系统会为进程分配一块连续的内存区域作为调用栈（Call Stack），它遵循 “后进先出（LIFO）” 的规则。函数的执行过程，本质上就是 “栈帧（Stack Frame）” 在调用栈上 “压入（push）” 和 “弹出（pop）” 的过程。当你调用一个函数时，系统会在调用栈上为这个函数分配一块独立的内存区域，这块区域就叫栈帧—— 它是函数在栈上的 “专属内存空间”，包含了这个函数运行所需的所有数据：</p>
 <table>
 <thead>
 <tr>
-<th align="left">栈帧内容</th>
-<th align="left">作用</th>
+<th style="text-align:left">栈帧内容</th>
+<th style="text-align:left">作用</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="left">函数返回地址</td>
-<td align="left">记录函数执行完后，CPU 要回到调用者函数的哪一行继续执行</td>
+<tbody>
+<tr>
+<td style="text-align:left">函数返回地址</td>
+<td style="text-align:left">记录函数执行完后，CPU 要回到调用者函数的哪一行继续执行</td>
 </tr>
 <tr>
-<td align="left">调用者栈帧的基址</td>
-<td align="left">保存调用者函数的栈帧基地址（x86 架构），用于恢复调用者的栈帧</td>
+<td style="text-align:left">调用者栈帧的基址</td>
+<td style="text-align:left">保存调用者函数的栈帧基地址（x86 架构），用于恢复调用者的栈帧</td>
 </tr>
 <tr>
-<td align="left">局部变量</td>
-<td align="left">函数内定义的所有栈上局部变量（int a、char b、指针 ptr 等）</td>
+<td style="text-align:left">局部变量</td>
+<td style="text-align:left">函数内定义的所有栈上局部变量（int a、char b、指针 ptr 等）</td>
 </tr>
 <tr>
-<td align="left">函数参数</td>
-<td align="left">传递给当前函数的参数（如果参数是值传递，会拷贝到当前栈帧）</td>
+<td style="text-align:left">函数参数</td>
+<td style="text-align:left">传递给当前函数的参数（如果参数是值传递，会拷贝到当前栈帧）</td>
 </tr>
 <tr>
-<td align="left">临时变量</td>
-<td align="left">函数执行过程中产生的临时数据（比如表达式计算的中间结果）</td>
+<td style="text-align:left">临时变量</td>
+<td style="text-align:left">函数执行过程中产生的临时数据（比如表达式计算的中间结果）</td>
 </tr>
 <tr>
-<td align="left">寄存器备份</td>
-<td align="left">保存调用者函数使用的寄存器值，避免当前函数修改后影响调用者</td>
+<td style="text-align:left">寄存器备份</td>
+<td style="text-align:left">保存调用者函数使用的寄存器值，避免当前函数修改后影响调用者</td>
 </tr>
-</tbody></table>
+</tbody>
+</table>
 <p>然后，我们着重了解一下栈帧中的数据（也就是方法中的参数和局部变量）是怎么释放的，为什么不会出现内存泄漏问题，解释前先了解两个概念：ESP：栈顶指针 寄存器 ，EBP：栈底指针寄存器，它们组合起来就像一个“游标卡尺”，精确标记出当前的“栈帧”位置，当函数执行结束（遇到return或函数体结束）时，CPU 会把当前栈帧中保存的 “调用者”的栈底地址写回 EBP 寄存器，这相当于一只脚已经放回到上一次踩的位置上，然后，栈顶指针 ESP “后撤移动”当前栈帧的总大小（参数 + 局部变量 + 返回地址等的总字节数），就完成了当前栈帧的“弹出”，也就是函数的“返回”，CPU 根本不需要追一清理栈帧中的数据，因为栈顶指针 ESP 移动后，函数的栈帧区域就被标记为 “未使用”，后续新的栈帧会直接覆盖这块内存，无需主动 “擦除” 数据。所以，栈释放资源是极其快速和高效的，这和堆形成了鲜明的对比，在堆上释放资源，需要查找空闲块、合并碎片、维护链表等很多繁琐的工作。</p>
 <p>关于栈的运作方式，让我想起了另一个经典问题，在这里解释是再合适不过了，真得是能“从根上解释清楚”的：我们知道，在 C++ 里函数体的局部变量，如果只是定义而不显式地初始化的话，C++ 是不会对其默认初始化的（这和全局变量不同），看下面的例子：</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">int</span> x;   <span class="comment">// 未初始化，值是垃圾</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
 <p>在运行这个函数时，变量 x 是会被分配内存空间的，当然是在“栈”上，但是由于 C++ 不会对其进行默认初始化，所以我们常说它的值是未定义的“垃圾”值，让人好奇的就是：它为什么会有值，它的值到底是怎么来的？看完前面的解释再来看这个问题就非常“通透”了：它的值就是上一次函数调用（上一个栈帧）分配的内存空间中未被清理的数据，就是上一个栈帧“弹出”了，但CPU不会清理数据，这一次函数执行又压回一个栈帧，占用的前一个函数栈帧用过的内存空间（栈的区段），未被初始化的 x 值就是上一次遗留下来完全不可测的值，就是这样了。</p>
-<h2 id="4-堆"><a href="#4-堆" class="headerlink" title="4. 堆"></a>4. 堆</h2><p>堆也是操作系统给每个进程划分的虚拟内存布局里的一个内存段，但和栈很不同：栈有具象的结构和自动化的运行机制，所以理解起来有些麻烦，但用起来几乎是完全透明的，而堆正好相反，它没有具象的结构，也没有自动化的运行机制，所以没有过多需要了解的知识，但用起来却是全要靠程序员手动维护：</p>
+<h2 id="4-堆">4. 堆</h2>
+<p>堆也是操作系统给每个进程划分的虚拟内存布局里的一个内存段，但和栈很不同：栈有具象的结构和自动化的运行机制，所以理解起来有些麻烦，但用起来几乎是完全透明的，而堆正好相反，它没有具象的结构，也没有自动化的运行机制，所以没有过多需要了解的知识，但用起来却是全要靠程序员手动维护：</p>
 <ul>
-<li><p>栈：自动管理、后进先出、小而快、生命周期随函数；</p>
+<li>
+<p>栈：自动管理、后进先出、小而快、生命周期随函数；</p>
 </li>
-<li><p>堆：手动管理、无固定顺序、大而灵活、生命周期由程序员控制。</p>
+<li>
+<p>堆：手动管理、无固定顺序、大而灵活、生命周期由程序员控制。</p>
 </li>
 </ul>
-<p>对 C &#x2F; C++ 程序员而言，和堆打交道的抓手就是“new” 和 “delete”这两个操作符了，当然，还有负责指向堆空间具体位置的“指针”，这些是编程层面的话题，我们放到另一篇文章中单独讨论。</p>
-<h2 id="5-A-a-new-A-背后的故事"><a href="#5-A-a-new-A-背后的故事" class="headerlink" title="5. A* a &#x3D; new A() 背后的故事"></a>5. A* a &#x3D; new A() 背后的故事</h2><p>当我最初从 Java 转到 C++ 时，有一个非常简单直白但却始终没有意识到的问题：为什么 C++ 代码里到处在使用指针？这确实是个很蠢的问题，直到我意识到： <strong>在 C++ 里通过 new 操作符创建对象时只会返回对象的“地址”，而指针是唯一的接收“载体”</strong> （尽管还有智能指针、匿名指针这样的变体，但本质上还是指针），就像 Java 中 new 出来的对象只返回引用一样，都 <strong>是唯一“访问一个分配在堆上的对象”的方式&#x2F;途径</strong> 。如果你想知道一个普通的 <code>A* a = new A()</code> 操作发生的全部故事，就必须清楚地了解堆和栈的工作细节，我们就掰开了仔细说一下。</p>
+<p>对 C / C++ 程序员而言，和堆打交道的抓手就是“new” 和 “delete&quot;这两个操作符了，当然，还有负责指向堆空间具体位置的“指针”，这些是编程层面的话题，我们放到另一篇文章中单独讨论。</p>
+<h2 id="5-A-a-new-A-背后的故事">5. A* a = new A() 背后的故事</h2>
+<p>当我最初从 Java 转到 C++ 时，有一个非常简单直白但却始终没有意识到的问题：为什么 C++ 代码里到处在使用指针？这确实是个很蠢的问题，直到我意识到： <strong>在 C++ 里通过 new 操作符创建对象时只会返回对象的“地址”，而指针是唯一的接收“载体”</strong> （尽管还有智能指针、匿名指针这样的变体，但本质上还是指针），就像 Java 中 new 出来的对象只返回引用一样，都 <strong>是唯一“访问一个分配在堆上的对象”的方式/途径</strong> 。如果你想知道一个普通的 <code>A* a = new A()</code> 操作发生的全部故事，就必须清楚地了解堆和栈的工作细节，我们就掰开了仔细说一下。</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> std;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">A</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="built_in">A</span>() &#123; cout &lt;&lt; <span class="string">&quot;A 的构造函数执行&quot;</span> &lt;&lt; endl; &#125;  <span class="comment">// 构造函数</span></span><br><span class="line">    ~<span class="built_in">A</span>() &#123; cout &lt;&lt; <span class="string">&quot;A 的析构函数执行&quot;</span> &lt;&lt; endl; &#125; <span class="comment">// 析构函数</span></span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    A* a = <span class="keyword">new</span> <span class="built_in">A</span>();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="built_in">f</span>();</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;函数 f 执行完毕&quot;</span> &lt;&lt; endl;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 离开作用域，a 被自动销毁</span></span><br></pre></td></tr></table></figure>
-
 <ol>
-<li><p>进入函数 f()，创建栈帧</p>
+<li>
+<p>进入函数 f()，创建栈帧</p>
 </li>
-<li><p>先执行变量声明 <code>A* a</code> ，在栈上创建“指针变量 a”， <strong>C++ 语言规则要求：变量的内存分配（声明）必须先于对它的任何赋值 &#x2F; 初始化操作</strong> </p>
+<li>
+<p>先执行变量声明 <code>A* a</code> ，在栈上创建“指针变量 a”， <strong>C++ 语言规则要求：变量的内存分配（声明）必须先于对它的任何赋值 / 初始化操作</strong></p>
 <ul>
-<li><p>分配栈内存空间： <em>在 f() 的栈帧中，为指针变量 a 分配内存（大小为 sizeof(A)，64 位系统是 8 字节）</em> *；</p>
+<li>
+<p>分配栈内存空间： <em>在 f() 的栈帧中，为指针变量 a 分配内存（大小为 sizeof(A)，64 位系统是 8 字节）</em> *；</p>
 </li>
-<li><p>赋值（记录地址）：将 A 对象地址赋给指针变量 a<br>备注：这里有一个非常重要的细节：栈上为 a 开辟的 8 字节空间是存目标对象的地址，但程序又如何知道栈上的这个位置是变量a呢？a 本身的这个“名字”和“它关联这个栈上的地址”又存在哪里呢？实际情况是：“变量 a”只是程序员和编译器约定的一个“符号”，栈上不会保存一个内容是 <code>a</code> 的字符串和关联的内存地址， <strong>变量名 a 只存在于编译阶段，在运行阶段根本没有所谓的“变量名”，程序完全靠 “内存地址偏移” 而非 “名字” 来定位栈上的变量</strong> ，这是一个非常重要的细节。</p>
+<li>
+<p>赋值（记录地址）：将 A 对象地址赋给指针变量 a<br>
+备注：这里有一个非常重要的细节：栈上为 a 开辟的 8 字节空间是存目标对象的地址，但程序又如何知道栈上的这个位置是变量a呢？a 本身的这个“名字”和“它关联这个栈上的地址”又存在哪里呢？实际情况是：“变量 a”只是程序员和编译器约定的一个“符号”，栈上不会保存一个内容是 <code>a</code> 的字符串和关联的内存地址， <strong>变量名 a 只存在于编译阶段，在运行阶段根本没有所谓的“变量名”，程序完全靠 “内存地址偏移” 而非 “名字” 来定位栈上的变量</strong> ，这是一个非常重要的细节。</p>
 </li>
 </ul>
 </li>
-<li><p>执行 new A()，在堆上创建 A 对象</p>
+<li>
+<p>执行 new A()，在堆上创建 A 对象</p>
 <ul>
-<li><p>分配堆内存空间：根据 sizeof(A) 计算的大小分配堆内存空间</p>
+<li>
+<p>分配堆内存空间：根据 sizeof(A) 计算的大小分配堆内存空间</p>
 </li>
-<li><p>调用构造函数：调用 A 的构造函数在分配的堆空间上实例化 A（注意：此时创建出的 A 对象只有地址，还没有“名字”）</p>
+<li>
+<p>调用构造函数：调用 A 的构造函数在分配的堆空间上实例化 A（注意：此时创建出的 A 对象只有地址，还没有“名字”）</p>
 </li>
 </ul>
 </li>
-<li><p>函数 f() 返回，销毁栈帧</p>
+<li>
+<p>函数 f() 返回，销毁栈帧</p>
 <ul>
-<li>销毁变量： <strong>销毁栈帧中的所有局部变量（包括“指针变量 a”）</strong> （注意：销毁的是“指针变量 a”（栈上的 8 字节内存），不是指针所指的位于堆上的 A 对象）<br>栈帧弹出，调用栈回到 main() 函数的下一行继续执行</li>
+<li>销毁变量： <strong>销毁栈帧中的所有局部变量（包括“指针变量 a”）</strong> （注意：销毁的是“指针变量 a”（栈上的 8 字节内存），不是指针所指的位于堆上的 A 对象）<br>
+栈帧弹出，调用栈回到 main() 函数的下一行继续执行</li>
 </ul>
 </li>
 </ol>
 <p>最终结果：内存泄漏，位于堆上的 A 对象没有显式地执行销毁动作，也失去了唯一可追踪的地址，再没有再被释放的机会了。</p>
 <p>如果手动添加 <code>delete a;</code> ：</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    A* a = <span class="keyword">new</span> <span class="built_in">A</span>();</span><br><span class="line">    <span class="keyword">delete</span> a; <span class="comment">// 手动释放</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
 <p>则在 delete a 地会多出两步关键操作：</p>
 <ol>
-<li><p>调用 A 对象的析构函数，清理资源</p>
+<li>
+<p>调用 A 对象的析构函数，清理资源</p>
 </li>
-<li><p>释放堆内存</p>
+<li>
+<p>释放堆内存</p>
 </li>
 </ol>
 <p>最终结果：与上一版没有 delete a 操作的状况不同的是： 位于堆上的 A 对象被释放，不会发生“内存泄漏”了，但是在函数返回前，指针变量 a 尚未销毁，但它所指的地址已不再有效，此时 a 称为了“野指针”，虽然函数很快将返回，a 会被销毁，但规范做法是要将 a 置空，防止杜绝野指针情况的发生：</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    A* a = <span class="keyword">new</span> <span class="built_in">A</span>();</span><br><span class="line">    <span class="keyword">delete</span> a; <span class="comment">// 手动释放</span></span><br><span class="line">    a = <span class="literal">nullptr</span>; <span class="comment">// 指针置空</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
 <p>最后，再补充一个极易误解的地方：“对象在栈（帧）销毁（弹出）时会自动析构吗？”这个问题记好，不要搞混：</p>
 <ul>
-<li><p>只有在栈上创建的对象在栈（帧）销毁（弹出）时才会自动调用对象的析构函数</p>
+<li>
+<p>只有在栈上创建的对象在栈（帧）销毁（弹出）时才会自动调用对象的析构函数</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    A a; <span class="comment">// 直接在栈上创建A对象（无new）</span></span><br><span class="line">&#125; <span class="comment">// 离开作用域，栈对象a自动析构</span></span><br></pre></td></tr></table></figure>
 </li>
-<li><p>在堆上创建的对象，栈（帧）销毁（弹出）时只会销毁指针变量，不会自动调用对象的析构函数</p>
+<li>
+<p>在堆上创建的对象，栈（帧）销毁（弹出）时只会销毁指针变量，不会自动调用对象的析构函数</p>
 </li>
 </ul>
 <p>我们上面举的例子就是这种情况，不要把这两种情形搞混！</p>
 <p>参考资料：</p>
-<p>https:&#x2F;&#x2F; blog .csdn.net&#x2F;K346K346&#x2F;article&#x2F;details&#x2F;45592329<br><a target="_blank" rel="noopener" href="https://www.51cto.com/article/770253.html">https://www.51cto.com/article/770253.html</a><br><a target="_blank" rel="noopener" href="https://blog.csdn.net/weixin_42482191/article/details/130593563">https://blog.csdn.net/weixin_42482191/article/details/130593563</a></p>
+<p>https:// blog .csdn.net/K346K346/article/details/45592329<br>
+<a target="_blank" rel="noopener" href="https://www.51cto.com/article/770253.html">https://www.51cto.com/article/770253.html</a><br>
+<a target="_blank" rel="noopener" href="https://blog.csdn.net/weixin_42482191/article/details/130593563">https://blog.csdn.net/weixin_42482191/article/details/130593563</a></p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>编程底层概念回顾：虚拟内存、栈、栈帧、堆</p><p><a href="https://laurence.enlightgram.com/cpp/virtual-memory-stack-frame-heap/">https://laurence.enlightgram.com/cpp/virtual-memory-stack-frame-heap/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-08-28</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/cpp/">C++</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a><a class="link-muted mr-2" rel="tag" href="/tags/%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98/">虚拟内存</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/rust/rust-rc-shared-ownership/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Rust 所有权进阶必读：为什么 Rc 共享所有权是个伪概念？</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/cpp/cpp-shared-ptr-cycles/"><span class="level-item">C++ 共享指针“循环依赖”问题深度剖析</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

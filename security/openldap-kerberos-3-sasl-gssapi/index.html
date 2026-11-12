@@ -42,289 +42,315 @@
       window.addEventListener('hashchange', switchTab, false);
   })();
   </script><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence 的技术博客" type="application/atom+xml">
-</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">集成 OpenLDAP 与 Kerberos 实现统一认证 (3)：基于 SASL/GSSAPI 深度集成</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Security/">Security</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2022-06-08T00:22:17.000Z" title="2022-06-07 17:22:17">2022-06-07</time></span><span class="level-item is-hidden-mobile">阅读用时：1 小时 (约 10579 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><h3 id="1-写作背景"><a href="#1-写作背景" class="headerlink" title="1. 写作背景"></a>1. 写作背景</h3><p>写作本系列文章的背景是我们要在大 数据平台 &#x2F;企业数据湖场景下给出中心化的用户身份认证方案。此前，我们实现过Windows AD + Kerberos的集成方案，由于Windows AD是LDAP和Kerberos的双重实现，这种天然优势使得Windows AD可以实现真正意义上的（大数据集群的）Kerberos账号与企业用户账号的统一管理。当我们想在OpenLDAP + Kerberos上实现同样的目标时，发现这一领域的知识与方案琐碎而凌乱，缺少统一连贯，脉络清晰的讲解，在经过大量技术调研和系统梳理后，我们特别撰写了本系列文章，希望可以借此将这一话题全面彻底地阐述清楚。本系列由三篇文章组成，将沿着“如何集成OpenLDAP与Kerberos实现统一认证管理”这一主线推进，在实现过程中会详细介绍使用到的技术和原理并给出完备的执行脚本用于实际环境的搭建。我们假设读者已经具备OpenLDAP和Kerberos的基本知识，不再对两者进行单独介绍。此外，本系列文章写作期间正值2022年4月-5月上海疫情最严重的时期，特以此文纪念这段艰难的特殊时光。本文发表于作者技术博客，原文链接： <a href="/security/openldap-kerberos-3-sasl-gssapi/">https://laurence.enlightgram.com/security/openldap-kerberos-3-sasl-gssapi/</a> </p>
-<h3 id="2-既定目标"><a href="#2-既定目标" class="headerlink" title="2. 既定目标"></a>2. 既定目标</h3><p>作为本系列的最后一篇文章，在前面两篇文章的基础上，我们要对OpenLDAP + Kerberos进行深度集成，实现最终的用户账号统一管理。在正式展开前，要再次提醒大家清楚这样一个事实：人们通常认为的“账号统一”是指：一处创建账号，多处登录使用。在Windows AD + Kerberos环境下，我们确实可以实现这一目标，根本原因在于Windows的AD服务即是LDAP的实现又是Keberos的实现，其从产品内部整合了这两套认证系统，但是OpenLDAP和(MIT) Kerberos作为两套独立的认证系统，是无法实现绝对意义上的账号统一的，这一点在厘清全部技术细节之后，相信读者会深有感触。</p>
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">集成 OpenLDAP 与 Kerberos 实现统一认证 (3)：基于 SASL/GSSAPI 深度集成</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Security/">Security</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2022-06-08T00:22:17.000Z" title="2022-06-07 17:22:17">2022-06-07</time></span><span class="level-item is-hidden-mobile">阅读用时：1 小时 (约 10579 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><h3 id="1-写作背景">1. 写作背景</h3>
+<p>写作本系列文章的背景是我们要在大 数据平台 /企业数据湖场景下给出中心化的用户身份认证方案。此前，我们实现过Windows AD + Kerberos的集成方案，由于Windows AD是LDAP和Kerberos的双重实现，这种天然优势使得Windows AD可以实现真正意义上的（大数据集群的）Kerberos账号与企业用户账号的统一管理。当我们想在OpenLDAP + Kerberos上实现同样的目标时，发现这一领域的知识与方案琐碎而凌乱，缺少统一连贯，脉络清晰的讲解，在经过大量技术调研和系统梳理后，我们特别撰写了本系列文章，希望可以借此将这一话题全面彻底地阐述清楚。本系列由三篇文章组成，将沿着“如何集成OpenLDAP与Kerberos实现统一认证管理”这一主线推进，在实现过程中会详细介绍使用到的技术和原理并给出完备的执行脚本用于实际环境的搭建。我们假设读者已经具备OpenLDAP和Kerberos的基本知识，不再对两者进行单独介绍。此外，本系列文章写作期间正值2022年4月-5月上海疫情最严重的时期，特以此文纪念这段艰难的特殊时光。本文发表于作者技术博客，原文链接： <a href="/security/openldap-kerberos-3-sasl-gssapi/">https://laurence.enlightgram.com/security/openldap-kerberos-3-sasl-gssapi/</a></p>
+<h3 id="2-既定目标">2. 既定目标</h3>
+<p>作为本系列的最后一篇文章，在前面两篇文章的基础上，我们要对OpenLDAP + Kerberos进行深度集成，实现最终的用户账号统一管理。在正式展开前，要再次提醒大家清楚这样一个事实：人们通常认为的“账号统一”是指：一处创建账号，多处登录使用。在Windows AD + Kerberos环境下，我们确实可以实现这一目标，根本原因在于Windows的AD服务即是LDAP的实现又是Keberos的实现，其从产品内部整合了这两套认证系统，但是OpenLDAP和(MIT) Kerberos作为两套独立的认证系统，是无法实现绝对意义上的账号统一的，这一点在厘清全部技术细节之后，相信读者会深有感触。</p>
 <p>本文的目标是利用SASL、GSSAPI、saslauthd等技术实现两系统间的“账号映射”与“委托认证”，在“使用效果上”达成账号统一的目标，也就是完成集成方案中的第⑤、⑥、⑦、⑧四步操作：</p>
-<p><img src="/../../images/security/openldap-kerberos-3-sasl-gssapi/2.jpeg" alt="在这里插入图片描述"></p>
+<p><img src="../../images/security/openldap-kerberos-3-sasl-gssapi/2.jpeg" alt="在这里插入图片描述"></p>
 <center>图1: OpenLDAP与Kerberos集成方案</center>
-
 <p>为了能更加细致地解释每一步操作，我们切换一下观察视角，以 <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 和 <code>uid=user1,ou=users,dc=example,dc=com</code> 这两个配套账号为例，重新理解一下实现账号统一和密码统一要做的工作和实现的效果：</p>
-<p><img src="/../../images/security/openldap-kerberos-3-sasl-gssapi/3.jpeg" alt="在这里插入图片描述"></p>
+<p><img src="../../images/security/openldap-kerberos-3-sasl-gssapi/3.jpeg" alt="在这里插入图片描述"></p>
 <center>图2: 账号视图下的OpenLDAP与Kerberos集成方案</center>
-
-<p>①：管理员会为用户user1创建两个配套账号，分别是Kerberos上的 <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 和OpenLDAP上的 <code>uid=user1,ou=users,dc=example,dc=com</code> ，两个账号中的用户名部分，即 <code>user1</code> 必须保持一致；<br>⑤：通过SASL&#x2F;GSSAPI，让 <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 可以登录OpenLDAP，登录后获得默认身份 <code>uid=user1,cn=gssapi,cn=auth</code> ，该身份只是过渡用的临时身份；<br>⑥：配置OpenLDAP的账号映射规则，将 <code>uid=user1,cn=gssapi,cn=auth</code> 映射为 <code>uid=user1,ou=users,dc=example,dc=com</code> ，这样，当Kerberos用户再次登录时将会获得 <code>uid=user1,ou=users,dc=example,dc=com</code> 的身份；<br>⑦：启用OpenLDAP的委派认证机制，通过saslauthd服务向Kerberos发起密码验证请求，将OpenLDAP账号的密码指向Kerberos账号的密码</p>
+<p>①：管理员会为用户user1创建两个配套账号，分别是Kerberos上的 <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 和OpenLDAP上的 <code>uid=user1,ou=users,dc=example,dc=com</code> ，两个账号中的用户名部分，即 <code>user1</code> 必须保持一致；<br>
+⑤：通过SASL/GSSAPI，让 <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 可以登录OpenLDAP，登录后获得默认身份 <code>uid=user1,cn=gssapi,cn=auth</code> ，该身份只是过渡用的临时身份；<br>
+⑥：配置OpenLDAP的账号映射规则，将 <code>uid=user1,cn=gssapi,cn=auth</code> 映射为 <code>uid=user1,ou=users,dc=example,dc=com</code> ，这样，当Kerberos用户再次登录时将会获得 <code>uid=user1,ou=users,dc=example,dc=com</code> 的身份；<br>
+⑦：启用OpenLDAP的委派认证机制，通过saslauthd服务向Kerberos发起密码验证请求，将OpenLDAP账号的密码指向Kerberos账号的密码</p>
 <p>通过第①、⑤、⑥步，可以将两个认证系统的账号统一到用户持有的名为 <code>user1</code> 的账号上，通过第⑦步可以将两个认证系统的账号密码统一到用户持有的密码 <code>Admin1234!</code> 上。</p>
-<h3 id="3-重要概念"><a href="#3-重要概念" class="headerlink" title="3. 重要概念"></a>3. 重要概念</h3><p>统一OpenLDAP与Kerberos用户认证的关键技术是SASL，具体来说包括：SASL（程序库）、GSSAPI以及saslauthd，清楚这些技术的工作原理对理解整个方案是非常重要的。下面，我们就来逐一介绍一下这些技术以及它们之间的相互关系。</p>
-<h4 id="3-1-SASL"><a href="#3-1-SASL" class="headerlink" title="3.1 SASL"></a>3.1 SASL</h4><p>SASL - Simple Authentication and Security Layer，中文译作：“简单认证与安全层”，它是一个在网络协议中用来认证和数据加密的构架。SASL的官方定义非常抽象，很难让人直接明白它是做什么的。实际上，我们可以把SASL理解为一个用于身份认证（Athentication）的编程框架或者是一组接口定义，不同的认证机制可以基于这个框架编写各自的实现，从而允许客户端和服务器之间通过协商选出一种共同支持的认证机制完成身份认证。引入SASL后，应用系统不必再针对某一种认证机制去硬编码，而是具备了认证机制的可插拔能力；对于应用系统的开发者而言，使用SASL可以避免从一种认证机制的最底层 API 开始编写实现方案，将精力集中在与SASL框架的集成上即可，因为与各种认证机制对接的细节都已由相应的SASL插件实现了。作为SASL最主流的实现Cyrus SASL，其官方文档列出了大量开箱即用的插件：<a target="_blank" rel="noopener" href="https://www.cyrusimap.org/sasl/#features%E3%80%82SASL%E7%94%B1%E5%85%B1%E4%BA%AB%E7%A8%8B%E5%BA%8F%E5%BA%93cyrus-sasl-lib%E5%92%8C%E8%8B%A5%E5%B9%B2%E9%9D%A2%E5%90%91%E7%89%B9%E5%AE%9A%E8%AE%A4%E8%AF%81%E6%9C%BA%E5%88%B6%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%BA%93%EF%BC%8C%E5%A6%82%EF%BC%9Acyrus-sasl-plain%EF%BC%8Ccyrus-sasl-gssapi%E7%AD%89%E7%BB%84%E6%88%90%E3%80%82">https://www.cyrusimap.org/sasl/#features。SASL由共享程序库cyrus-sasl-lib和若干面向特定认证机制的实现库，如：cyrus-sasl-plain，cyrus-sasl-gssapi等组成。</a></p>
-<h4 id="3-2-GSSAPI"><a href="#3-2-GSSAPI" class="headerlink" title="3.2 GSSAPI"></a>3.2 GSSAPI</h4><p>GSSAPI - Generic Security Services Application Program Interface，它是另一个身份认证框架，基于这个框架也有多种认证机制的实现，如Kerberos，NTLM，SPNEGO等，但最为人所熟知还是Kerberos5的实现，所以会有很多人把“GSSAPI”等同于“Kerberos认证”。GSSAPI的程序库是cyrus-sasl-gssapi，它需要依赖SASL的共享程序库cyrus-sasl-lib。</p>
-<h4 id="3-3-SASL与GSSAPI的关系"><a href="#3-3-SASL与GSSAPI的关系" class="headerlink" title="3.3 SASL与GSSAPI的关系"></a>3.3 SASL与GSSAPI的关系</h4><p>GSSAPI除本身是一个独立的认证框架外，它同时也适配了SASL，也就是说GSSAPI同时也是SASL规范下的一种认证机制，这就使得SASL可以通过GSSAPI间接支持Kerberos5，这就是SASL与GSSAPI之间的微妙关系。本文我们将使用“SASL&#x2F;GSSAPI”同时指代两者。</p>
-<p>为了更好地解释SASL&#x2F;GSSAPI是如何工作的，我们参考了 <a target="_blank" rel="noopener" href="https://serverfault.com/questions/139896/what-is-sasl-gssapi">https://serverfault.com/questions/139896/what-is-sasl-gssapi</a> 给出的一份解释，稍加修改，得到了下面一段模拟SASL&#x2F;GSSAPI协商过程的会话，它可以很好地帮助大家理解一个应用程序的客户端和服务器是如何通过SASL&#x2F;GSSAPI协商完成Kerberos认证的：</p>
+<h3 id="3-重要概念">3. 重要概念</h3>
+<p>统一OpenLDAP与Kerberos用户认证的关键技术是SASL，具体来说包括：SASL（程序库）、GSSAPI以及saslauthd，清楚这些技术的工作原理对理解整个方案是非常重要的。下面，我们就来逐一介绍一下这些技术以及它们之间的相互关系。</p>
+<h4 id="3-1-SASL">3.1 SASL</h4>
+<p>SASL - Simple Authentication and Security Layer，中文译作：“简单认证与安全层”，它是一个在网络协议中用来认证和数据加密的构架。SASL的官方定义非常抽象，很难让人直接明白它是做什么的。实际上，我们可以把SASL理解为一个用于身份认证（Athentication）的编程框架或者是一组接口定义，不同的认证机制可以基于这个框架编写各自的实现，从而允许客户端和服务器之间通过协商选出一种共同支持的认证机制完成身份认证。引入SASL后，应用系统不必再针对某一种认证机制去硬编码，而是具备了认证机制的可插拔能力；对于应用系统的开发者而言，使用SASL可以避免从一种认证机制的最底层 API 开始编写实现方案，将精力集中在与SASL框架的集成上即可，因为与各种认证机制对接的细节都已由相应的SASL插件实现了。作为SASL最主流的实现Cyrus SASL，其官方文档列出了大量开箱即用的插件：<a target="_blank" rel="noopener" href="https://www.cyrusimap.org/sasl/#features%E3%80%82SASL%E7%94%B1%E5%85%B1%E4%BA%AB%E7%A8%8B%E5%BA%8F%E5%BA%93cyrus-sasl-lib%E5%92%8C%E8%8B%A5%E5%B9%B2%E9%9D%A2%E5%90%91%E7%89%B9%E5%AE%9A%E8%AE%A4%E8%AF%81%E6%9C%BA%E5%88%B6%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%BA%93%EF%BC%8C%E5%A6%82%EF%BC%9Acyrus-sasl-plain%EF%BC%8Ccyrus-sasl-gssapi%E7%AD%89%E7%BB%84%E6%88%90%E3%80%82">https://www.cyrusimap.org/sasl/#features。SASL由共享程序库cyrus-sasl-lib和若干面向特定认证机制的实现库，如：cyrus-sasl-plain，cyrus-sasl-gssapi等组成。</a></p>
+<h4 id="3-2-GSSAPI">3.2 GSSAPI</h4>
+<p>GSSAPI - Generic Security Services Application Program Interface，它是另一个身份认证框架，基于这个框架也有多种认证机制的实现，如Kerberos，NTLM，SPNEGO等，但最为人所熟知还是Kerberos5的实现，所以会有很多人把“GSSAPI”等同于“Kerberos认证”。GSSAPI的程序库是cyrus-sasl-gssapi，它需要依赖SASL的共享程序库cyrus-sasl-lib。</p>
+<h4 id="3-3-SASL与GSSAPI的关系">3.3 SASL与GSSAPI的关系</h4>
+<p>GSSAPI除本身是一个独立的认证框架外，它同时也适配了SASL，也就是说GSSAPI同时也是SASL规范下的一种认证机制，这就使得SASL可以通过GSSAPI间接支持Kerberos5，这就是SASL与GSSAPI之间的微妙关系。本文我们将使用“SASL/GSSAPI”同时指代两者。</p>
+<p>为了更好地解释SASL/GSSAPI是如何工作的，我们参考了 <a target="_blank" rel="noopener" href="https://serverfault.com/questions/139896/what-is-sasl-gssapi">https://serverfault.com/questions/139896/what-is-sasl-gssapi</a> 给出的一份解释，稍加修改，得到了下面一段模拟SASL/GSSAPI协商过程的会话，它可以很好地帮助大家理解一个应用程序的客户端和服务器是如何通过SASL/GSSAPI协商完成Kerberos认证的：</p>
 <blockquote>
-<p>客户端连接到服务器说：“Hi，我要登录，我支持SASL，请问我要如何证明自己的身份？”<br>服务器收到连接并作出响应：“收到，我也支持SASL，具体来说支持如下几种SASL认证实现：PLAIN，CRAM-MD5，GSSAPI，…”<br>客户端回答：“我想使用其中的GSSAPI。”<br>服务器响应: “收到。你知道GSSAPI也是一个认证框架，在GSSAPI方式下，具体来说我又支持：Kerberos5，SPNEGO，…”<br>客户端回复：“让我们使用Kerberos5吧，给你我的加密票据…”</p>
+<p>客户端连接到服务器说：“Hi，我要登录，我支持SASL，请问我要如何证明自己的身份？”<br>
+服务器收到连接并作出响应：“收到，我也支持SASL，具体来说支持如下几种SASL认证实现：PLAIN，CRAM-MD5，GSSAPI，…”<br>
+客户端回答：“我想使用其中的GSSAPI。”<br>
+服务器响应: “收到。你知道GSSAPI也是一个认证框架，在GSSAPI方式下，具体来说我又支持：Kerberos5，SPNEGO，…”<br>
+客户端回复：“让我们使用Kerberos5吧，给你我的加密票据…”</p>
 </blockquote>
-<h4 id="3-4-saslauthd"><a href="#3-4-saslauthd" class="headerlink" title="3.4 saslauthd"></a>3.4 saslauthd</h4><p>saslauthd是Cyrus SASL的一个组件，是专门接受明文（plaintext，即用户名+密码）认证请求再调用具体的SASL认证机制完成身份认证的守护进程。它随cyrus-sasl-lib一起安装，但默认不会自动激活并启动，需要通过systemctl手动配置。我们会在后面专门介绍它的工作原理。</p>
-<h4 id="3-5-Kerberos化"><a href="#3-5-Kerberos化" class="headerlink" title="3.5 Kerberos化"></a>3.5 Kerberos化</h4><p>我们不确定“Kerberos化”这一称谓是否是广泛认可且无歧义的概念，但是它确实很好地传达了概念的本质，所以我们决定在本文使用这一术语。“将某应用或服务Kerberos化”意为将该服务添加到Kerberos认证体系里，由此需要为该服务创建服务主体，生成keytab文件，在应用端，它们通常会提供一个 配置项 ，用于指定其所使用的keytab文件，用户需要找到这个配置项，将准确的文件路径配置给该项，然后重启应用，该应用即可凭借keytab文件以服务主体（Service Principal）的身份通过Kerberos认证，进而可以为Kerberos上合法的Principal提供服务了。我们把这一过程和连带的一系列操作称为：“Kerberos化”。</p>
-<h3 id="4-核心原理"><a href="#4-核心原理" class="headerlink" title="4. 核心原理"></a>4. 核心原理</h3><p>熟悉了上述重要概念之后，我们需要把这些概念串联起来，看一下它们是如何协同工作的。最核心的就是在介绍集成方案时列出的第⑤、⑥、⑦三项所对应的技术原理：</p>
+<h4 id="3-4-saslauthd">3.4 saslauthd</h4>
+<p>saslauthd是Cyrus SASL的一个组件，是专门接受明文（plaintext，即用户名+密码）认证请求再调用具体的SASL认证机制完成身份认证的守护进程。它随cyrus-sasl-lib一起安装，但默认不会自动激活并启动，需要通过systemctl手动配置。我们会在后面专门介绍它的工作原理。</p>
+<h4 id="3-5-Kerberos化">3.5 Kerberos化</h4>
+<p>我们不确定“Kerberos化”这一称谓是否是广泛认可且无歧义的概念，但是它确实很好地传达了概念的本质，所以我们决定在本文使用这一术语。“将某应用或服务Kerberos化”意为将该服务添加到Kerberos认证体系里，由此需要为该服务创建服务主体，生成keytab文件，在应用端，它们通常会提供一个 配置项 ，用于指定其所使用的keytab文件，用户需要找到这个配置项，将准确的文件路径配置给该项，然后重启应用，该应用即可凭借keytab文件以服务主体（Service Principal）的身份通过Kerberos认证，进而可以为Kerberos上合法的Principal提供服务了。我们把这一过程和连带的一系列操作称为：“Kerberos化”。</p>
+<h3 id="4-核心原理">4. 核心原理</h3>
+<p>熟悉了上述重要概念之后，我们需要把这些概念串联起来，看一下它们是如何协同工作的。最核心的就是在介绍集成方案时列出的第⑤、⑥、⑦三项所对应的技术原理：</p>
 <ol>
-<li><p>基于SASL&#x2F;GSSAPI实现Kerberos账号登录OpenLDAP</p>
+<li>
+<p>基于SASL/GSSAPI实现Kerberos账号登录OpenLDAP</p>
 </li>
-<li><p>基于olcAuthzRegexp规则映射Kerberos与OpenLDAP账号</p>
+<li>
+<p>基于olcAuthzRegexp规则映射Kerberos与OpenLDAP账号</p>
 </li>
-<li><p>基于saslauthd进行委托认证</p>
+<li>
+<p>基于saslauthd进行委托认证</p>
 </li>
 </ol>
-<h4 id="4-1-基于SASL-GSSAPI实现Kerberos账号登录OpenLDAP"><a href="#4-1-基于SASL-GSSAPI实现Kerberos账号登录OpenLDAP" class="headerlink" title="4.1 基于SASL&#x2F;GSSAPI实现Kerberos账号登录OpenLDAP"></a>4.1 基于SASL&#x2F;GSSAPI实现Kerberos账号登录OpenLDAP</h4><p>Kerberos账号能够登录OpenLDAP的关键在于OpenLDAP集成了SASL&#x2F;GSSAPI认证机制。 整个登录流程遵循的是标准的Kerberos认证规范，只是OpenLDAP并不直接参与，而是由SASL&#x2F;GSSAPI全程负责，下面是具体的工作原理：</p>
-<p><img src="/../../images/security/openldap-kerberos-3-sasl-gssapi/4.jpeg" alt="在这里插入图片描述"></p>
+<h4 id="4-1-基于SASL-GSSAPI实现Kerberos账号登录OpenLDAP">4.1 基于SASL/GSSAPI实现Kerberos账号登录OpenLDAP</h4>
+<p>Kerberos账号能够登录OpenLDAP的关键在于OpenLDAP集成了SASL/GSSAPI认证机制。 整个登录流程遵循的是标准的Kerberos认证规范，只是OpenLDAP并不直接参与，而是由SASL/GSSAPI全程负责，下面是具体的工作原理：</p>
+<p><img src="../../images/security/openldap-kerberos-3-sasl-gssapi/4.jpeg" alt="在这里插入图片描述"></p>
 <center>图3: SASL/GSSAPI认证原理</center>
-
-<p>熟悉Kerberos原理的读者应该能够看出，这是一个标准的Kerberos认证流程，我们要特别留意SASL&#x2F;GSSAPI（即cryus-sasl-gssapi）在其中扮演的角色。在Kerberos中，客户端与服务器的身份认证通常需要进行三次通信，也称Kerberos认证的三个阶段：第一阶段（图示中的①、②）是客户端向KDC的AS请求TGT，这一工作通常是通过kinit命令完成的，SASL&#x2F;GSSAPI并不参与这一阶段的工作，而是在客户端获得了TGT（存储于本地的Ticket Cache）后，才会接棒第二和第三阶段的认证工作。在第二阶段（图示中的③、④），客户端的SASL&#x2F;GSSAPI将代表OpenLDAP客户端与KDC的TGS交互获得访问OpenLDAP的Service Ticket。在第三阶段（图示中的⑤），服务器端的SASL&#x2F;GSSAPI将代表OpenLDAP服务器端接收客户端SASL&#x2F;GSSAPI提交的Service Ticket，完成身份验证后，OpenLDAP的客户端与服务器端就可以正常通信了。</p>
-<p>为了突出SASL&#x2F;GSSAPI在整个认证过程中扮演的角色，示意图简化了Kerberos登录的细节，实际的Kerberos认证过程要比图示复杂得多，且每次交互客户端都会得到两条消息，除了内容有所差别外，最重要的是其中一条客户端可以解密，另一条只能被下一步的被请求方解密，这是Kerberos验证中非常重要的一个机制，更为详细的过程请参阅Kerberos官方文档。</p>
-<h4 id="4-2-基于olcAuthzRegexp规则映射Kerberos与OpenLDAP账号"><a href="#4-2-基于olcAuthzRegexp规则映射Kerberos与OpenLDAP账号" class="headerlink" title="4.2 基于olcAuthzRegexp规则映射Kerberos与OpenLDAP账号"></a>4.2 基于olcAuthzRegexp规则映射Kerberos与OpenLDAP账号</h4><p>一旦允许Kerberos账号登录OpenLDAP，就会立即遇到一个现实问题：这个Kerberos账号在OpenLDAP上应该是什么身份？不管Kerberos和OpenLDAP有没有统一后台存储，Kerberos账号在OpenLDAP上都是无意义的，后者没有“Kerberos账号”这样的概念。为此，OpenLDAP给出的解决方案是：将Kerberos账号关联到一个特定的临时账号上，用户登录后，将自动获得这个临时身份，这个临时账号的格式是：</p>
+<p>熟悉Kerberos原理的读者应该能够看出，这是一个标准的Kerberos认证流程，我们要特别留意SASL/GSSAPI（即cryus-sasl-gssapi）在其中扮演的角色。在Kerberos中，客户端与服务器的身份认证通常需要进行三次通信，也称Kerberos认证的三个阶段：第一阶段（图示中的①、②）是客户端向KDC的AS请求TGT，这一工作通常是通过kinit命令完成的，SASL/GSSAPI并不参与这一阶段的工作，而是在客户端获得了TGT（存储于本地的Ticket Cache）后，才会接棒第二和第三阶段的认证工作。在第二阶段（图示中的③、④），客户端的SASL/GSSAPI将代表OpenLDAP客户端与KDC的TGS交互获得访问OpenLDAP的Service Ticket。在第三阶段（图示中的⑤），服务器端的SASL/GSSAPI将代表OpenLDAP服务器端接收客户端SASL/GSSAPI提交的Service Ticket，完成身份验证后，OpenLDAP的客户端与服务器端就可以正常通信了。</p>
+<p>为了突出SASL/GSSAPI在整个认证过程中扮演的角色，示意图简化了Kerberos登录的细节，实际的Kerberos认证过程要比图示复杂得多，且每次交互客户端都会得到两条消息，除了内容有所差别外，最重要的是其中一条客户端可以解密，另一条只能被下一步的被请求方解密，这是Kerberos验证中非常重要的一个机制，更为详细的过程请参阅Kerberos官方文档。</p>
+<h4 id="4-2-基于olcAuthzRegexp规则映射Kerberos与OpenLDAP账号">4.2 基于olcAuthzRegexp规则映射Kerberos与OpenLDAP账号</h4>
+<p>一旦允许Kerberos账号登录OpenLDAP，就会立即遇到一个现实问题：这个Kerberos账号在OpenLDAP上应该是什么身份？不管Kerberos和OpenLDAP有没有统一后台存储，Kerberos账号在OpenLDAP上都是无意义的，后者没有“Kerberos账号”这样的概念。为此，OpenLDAP给出的解决方案是：将Kerberos账号关联到一个特定的临时账号上，用户登录后，将自动获得这个临时身份，这个临时账号的格式是：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">uid=&lt;primary[/instance][@realm]&gt;,cn=gssapi,cn=auth</span><br></pre></td></tr></table></figure>
-
-<p>对于从Kerberos登录的账号，“cn&#x3D;gssapi,cn&#x3D;auth”部分是固定的，表示用户来自于GSSAPI认证，uid部分是登录用户的Kerberos账号名，如果登录用户的realm是&#x2F;etc&#x2F;krb5.conf中定义的默认realm，SASL会将“@realm”部分省略。以我们的测试用Kerberos账号： <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 为例，其登录OpenLDAP后获得的临时身份是：</p>
+<p>对于从Kerberos登录的账号，“cn=gssapi,cn=auth”部分是固定的，表示用户来自于GSSAPI认证，uid部分是登录用户的Kerberos账号名，如果登录用户的realm是/etc/krb5.conf中定义的默认realm，SASL会将“@realm”部分省略。以我们的测试用Kerberos账号： <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 为例，其登录OpenLDAP后获得的临时身份是：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">uid=user1,cn=gssapi,cn=auth</span><br></pre></td></tr></table></figure>
-
 <p>如果是一个非默认realm账号，例如: <code>admin1/admin@FOREIGN.COM</code> ，其登录OpenLDAP后关联的DN将会是：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">uid=admin1/admin@foreign.com,cn=gssapi,cn=auth</span><br></pre></td></tr></table></figure>
-
 <p>分配默认临时账号的做法很好地解决了使用不同认证机制登录OpenLDAP时如何获得合法身份的问题，但是绑定在一个固定且临时的账号上是不够灵活和实用的，为此OpenLDAP提供了一种基于正则表达式进行账号映射的机制，利用这一机制，我们可以将Kerberos账号精准映射到配套的LDAP账号上，实现两个账号的软性关联。</p>
 <p>OpenLDAP中用于配置账号映射规则的项是 <code>cn=config</code> 下面的 <code>olcAuthzRegexp</code> 。它接收两个正则表达式，第一个用于匹配要被替换的DN，第二个用于描述替换成的DN：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">olcAuthzRegexp: &lt;search pattern&gt;   &lt;replacement pattern&gt;</span><br></pre></td></tr></table></figure>
-
 <p>在我们的示例中，为user1用户创建的Kerberos账号是 <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> ，登录OpenLDAP后默认的映射账号是 <code>uid=user1,cn=gssapi,cn=auth</code> ，而我们为user1创建的配套LDAP账号是 <code>uid=user1,ou=users,dc=example,dc=com</code> ，如果要将前者映射为后者，映射规则应该这样配置：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">olcAuthzRegexp: uid=([^,]*),cn=gssapi,cn=auth uid=$1,ou=users,dc=example,dc=com</span><br></pre></td></tr></table></figure>
-
 <p>其中 <code>uid=([^,]*),cn=gssapi,cn=auth</code> 为search pattern部分，这一pattern会命中所有通过GSSAPI登录的账号，并将uid部分提取为一个capturing group。由于逗号在DN中是特殊字符，所以提取时要特别剔除； <code>uid=$1,ou=users,dc=example,dc=com</code> 是replacement pattern， <code>$1</code> 指代search pattern中的第一个capturing group，也就是小括号中的部分。这个映射规则用一句话概括就是：将使用GSSAPI登录的Kerberos账号全部映射到 <code>ou=users,dc=example,dc=com</code> 下面的同名（uid部分）DN上。完成上述配置后，Kerberos账号 <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 再次登录OpenLDAP时就将变成 <code>uid=user1,ou=users,dc=example,dc=com</code> 用户了。</p>
-<h4 id="4-3-基于saslauthd进行委托认证"><a href="#4-3-基于saslauthd进行委托认证" class="headerlink" title="4.3 基于saslauthd进行委托认证"></a>4.3 基于saslauthd进行委托认证</h4><p>SASL&#x2F;GSSAPI与账号映射机制解决了Kerberos这一侧的账号问题，但是在OpenLDAP这一侧，由于用户可以设置独立的LDAP账号密码（存储在 <code>userPassword</code> 属性里），这会导致虽然两侧账号的用户名一致，但密码却有可能不同，对于用户来说，使用体验上还是两个独立的账号。为此，OpenLDAP提供了一种叫“Pass-Through Authentication”的密码验证机制（本文将使用“委托认证”这一称谓，因为这个名称更加准确），它允许OpenLDAP将密码的核验工作委派给第三方处理，这样的话，LDAP账号将不再单独设置密码，而是可以“关联”到被委派一方的密码上，这可以实现“统一密码”的效果。在OpenLDAP中，启用Pass-Through Authentication的方法是：将用户的 <code>userPassword</code> 属性设置为如下特殊格式：</p>
+<h4 id="4-3-基于saslauthd进行委托认证">4.3 基于saslauthd进行委托认证</h4>
+<p>SASL/GSSAPI与账号映射机制解决了Kerberos这一侧的账号问题，但是在OpenLDAP这一侧，由于用户可以设置独立的LDAP账号密码（存储在 <code>userPassword</code> 属性里），这会导致虽然两侧账号的用户名一致，但密码却有可能不同，对于用户来说，使用体验上还是两个独立的账号。为此，OpenLDAP提供了一种叫“Pass-Through Authentication”的密码验证机制（本文将使用“委托认证”这一称谓，因为这个名称更加准确），它允许OpenLDAP将密码的核验工作委派给第三方处理，这样的话，LDAP账号将不再单独设置密码，而是可以“关联”到被委派一方的密码上，这可以实现“统一密码”的效果。在OpenLDAP中，启用Pass-Through Authentication的方法是：将用户的 <code>userPassword</code> 属性设置为如下特殊格式：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">userPassword: &#123;SASL&#125;username@REALM</span><br></pre></td></tr></table></figure>
-
 <p>其中 <code>{SASL}</code> 部分表示该账号的密码将委托SASL（准确地说是saslauthd）进行验证，而 <code>username@REALM</code> 是提交委托对方验证密码时应使用的委托方账号， <code>username</code> 和 <code>REALM</code> 都需要根据账号实际情况替换相应的值。以测试用的LDAP账号 <code>uid=user1,ou=users,dc=example,dc=com</code> 为例，它的 <code>userPassword</code> 应该设置为：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">userPassword: &#123;SASL&#125;user1@CN-NORTH-1.COMPUTE.INTERNAL</span><br></pre></td></tr></table></figure>
-
 <p>其中 <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 正是关联的Kerberos账号。下图展示了密码委派验证的整个流程：</p>
-<p><img src="/../../images/security/openldap-kerberos-3-sasl-gssapi/5.jpeg" alt="在这里插入图片描述"></p>
+<p><img src="../../images/security/openldap-kerberos-3-sasl-gssapi/5.jpeg" alt="在这里插入图片描述"></p>
 <center>图4: OpenLDAP的委派认证机制</center>
-
-<p>①：当客户端使用LDAP账号 <code>uid=user1,ou=users,dc=example,dc=com</code> 登录OpenLDAP服务器时，OpenLDAP会去数据库中查找这个账号的密码；<br>②：当OpenLDAP发现密码是 <code>{SASL}user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 这种特殊形式时，它将发起委派验证请求；<br>③：OpenLDAP将使用 <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 作为账号名，加上用户输入的密码一起提交给saslauthd；<br>④：saslauthd会负责和Kerberos KDC通信，完成密码工作，并将结果反馈给OpenLDAP</p>
+<p>①：当客户端使用LDAP账号 <code>uid=user1,ou=users,dc=example,dc=com</code> 登录OpenLDAP服务器时，OpenLDAP会去数据库中查找这个账号的密码；<br>
+②：当OpenLDAP发现密码是 <code>{SASL}user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 这种特殊形式时，它将发起委派验证请求；<br>
+③：OpenLDAP将使用 <code>user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 作为账号名，加上用户输入的密码一起提交给saslauthd；<br>
+④：saslauthd会负责和Kerberos KDC通信，完成密码工作，并将结果反馈给OpenLDAP</p>
 <p>前面已经简单介绍过saslauthd，它是一个接受明文用户名和密码再调用SASL进行身份验证的守护进程，saslauthd运行在OpenLDAP服务器端，它对于OpenLDAP客户端是透明的。客户端只负责向OpenLDAP服务器提交用户名和密码，对于后台是否会执行委派验证以及委派给什么系统验证都是无感知的。</p>
-<h3 id="5-安装操作"><a href="#5-安装操作" class="headerlink" title="5. 安装操作"></a>5. 安装操作</h3><p>接下来，我们就进入正式的安装实操环节，下表是将要安装的软件列表：</p>
+<h3 id="5-安装操作">5. 安装操作</h3>
+<p>接下来，我们就进入正式的安装实操环节，下表是将要安装的软件列表：</p>
 <table>
 <thead>
 <tr>
-<th align="left">软件</th>
-<th align="left">说明</th>
-<th align="left">安装包</th>
-<th align="left">版本</th>
+<th style="text-align:left">软件</th>
+<th style="text-align:left">说明</th>
+<th style="text-align:left">安装包</th>
+<th style="text-align:left">版本</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="left">OpenLDAP</td>
-<td align="left">LDAP的开源实现，分Server与Client，其Server端的守护进程名为：slapd</td>
-<td align="left">openldap-clients，openldap-servers</td>
-<td align="left">2.4.44</td>
+<tbody>
+<tr>
+<td style="text-align:left">OpenLDAP</td>
+<td style="text-align:left">LDAP的开源实现，分Server与Client，其Server端的守护进程名为：slapd</td>
+<td style="text-align:left">openldap-clients，openldap-servers</td>
+<td style="text-align:left">2.4.44</td>
 </tr>
 <tr>
-<td align="left">Cyrus SASL</td>
-<td align="left">SASL的开源实现，Cyrus SASL是一个程序库，不会单独运行，而是由集成了SASL验证功能的应用程序（如OpenLDAP）调用。它由核心程序库cyrus-sasl-lib和若干面向不同认证机制开发的具体实现库组成，如面向PLAIN和LOGIN的cyrus-sasl-plain，面向GSSAPI的cyrus-sasl-gssapi等</td>
-<td align="left">cyrus-sasl-lib，cyrus-sasl-gssapi，cyrus-sasl-devel</td>
-<td align="left">2.1.26</td>
+<td style="text-align:left">Cyrus SASL</td>
+<td style="text-align:left">SASL的开源实现，Cyrus SASL是一个程序库，不会单独运行，而是由集成了SASL验证功能的应用程序（如OpenLDAP）调用。它由核心程序库cyrus-sasl-lib和若干面向不同认证机制开发的具体实现库组成，如面向PLAIN和LOGIN的cyrus-sasl-plain，面向GSSAPI的cyrus-sasl-gssapi等</td>
+<td style="text-align:left">cyrus-sasl-lib，cyrus-sasl-gssapi，cyrus-sasl-devel</td>
+<td style="text-align:left">2.1.26</td>
 </tr>
 <tr>
-<td align="left">Keberos5</td>
-<td align="left">大数据领域广泛支持的认证系统，同样分Server与Client</td>
-<td align="left">krb5-worksation，krb5-server（略）</td>
-<td align="left">1.15.1</td>
+<td style="text-align:left">Keberos5</td>
+<td style="text-align:left">大数据领域广泛支持的认证系统，同样分Server与Client</td>
+<td style="text-align:left">krb5-worksation，krb5-server（略）</td>
+<td style="text-align:left">1.15.1</td>
 </tr>
-</tbody></table>
+</tbody>
+</table>
 <p>我们将使用两台服务器分别作为OpenLDAP客户端和服务器端，主要的安装与配置工作是在这两台服务器上展开的，同时还需要在一台已有的Kerberos KDC服务器上进行一些必要操作，整体的安装示意图如下：</p>
-<p><img src="/../../images/security/openldap-kerberos-3-sasl-gssapi/6.jpeg" alt="在这里插入图片描述"></p>
+<p><img src="../../images/security/openldap-kerberos-3-sasl-gssapi/6.jpeg" alt="在这里插入图片描述"></p>
 <center>图5: SASL/GSSAPI安装示意图</center>
-
 <p>关于该示意图，有三点需要解释：</p>
 <ol>
-<li><p>图中各服务器上的虚线框表示程序库或客户端，无守护进程，实现框表示安装后以守护进程形式运行，方框中的名称均为yum安装包的名称</p>
+<li>
+<p>图中各服务器上的虚线框表示程序库或客户端，无守护进程，实现框表示安装后以守护进程形式运行，方框中的名称均为yum安装包的名称</p>
 </li>
-<li><p>saslauthd不是安装包，而是打包在cryus-sasl-lib里的一个组件，安装cryus-sasl-lib后可以在系统里找到它，但是作为守护进程，它不会自动启用，需通过systemctl手动激活并启用。</p>
+<li>
+<p>saslauthd不是安装包，而是打包在cryus-sasl-lib里的一个组件，安装cryus-sasl-lib后可以在系统里找到它，但是作为守护进程，它不会自动启用，需通过systemctl手动激活并启用。</p>
 </li>
-<li><p>我们预设的场景是Kerberos KDC服务器已经存在，所以本文不介绍Kerberos KDC的安装（大部分的大数据平台产品内置Kerberos功能，可以在集群各节点上自动完成Kerberos的安装与配置，我们建议读者使用集群自建的Kerberos），但我们需要在Kerberos KDC服务器上完成如下操作：</p>
+<li>
+<p>我们预设的场景是Kerberos KDC服务器已经存在，所以本文不介绍Kerberos KDC的安装（大部分的大数据平台产品内置Kerberos功能，可以在集群各节点上自动完成Kerberos的安装与配置，我们建议读者使用集群自建的Kerberos），但我们需要在Kerberos KDC服务器上完成如下操作：</p>
 </li>
 </ol>
 <ul>
-<li><p>将KDC上的krb5.conf文件分发给OpenLDAP客户端和服务器，便于后者与KDC通信；</p>
+<li>
+<p>将KDC上的krb5.conf文件分发给OpenLDAP客户端和服务器，便于后者与KDC通信；</p>
 </li>
-<li><p>在KDC上为OpenLDAP服务创建主体（Principal）并将其keytab文件ldap.keytab分发给OpenLDAP服务器，以便将OpenLDAP服务“Kerberos化”，这是服务器端SASL&#x2F;GSSAPI插件要求的；</p>
+<li>
+<p>在KDC上为OpenLDAP服务创建主体（Principal）并将其keytab文件ldap.keytab分发给OpenLDAP服务器，以便将OpenLDAP服务“Kerberos化”，这是服务器端SASL/GSSAPI插件要求的；</p>
 </li>
-<li><p>在KDC上为OpenLDAP服务器主机创建主体（Principal）并将其keytab文件krb5.keytab分发给OpenLDAP服务器，以便将OpenLDAP服务器主机“Kerberos化”，这是服务器端saslauthd要求的</p>
+<li>
+<p>在KDC上为OpenLDAP服务器主机创建主体（Principal）并将其keytab文件krb5.keytab分发给OpenLDAP服务器，以便将OpenLDAP服务器主机“Kerberos化”，这是服务器端saslauthd要求的</p>
 </li>
 </ul>
 <p>※ 提示：本文所有命令均以root用户身份执行，不再显式使用sudo修饰。</p>
-<h4 id="5-1-安装客户端"><a href="#5-1-安装客户端" class="headerlink" title="5.1 安装客户端"></a>5.1 安装客户端</h4><p>本节所谓的“客户端”是指Linux主机，即大数据集群的各个节点，从OpenLDAP和Kerberos KDC的角度看，这些机器都是它们的客户端。</p>
-<h5 id="5-1-1-安装客户端软件包"><a href="#5-1-1-安装客户端软件包" class="headerlink" title="5.1.1 安装客户端软件包"></a>5.1.1 安装客户端软件包</h5><p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
+<h4 id="5-1-安装客户端">5.1 安装客户端</h4>
+<p>本节所谓的“客户端”是指Linux主机，即大数据集群的各个节点，从OpenLDAP和Kerberos KDC的角度看，这些机器都是它们的客户端。</p>
+<h5 id="5-1-1-安装客户端软件包">5.1.1 安装客户端软件包</h5>
+<p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
 <p>登录Linux主机安装如下软件包：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum -y install openldap-clients cyrus-sasl-lib cyrus-sasl-gssapi cyrus-sasl-devel krb5-workstation</span><br></pre></td></tr></table></figure>
-
-<p>openldap-clients是OpenLDAP客户端的安装包；cyrus-sasl-lib是SASL的共享程序库，SASL的各种具体实现都依赖该库；cyrus-sasl-gssapi是SASL面向GSSAPI的实现，使用SASL验证时，OpenLDAP客户端需要使用这个库与KDC交互，所以这个软件包是必须的；cyrus-sasl-devel与其基他devel包类似，为开发基于SASL的应用提供额外的支持，一般情况下并不需要，我们这里选择安装的原因是后面会使用pluginviewer命令检查当前机器上安装了哪些可用的SASL认证机制，这个命令在cyrus-sasl-devel包中；krb5-workstation是Kerberos客户端的安装包，如果当前Linux主机是启用了Kerberos的大数据集群中的节点，则Kerberos客户端已经自动安装。命令执行完毕后可以使用SASL提供的pluginviewer命令检查一下本机是否已经支持SASL&#x2F;GSSAPI认证，如果打印的信息中含有gssapi 插件 的相关内容就表示SASL&#x2F;GSSAPI已经就绪：</p>
+<p>openldap-clients是OpenLDAP客户端的安装包；cyrus-sasl-lib是SASL的共享程序库，SASL的各种具体实现都依赖该库；cyrus-sasl-gssapi是SASL面向GSSAPI的实现，使用SASL验证时，OpenLDAP客户端需要使用这个库与KDC交互，所以这个软件包是必须的；cyrus-sasl-devel与其基他devel包类似，为开发基于SASL的应用提供额外的支持，一般情况下并不需要，我们这里选择安装的原因是后面会使用pluginviewer命令检查当前机器上安装了哪些可用的SASL认证机制，这个命令在cyrus-sasl-devel包中；krb5-workstation是Kerberos客户端的安装包，如果当前Linux主机是启用了Kerberos的大数据集群中的节点，则Kerberos客户端已经自动安装。命令执行完毕后可以使用SASL提供的pluginviewer命令检查一下本机是否已经支持SASL/GSSAPI认证，如果打印的信息中含有gssapi 插件 的相关内容就表示SASL/GSSAPI已经就绪：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pluginviewer  | grep -i gssapi</span><br></pre></td></tr></table></figure>
-
-<h5 id="5-1-2-配置Kerberos"><a href="#5-1-2-配置Kerberos" class="headerlink" title="5.1.2 配置Kerberos"></a>5.1.2 配置Kerberos</h5><p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
-<p>无论是否安装Kerberos客户端，我们都需要提供一份&#x2F;etc&#x2F;krb5.conf配置文件，因为客户端的SASL&#x2F;GSSAPI需要使用它与KDC通信。我们无需编写这个文件，可从Kerberos KDC上直接下载一份到本地，然后上传到客户端的相同位置上（或者通过scp拷贝）即可：</p>
+<h5 id="5-1-2-配置Kerberos">5.1.2 配置Kerberos</h5>
+<p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
+<p>无论是否安装Kerberos客户端，我们都需要提供一份/etc/krb5.conf配置文件，因为客户端的SASL/GSSAPI需要使用它与KDC通信。我们无需编写这个文件，可从Kerberos KDC上直接下载一份到本地，然后上传到客户端的相同位置上（或者通过scp拷贝）即可：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 注意：请先行上传krb5.conf文件到当前目录，然后再执行以下命令</span></span><br><span class="line"><span class="built_in">mv</span> -f /etc/krb5.conf /etc/krb5.conf.$(<span class="built_in">date</span> +%s)</span><br><span class="line"><span class="built_in">cp</span> -f krb5.conf /etc/krb5.conf</span><br></pre></td></tr></table></figure>
-
-<h5 id="5-1-3-配置SSH"><a href="#5-1-3-配置SSH" class="headerlink" title="5.1.3 配置SSH"></a>5.1.3 配置SSH</h5><p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
-<p>为了允许用户登录大数据集群节点提交作业，需要对SSH进行一些与Kerberos和GSSAPI有关的必要配置，具体操作为：打开&#x2F;etc&#x2F;ssh&#x2F;sshd_config文件，将“KerberosAuthentication no”和“GSSAPIAuthentication no”注释掉（如果有的话），并设置“KerberosAuthentication yes”和“GSSAPIAuthentication yes”</p>
+<h5 id="5-1-3-配置SSH">5.1.3 配置SSH</h5>
+<p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
+<p>为了允许用户登录大数据集群节点提交作业，需要对SSH进行一些与Kerberos和GSSAPI有关的必要配置，具体操作为：打开/etc/ssh/sshd_config文件，将“KerberosAuthentication no”和“GSSAPIAuthentication no”注释掉（如果有的话），并设置“KerberosAuthentication yes”和“GSSAPIAuthentication yes”</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#KerberosAuthentication no</span></span><br><span class="line">KerberosAuthentication <span class="built_in">yes</span></span><br><span class="line"></span><br><span class="line"><span class="comment">#GSSAPIAuthentication no</span></span><br><span class="line">GSSAPIAuthentication <span class="built_in">yes</span></span><br></pre></td></tr></table></figure>
-
 <p>或执行如下脚本：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cp</span> -f /etc/ssh/sshd_config /etc/ssh/sshd_config.$(<span class="built_in">date</span> +%s)</span><br><span class="line"></span><br><span class="line">items=(KerberosAuthentication GSSAPIAuthentication)</span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> item <span class="keyword">in</span> <span class="variable">$&#123;items[@]&#125;</span>; <span class="keyword">do</span></span><br><span class="line">    searchExp=<span class="string">&quot;^\s*[#]\?\s*<span class="variable">$&#123;item&#125;</span>\s*\(yes\|no\)$&quot;</span></span><br><span class="line">    <span class="comment"># 所有待删除的行号</span></span><br><span class="line">    lineNums=($(grep -n -e <span class="string">&quot;<span class="variable">$searchExp</span>&quot;</span> /etc/ssh/sshd_config | <span class="built_in">cut</span> -d: -f1))</span><br><span class="line">    <span class="comment"># 生成sed行表达式</span></span><br><span class="line">    <span class="built_in">printf</span> -v linesExp <span class="string">&quot;%sd;&quot;</span> <span class="string">&quot;<span class="variable">$&#123;lineNums[@]&#125;</span>&quot;</span></span><br><span class="line">    <span class="comment"># 删除所有行</span></span><br><span class="line">    sed -i -e <span class="string">&quot;<span class="variable">$linesExp</span>&quot;</span> /etc/ssh/sshd_config</span><br><span class="line">    <span class="comment"># 在原第一行处插入新配置（为了保持配置项出现在合适的位置）</span></span><br><span class="line">    sed -i <span class="string">&quot;<span class="variable">$&#123;lineNums[0]&#125;</span>i <span class="variable">$&#123;item&#125;</span> yes&quot;</span> /etc/ssh/sshd_config</span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
-
 <p>修改完毕后重启sshd服务：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">systemctl restart sshd</span><br><span class="line">systemctl status sshd</span><br></pre></td></tr></table></figure>
-
 <p>待服务重启之后，就可以使用SSH进行登录验证了。在启用 <code>GSSAPIAuthentication yes</code> 的情况下，可以使用ssh的 <code>-K</code> 参数显式使用GSSAPI认证方式登录，且登录后会自动获得Kerberos凭证（相当于登录时自动执行了一次kinit），此时已经完成了集成方案中标注的第⑧步操作；在启用 <code>KerberosAuthentication yes</code> 的情况下，使用常规的SSH登录方式（publickey或password），登录后也会自动获得Kerberos凭证（同样相当于登录时自动执行了一次kinit），此时我们完成的是第④步的增强操作，即用户以常规SSH方式登录后可自动获得Kerberos凭证。不管用户选择哪种方式登录，此时的用户已经具备了提交大数据作业的条件。</p>
-<h5 id="5-1-4-配置SASL-GSSAPI"><a href="#5-1-4-配置SASL-GSSAPI" class="headerlink" title="5.1.4 配置SASL&#x2F;GSSAPI"></a>5.1.4 配置SASL&#x2F;GSSAPI</h5><p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
-<p>客户端的SASL&#x2F;GSSAPI并不需要特别的配置，它唯一的要求是本地必须要有一份&#x2F;etc&#x2F;krb5.conf配置文件，以便其基于该文件提供的信息与KDC通信，我们已经在5.1.3完成了这项工作。此外，有文章提及需要在OpenLDAP客户端向&#x2F;etc&#x2F;openldap&#x2F;ldap.conf中添加 <code>SASL_MECH GSSAPI</code> 一项配置，这一操作不是必须的，因为OpenLDAP客户端与服务器使用SASL认证时有一个协商过程，只要客户端和服务器都安装了cyrus-sasl-gssapi，GSSAPI会自动入选。当然，显式配置也没有错。</p>
-<h4 id="5-2-安装服务器端"><a href="#5-2-安装服务器端" class="headerlink" title="5.2 安装服务器端"></a>5.2 安装服务器端</h4><p>※ 提示：本节操作的前置条件是OpenLDAP已经完成安装和配置，也就是已经完成了本系列第一篇文章4.1节的全部操作。</p>
-<h5 id="5-2-1-安装服务器端软件包"><a href="#5-2-1-安装服务器端软件包" class="headerlink" title="5.2.1 安装服务器端软件包"></a>5.2.1 安装服务器端软件包</h5><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<h5 id="5-1-4-配置SASL-GSSAPI">5.1.4 配置SASL/GSSAPI</h5>
+<p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
+<p>客户端的SASL/GSSAPI并不需要特别的配置，它唯一的要求是本地必须要有一份/etc/krb5.conf配置文件，以便其基于该文件提供的信息与KDC通信，我们已经在5.1.3完成了这项工作。此外，有文章提及需要在OpenLDAP客户端向/etc/openldap/ldap.conf中添加 <code>SASL_MECH GSSAPI</code> 一项配置，这一操作不是必须的，因为OpenLDAP客户端与服务器使用SASL认证时有一个协商过程，只要客户端和服务器都安装了cyrus-sasl-gssapi，GSSAPI会自动入选。当然，显式配置也没有错。</p>
+<h4 id="5-2-安装服务器端">5.2 安装服务器端</h4>
+<p>※ 提示：本节操作的前置条件是OpenLDAP已经完成安装和配置，也就是已经完成了本系列第一篇文章4.1节的全部操作。</p>
+<h5 id="5-2-1-安装服务器端软件包">5.2.1 安装服务器端软件包</h5>
+<p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
 <p>在OpenLDAP服务器端主机上安装如下软件包：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum -y install cyrus-sasl-lib cyrus-sasl-gssapi cyrus-sasl-devel krb5-workstation</span><br></pre></td></tr></table></figure>
-
-<p>与客户端一样，安装后可以通过pluginviewer命令检查一下服务器端的SASL&#x2F;GSSAPI是否已安装妥当：</p>
+<p>与客户端一样，安装后可以通过pluginviewer命令检查一下服务器端的SASL/GSSAPI是否已安装妥当：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pluginviewer  | grep -i gssapi</span><br></pre></td></tr></table></figure>
-
-<h5 id="5-2-2-配置Kerberos"><a href="#5-2-2-配置Kerberos" class="headerlink" title="5.2.2 配置Kerberos"></a>5.2.2 配置Kerberos</h5><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
-<p>与客户端一样，服务器端的SASL&#x2F;GSSAPI也需要一份&#x2F;etc&#x2F;krb5.conf配置文件以便与Kerberos KDC通信，所以要再次从KDC下载一份并上传（或者通过scp拷贝）到服务器相同位置。</p>
+<h5 id="5-2-2-配置Kerberos">5.2.2 配置Kerberos</h5>
+<p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<p>与客户端一样，服务器端的SASL/GSSAPI也需要一份/etc/krb5.conf配置文件以便与Kerberos KDC通信，所以要再次从KDC下载一份并上传（或者通过scp拷贝）到服务器相同位置。</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 注意：请先行上传krb5.conf文件到当前目录，然后再执行以下命令</span></span><br><span class="line"><span class="built_in">mv</span> -f /etc/krb5.conf /etc/krb5.conf.bak</span><br><span class="line"><span class="built_in">cp</span> -f krb5.conf /etc/krb5.conf</span><br></pre></td></tr></table></figure>
-
-<h5 id="5-2-3-配置SSH"><a href="#5-2-3-配置SSH" class="headerlink" title="5.2.3 配置SSH"></a>5.2.3 配置SSH</h5><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<h5 id="5-2-3-配置SSH">5.2.3 配置SSH</h5>
+<p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
 <p>如果需要用户以GSSAPI方式SSH登录服务器，需要进行和客户端一样的SSH配置，具体请参考5.1.3一节。</p>
-<h5 id="5-2-4-配置SASL-GSSAPI"><a href="#5-2-4-配置SASL-GSSAPI" class="headerlink" title="5.2.4 配置SASL&#x2F;GSSAPI"></a>5.2.4 配置SASL&#x2F;GSSAPI</h5><p>接下来的一系列操作是配置OpenLDAP支持SASL&#x2F;GSSAPI认证从而允许用户使用Kerberos账号登录OpenLDAP，本节操作对应4.1和4.2两节阐述的原理。</p>
-<h6 id="5-2-4-1-Kerberos化OpenLDAP服务"><a href="#5-2-4-1-Kerberos化OpenLDAP服务" class="headerlink" title="5.2.4.1 Kerberos化OpenLDAP服务"></a>5.2.4.1 Kerberos化OpenLDAP服务</h6><p>从前面的SASL&#x2F;GSSAPI工作原理图可以看出，SASL&#x2F;GSSAPI是代表OpenLDAP的Client端和Server端同Kerberos KDC交互的，所以Client端和Server端必须持有合法的Kerberos用户身份，在Client端，SASL&#x2F;GSSAPI会从Ticket Cache中获取Kerberos身份；而在Server端，由于SASL&#x2F;GSSAPI是以插件形式伴随OpenLDAP守护进程运行的，这就需要OpenLDAP的Server端要有Kerberos服务主体（Service Principal）身份，因此，我们需要将这个Service Principal创建出来，并把生成的keytab文件配置给OpenLDAP，也就是完成OpenLDAP的“Kerberos化”。具体操作如下：</p>
+<h5 id="5-2-4-配置SASL-GSSAPI">5.2.4 配置SASL/GSSAPI</h5>
+<p>接下来的一系列操作是配置OpenLDAP支持SASL/GSSAPI认证从而允许用户使用Kerberos账号登录OpenLDAP，本节操作对应4.1和4.2两节阐述的原理。</p>
+<h6 id="5-2-4-1-Kerberos化OpenLDAP服务">5.2.4.1 Kerberos化OpenLDAP服务</h6>
+<p>从前面的SASL/GSSAPI工作原理图可以看出，SASL/GSSAPI是代表OpenLDAP的Client端和Server端同Kerberos KDC交互的，所以Client端和Server端必须持有合法的Kerberos用户身份，在Client端，SASL/GSSAPI会从Ticket Cache中获取Kerberos身份；而在Server端，由于SASL/GSSAPI是以插件形式伴随OpenLDAP守护进程运行的，这就需要OpenLDAP的Server端要有Kerberos服务主体（Service Principal）身份，因此，我们需要将这个Service Principal创建出来，并把生成的keytab文件配置给OpenLDAP，也就是完成OpenLDAP的“Kerberos化”。具体操作如下：</p>
 <p>※ 提示：以下操作在 [ Kerberos KDC ] 上执行</p>
 <p>登录KDC服务器，通过如下命令为OpenLDAP创建服务主体：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 创建OpenLDAP服务主体</span></span><br><span class="line">kadmin.local -q <span class="string">&quot;addprinc -randkey ldap/ip-10-0-0-70.cn-north-1.compute.internal@CN-NORTH-1.COMPUTE.INTERNAL&quot;</span></span><br><span class="line"><span class="comment"># 生成keytab文件</span></span><br><span class="line">kadmin.local -q <span class="string">&quot;ktadd -k ldap.keytab ldap/ip-10-0-0-70.cn-north-1.compute.internal@CN-NORTH-1.COMPUTE.INTERNAL&quot;</span></span><br></pre></td></tr></table></figure>
-
 <p>执行成功后，将在当前目录下生成一个 <code>ldap.keytab</code> 文件，将该文件下载至本地再上传（或使用scp远程复制）到OpenLDAP服务器。这里要注意一个细节，OpenLDAP的服务主体名 <code>ldap</code> 不是随意命名的，它是运行OpenLDAP守护进程的Linux用户名。</p>
 <p>※ 提示：以下操作在 [ OpenLDAP ] 上执行</p>
-<p>登录OpenLDAP服务器，上传ldap.keytab文件并移至&#x2F;etc&#x2F;openldap&#x2F;ldap.keytab，修改文件的所有人和读写权限：</p>
+<p>登录OpenLDAP服务器，上传ldap.keytab文件并移至/etc/openldap/ldap.keytab，修改文件的所有人和读写权限：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 注意：请先行上传ldap.keytab文件到当前目录，然后再执行以下命令</span></span><br><span class="line"><span class="built_in">mv</span> ldap.keytab /etc/openldap/ldap.keytab</span><br><span class="line"><span class="built_in">chown</span> ldap:ldap /etc/openldap/ldap.keytab</span><br><span class="line"><span class="built_in">chmod</span> 600 /etc/openldap/ldap.keytab</span><br><span class="line"><span class="built_in">ls</span> -al /etc/openldap/ldap.keytab</span><br></pre></td></tr></table></figure>
-
-<p>然后，打开OpenLDAP服务器上的&#x2F;etc&#x2F;sysconfig&#x2F;slapd文件，修改或追加 <code>KRB5_KTNAME</code> 配置项，指明keytab文件存放的路径：</p>
+<p>然后，打开OpenLDAP服务器上的/etc/sysconfig/slapd文件，修改或追加 <code>KRB5_KTNAME</code> 配置项，指明keytab文件存放的路径：</p>
 <figure class="highlight properties"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">KRB5_KTNAME</span>=<span class="string">&quot;FILE:/etc/openldap/ldap.keytab&quot;</span></span><br></pre></td></tr></table></figure>
-
 <p>或直接执行如下命令：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cp</span> -f /etc/sysconfig/slapd /etc/sysconfig/slapd.$(<span class="built_in">date</span> +%s)</span><br><span class="line"><span class="comment"># comment out existing config items</span></span><br><span class="line">sed -i <span class="string">&#x27;s/^KRB5_KTNAME/#KRB5_KTNAME/g&#x27;</span> /etc/sysconfig/slapd</span><br><span class="line"><span class="comment"># add new config item</span></span><br><span class="line"><span class="built_in">echo</span> <span class="string">&#x27;KRB5_KTNAME=&quot;FILE:/etc/openldap/ldap.keytab&quot;&#x27;</span> &gt;&gt; /etc/sysconfig/slapd</span><br><span class="line"><span class="built_in">cat</span> /etc/sysconfig/slapd</span><br></pre></td></tr></table></figure>
-
 <p>至此，OpenLDAP的“Kerberos化”操作完成。</p>
-<h6 id="5-2-4-2-配置账号映射规则"><a href="#5-2-4-2-配置账号映射规则" class="headerlink" title="5.2.4.2 配置账号映射规则"></a>5.2.4.2 配置账号映射规则</h6><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<h6 id="5-2-4-2-配置账号映射规则">5.2.4.2 配置账号映射规则</h6>
+<p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
 <p>前文4.2一节已经介绍了账号映射的工作原理，现在我们要进行实际的配置操作，执行：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF | ldapadd -Y EXTERNAL -H ldapi:/// </span></span><br><span class="line"><span class="string">dn: cn=config</span></span><br><span class="line"><span class="string">changetype: modify</span></span><br><span class="line"><span class="string">replace: olcAuthzRegexp</span></span><br><span class="line"><span class="string">olcAuthzRegexp: uid=([^,]*),cn=gssapi,cn=auth uid=\$1,ou=users,dc=example,dc=com</span></span><br><span class="line"><span class="string">EOF</span></span><br></pre></td></tr></table></figure>
-
-<p>在配置olcAuthzRegexp表达式时要特别留意一个陷阱，由于表达式中用于表示匹配组的变量 <code>$1</code> 与shell脚本的函数参数变量 <code>$1</code> 冲突，这会导致在shell脚本中构建ldif文本内容时， <code>$1</code> 会被优先当做shell中的函数参数变量进行解析，而不是以普通字符串输入到文件中，所以必须要对 <code>$</code> 符号进行转义，将 <code>$1</code> 写作 <code>\$1</code> ，否则映射规则无发按预期生效。如想要确认实际生成的规则是什么样的，可以查看&#x2F;etc&#x2F;openldap&#x2F;slapd.d&#x2F;cn&#x3D;config.ldif文件中的 <code>olcAuthzRegexp</code> 一项，它保存的是当前生效中的配置。另外，如果配置规则较长，可能会看到该项被断成了两行，这不是配置错误，ldif有一项规范（RFC 2849），约定单行ldif语句长度应控制在78字符之内，超过部分会自动断行。</p>
-<h6 id="5-2-4-3-重启slapd服务"><a href="#5-2-4-3-重启slapd服务" class="headerlink" title="5.2.4.3 重启slapd服务"></a>5.2.4.3 重启slapd服务</h6><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<p>在配置olcAuthzRegexp表达式时要特别留意一个陷阱，由于表达式中用于表示匹配组的变量 <code>$1</code> 与shell脚本的函数参数变量 <code>$1</code> 冲突，这会导致在shell脚本中构建ldif文本内容时， <code>$1</code> 会被优先当做shell中的函数参数变量进行解析，而不是以普通字符串输入到文件中，所以必须要对 <code>$</code> 符号进行转义，将 <code>$1</code> 写作 <code>\$1</code> ，否则映射规则无发按预期生效。如想要确认实际生成的规则是什么样的，可以查看/etc/openldap/slapd.d/cn=config.ldif文件中的 <code>olcAuthzRegexp</code> 一项，它保存的是当前生效中的配置。另外，如果配置规则较长，可能会看到该项被断成了两行，这不是配置错误，ldif有一项规范（RFC 2849），约定单行ldif语句长度应控制在78字符之内，超过部分会自动断行。</p>
+<h6 id="5-2-4-3-重启slapd服务">5.2.4.3 重启slapd服务</h6>
+<p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
 <p>上述部分操作需要重启slapd服务才会生效，故执行命令：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">systemctl restart slapd; systemctl status slapd</span><br></pre></td></tr></table></figure>
-
-<h6 id="5-2-4-4-验证"><a href="#5-2-4-4-验证" class="headerlink" title="5.2.4.4 验证"></a>5.2.4.4 验证</h6><p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
+<h6 id="5-2-4-4-验证">5.2.4.4 验证</h6>
+<p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
 <p>重启完毕后，就可以通过Kerberos凭证登录OpenLDAP了。我们可以这样验证：登录任意大数据集群节点，使用kinit命令获得user1的凭证：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kinit user1</span><br></pre></td></tr></table></figure>
-
 <p>提示输入密码时输入 <code>Admin1234!</code> ，然后通过：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">klist</span><br></pre></td></tr></table></figure>
-
 <p>确认一下是否获得了user1的身份，确认无误后使用ldapsearch检索一下DN：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ldapsearch -Y GSSAPI -LLL -H ldap://ip-10-0-0-70.cn-north-1.compute.internal -b <span class="string">&quot;dc=example,dc=com&quot;</span> | grep dn</span><br></pre></td></tr></table></figure>
-
 <p>你应该注意这条ldapsearch命令的两个特殊之处：首先，命令行没有提供-D，-w参数，即没有提供登录用户的任何信息；其次，“-Y GSSAPI”参数的含义是强制使用GSSAPI方式进行认证。根据前面介绍的原理，此时，OpenLDAP客户端将使用Kerberos凭证以GSSAPI方式登录（实际上，在不提供-D参数的情况下，即使不使用“-Y GSSAPI”，通过客户端与服务器的协商，最终使用的还是GSSAPI认证）。此外，我们还可以使用ldapwhoami命令，验证一下登录的身份到底是什么：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ldapwhoami -Y GSSAPI -H ldap://ip-10-0-0-70.cn-north-1.compute.internal</span><br></pre></td></tr></table></figure>
-
 <p>如果输出如下信息则表示当前用户是： <code>uid=user1,ou=users,dc=example,dc=com</code> ，验证无误：</p>
 <blockquote>
-<p>SASL&#x2F;GSSAPI authentication started<br>SASL username: <a href="mailto:&#117;&#115;&#x65;&#114;&#49;&#64;&#x43;&#78;&#45;&#x4e;&#x4f;&#x52;&#x54;&#72;&#x2d;&#49;&#46;&#67;&#79;&#x4d;&#80;&#x55;&#84;&#x45;&#46;&#x49;&#x4e;&#x54;&#69;&#82;&#78;&#65;&#76;">user1@CN-NORTH-1.COMPUTE.INTERNAL</a><br>SASL SSF: 256<br>SASL data security layer installed.<br>dn:uid&#x3D;user1,ou&#x3D;users,dc&#x3D;example,dc&#x3D;com</p>
+<p>SASL/GSSAPI authentication started<br>
+SASL username: user1@CN-NORTH-1.COMPUTE.INTERNAL<br>
+SASL SSF: 256<br>
+SASL data security layer installed.<br>
+dn:uid=user1,ou=users,dc=example,dc=com</p>
 </blockquote>
-<h5 id="5-2-5-启用委托验证"><a href="#5-2-5-启用委托验证" class="headerlink" title="5.2.5 启用委托验证"></a>5.2.5 启用委托验证</h5><p>为了能让LDAP账号委托Kerberos验证密码，实现“密码统一”，我们需要配置saslauthd服务。本节各项操作对应4.3一节阐述的原理。</p>
-<h6 id="5-2-5-1-配置OpenLDAP支持委托验证"><a href="#5-2-5-1-配置OpenLDAP支持委托验证" class="headerlink" title="5.2.5.1 配置OpenLDAP支持委托验证"></a>5.2.5.1 配置OpenLDAP支持委托验证</h6><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<h5 id="5-2-5-启用委托验证">5.2.5 启用委托验证</h5>
+<p>为了能让LDAP账号委托Kerberos验证密码，实现“密码统一”，我们需要配置saslauthd服务。本节各项操作对应4.3一节阐述的原理。</p>
+<h6 id="5-2-5-1-配置OpenLDAP支持委托验证">5.2.5.1 配置OpenLDAP支持委托验证</h6>
+<p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
 <p>前文已经介绍了启用委托认证的方法，现在，我们用user1这个账号为列，演示一下具体操作：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cat</span> &lt;&lt; <span class="string">EOF | ldapmodify -D &quot;cn=admin,dc=example,dc=com&quot; -w Admin1234!</span></span><br><span class="line"><span class="string">dn: uid=user1,ou=users,dc=example,dc=com</span></span><br><span class="line"><span class="string">changetype: modify</span></span><br><span class="line"><span class="string">replace: userPassword</span></span><br><span class="line"><span class="string">userPassword: &#123;SASL&#125;user1@CN-NORTH-1.COMPUTE.INTERNAL</span></span><br><span class="line"><span class="string">EOF</span></span><br></pre></td></tr></table></figure>
-
 <p>上述命令将user1的 <code>userPassword</code> 设为了：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">userPassword: &#123;SASL&#125;user1@CN-NORTH-1.COMPUTE.INTERNAL</span><br></pre></td></tr></table></figure>
-
 <p>你可能也见过下面这样种形式的配置：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">userPassword:: e1NBU0x9dXNlcjFAQ04tTk9SVEgtMS5DT01QVVRFLklOVEVSTkFMCg==</span><br></pre></td></tr></table></figure>
-
-<p>这种形式是在 <code>userPassword</code> 的后面跟了两个冒号加一串ASCII字符。实际上，上述两种形式是等价的，后者的ASCII字符串正是“{SASL}<a href="mailto:&#x75;&#x73;&#x65;&#x72;&#x31;&#x40;&#x43;&#x4e;&#45;&#x4e;&#79;&#x52;&#x54;&#72;&#45;&#x31;&#x2e;&#x43;&#x4f;&#x4d;&#x50;&#x55;&#84;&#69;&#46;&#73;&#x4e;&#84;&#x45;&#82;&#x4e;&#x41;&#76;">user1@CN-NORTH-1.COMPUTE.INTERNAL</a>”这段明文经过base64编码后的样子。</p>
-<h6 id="5-2-5-2-Kerberos化OpenLDAP主机"><a href="#5-2-5-2-Kerberos化OpenLDAP主机" class="headerlink" title="5.2.5.2 Kerberos化OpenLDAP主机"></a>5.2.5.2 Kerberos化OpenLDAP主机</h6><p>Kerberos化OpenLDAP主机是saslauthd要求的，因为saslauthd需要使用主机身份与KDC进行通信，完成密码验证。具体操作与Kerberos化OpenLDAP服务类似：</p>
+<p>这种形式是在 <code>userPassword</code> 的后面跟了两个冒号加一串ASCII字符。实际上，上述两种形式是等价的，后者的ASCII字符串正是“{SASL}user1@CN-NORTH-1.COMPUTE.INTERNAL”这段明文经过base64编码后的样子。</p>
+<h6 id="5-2-5-2-Kerberos化OpenLDAP主机">5.2.5.2 Kerberos化OpenLDAP主机</h6>
+<p>Kerberos化OpenLDAP主机是saslauthd要求的，因为saslauthd需要使用主机身份与KDC进行通信，完成密码验证。具体操作与Kerberos化OpenLDAP服务类似：</p>
 <p>※ 提示：以下操作在 [ Kerberos KDC ] 上执行</p>
 <p>首先，登录KDC服务器，通过如下命令创建OpenLDAP主机对应的principal并生成keytab文件：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 创建OpenLDAP主机主体</span></span><br><span class="line">kadmin.local -q <span class="string">&quot;addprinc -randkey host/ip-10-0-0-70.cn-north-1.compute.internal@CN-NORTH-1.COMPUTE.INTERNAL&quot;</span></span><br><span class="line"><span class="comment"># 生成keytab文件</span></span><br><span class="line">kadmin.local -q <span class="string">&quot;ktadd -k krb5.keytab host/ip-10-0-0-70.cn-north-1.compute.internal@CN-NORTH-1.COMPUTE.INTERNAL&quot;</span></span><br></pre></td></tr></table></figure>
-
 <p>※ 提示：以下操作在 [ OpenLDAP ] 上执行</p>
-<p>然后，回到OpenLDAP服务器，上传krb5.keytab文件并移至&#x2F;etc&#x2F;krb5.keytab，修改文件的所有人和读写权限：</p>
+<p>然后，回到OpenLDAP服务器，上传krb5.keytab文件并移至/etc/krb5.keytab，修改文件的所有人和读写权限：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 注意：请先行上传krb5.keytab文件到当前目录，然后再执行以下命令</span></span><br><span class="line"><span class="built_in">mv</span> krb5.keytab /etc/krb5.keytab</span><br><span class="line"><span class="built_in">chown</span> root:root /etc/krb5.keytab</span><br><span class="line"><span class="built_in">chmod</span> 600 /etc/krb5.keytab</span><br><span class="line"><span class="built_in">ls</span> -al /etc/krb5.keytab</span><br></pre></td></tr></table></figure>
-
-<p>配置saslauthd使用&#x2F;etc&#x2F;krb5.keytab的地方在&#x2F;etc&#x2F;sysconfig&#x2F;saslauthd文件中，我们将在后面配置saslauthd时一并完成。</p>
-<h6 id="5-2-5-3-配置SASL库"><a href="#5-2-5-3-配置SASL库" class="headerlink" title="5.2.5.3 配置SASL库"></a>5.2.5.3 配置SASL库</h6><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
-<p>接下来，修改SASL库的配置，新建或编辑&#x2F;etc&#x2F;sasl2&#x2F;slapd.conf（该文件默认是不存在的，初次配置时需要创建），添加或修改如下内容：</p>
+<p>配置saslauthd使用/etc/krb5.keytab的地方在/etc/sysconfig/saslauthd文件中，我们将在后面配置saslauthd时一并完成。</p>
+<h6 id="5-2-5-3-配置SASL库">5.2.5.3 配置SASL库</h6>
+<p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<p>接下来，修改SASL库的配置，新建或编辑/etc/sasl2/slapd.conf（该文件默认是不存在的，初次配置时需要创建），添加或修改如下内容：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">pwcheck_method: saslauthd</span><br><span class="line">saslauthd_path: /run/saslauthd/mux</span><br></pre></td></tr></table></figure>
-
 <p>或直接执行如下命令：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">tee</span> /etc/sasl2/slapd.conf &lt;&lt;<span class="string">EOF</span></span><br><span class="line"><span class="string">pwcheck_method: saslauthd</span></span><br><span class="line"><span class="string">saslauthd_path: /run/saslauthd/mux</span></span><br><span class="line"><span class="string">EOF</span></span><br><span class="line"><span class="built_in">cat</span> /etc/sasl2/slapd.conf</span><br></pre></td></tr></table></figure>
-
 <p>对SASL库的配置是衔接OpenLDAP和saslauthd的关键部分，当OpenLDAP解析到 <code>{SASL}user1@CN-NORTH-1.COMPUTE.INTERNAL</code> 时，会根据这里的配置找到委托方（也就是saslauthd）的信息并转发认证请求的。关于SASL库的配置，有如下几点需要注意：</p>
-<p>1.Cyrus SASL官方文档对SASL库配置文件的存放位置是这样描述的：默认情况下，Cyrus SASL是从&#x2F;usr&#x2F;lib&#x2F;sasl2&#x2F;下读取指定应用（或服务）的配置文件的。如果你的系统是64位架构的，则位置应是&#x2F;usr&#x2F;lib64&#x2F;sasl2&#x2F;。但实际上，不同Linux版本在预编译Cyrus SASL的安装包时可能会依据规范对存储文件的存放位置进行适当调整，例如，在本文使用的Amazon Linux 2环境下，SASL库的配置文件统一存放于&#x2F;etc&#x2F;sasl2&#x2F;目录下。再者，SASL对配置文件的命名也是有要求的，文件名需要与使用的应用（或服务）名保持一致。例如，smtpd服务需要使用SASL库，需在该目录下提供名为smtpd.conf的配置文件。在我们的示例里，面向为OpenLDAP提供的SASL配置文件必须命名为slapd.conf（slapd是OpenLDAP的守护 进程名）。经过测试，错误的文件名将不会被期望的应用加载，里面的任何配置都不会生效。</p>
+<p>1.Cyrus SASL官方文档对SASL库配置文件的存放位置是这样描述的：默认情况下，Cyrus SASL是从/usr/lib/sasl2/下读取指定应用（或服务）的配置文件的。如果你的系统是64位架构的，则位置应是/usr/lib64/sasl2/。但实际上，不同Linux版本在预编译Cyrus SASL的安装包时可能会依据规范对存储文件的存放位置进行适当调整，例如，在本文使用的Amazon Linux 2环境下，SASL库的配置文件统一存放于/etc/sasl2/目录下。再者，SASL对配置文件的命名也是有要求的，文件名需要与使用的应用（或服务）名保持一致。例如，smtpd服务需要使用SASL库，需在该目录下提供名为smtpd.conf的配置文件。在我们的示例里，面向为OpenLDAP提供的SASL配置文件必须命名为slapd.conf（slapd是OpenLDAP的守护 进程名）。经过测试，错误的文件名将不会被期望的应用加载，里面的任何配置都不会生效。</p>
 <p>2.修改对应应用程序（服务）的SASL库配置后，通常需要重启相应的服务才会生效。例如，本例中，我们配置的slapd.conf是供OpenLDAP使用的，所以，只有重启OpenLDAP，该配置才会生效，这也从侧面印证了SASL库的工作原理：SASL库并不是独立运行的daemon进程，而是被使用SASL的应用程序调用的程序库，如果要更新SASL库的配置，通常都需要重启使用这个库的应用程序，以便其重新加载配置。</p>
-<h6 id="5-2-5-4-配置saslauthd"><a href="#5-2-5-4-配置saslauthd" class="headerlink" title="5.2.5.4 配置saslauthd"></a>5.2.5.4 配置saslauthd</h6><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
-<p>打开&#x2F;etc&#x2F;sysconfig&#x2F;saslauthd，添加或修改如下内容：</p>
+<h6 id="5-2-5-4-配置saslauthd">5.2.5.4 配置saslauthd</h6>
+<p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<p>打开/etc/sysconfig/saslauthd，添加或修改如下内容：</p>
 <figure class="highlight properties"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">SOCKETDIR</span>=<span class="string">/run/saslauthd</span></span><br><span class="line"><span class="attr">MECH</span>=<span class="string">kerberos5</span></span><br><span class="line"><span class="attr">KRB5_KTNAME</span>=<span class="string">/etc/krb5.keytab</span></span><br></pre></td></tr></table></figure>
-
 <p>或直接执行如下命令：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cp</span> -f /etc/sysconfig/saslauthd /etc/sysconfig/saslauthd.$(<span class="built_in">date</span> +%s)</span><br><span class="line"><span class="comment"># 配置SOCKETDIR</span></span><br><span class="line">sed -i <span class="string">&#x27;s/^SOCKETDIR/#SOCKETDIR/g&#x27;</span> /etc/sysconfig/saslauthd</span><br><span class="line"><span class="built_in">echo</span> <span class="string">&#x27;SOCKETDIR=/run/saslauthd&#x27;</span> &gt;&gt; /etc/sysconfig/saslauthd</span><br><span class="line"><span class="comment"># 配置MECH</span></span><br><span class="line">sed -i <span class="string">&#x27;s/^MECH/#MECH/g&#x27;</span> /etc/sysconfig/saslauthd</span><br><span class="line"><span class="built_in">echo</span> <span class="string">&#x27;MECH=kerberos5&#x27;</span> &gt;&gt; /etc/sysconfig/saslauthd</span><br><span class="line"><span class="comment"># 配置KRB5_KTNAME</span></span><br><span class="line">sed -i <span class="string">&#x27;s/^KRB5_KTNAME/#KRB5_KTNAME/g&#x27;</span> /etc/sysconfig/saslauthd</span><br><span class="line"><span class="built_in">echo</span> <span class="string">&#x27;KRB5_KTNAME=/etc/krb5.keytab&#x27;</span> &gt;&gt; /etc/sysconfig/saslauthd</span><br><span class="line"><span class="built_in">cat</span> /etc/sysconfig/saslauthd</span><br></pre></td></tr></table></figure>
-
 <p>解释一下几个配置项：</p>
 <ul>
-<li><p>SOCKETDIR：saslauthd使用Unix域套接字技术实现两进程间的通信，该项配置的是套接字绑定的文件系统路径（注意：不得以&#x2F;mux结尾）</p>
+<li>
+<p>SOCKETDIR：saslauthd使用Unix域套接字技术实现两进程间的通信，该项配置的是套接字绑定的文件系统路径（注意：不得以/mux结尾）</p>
 </li>
-<li><p>MECH：指定使用的认证机制</p>
+<li>
+<p>MECH：指定使用的认证机制</p>
 </li>
-<li><p>KRB5_KTNAME：本地主机的keytab文件存放位置，这也是5.2.5.2一节需要完成的一项操作，合并到本节一起完成。</p>
+<li>
+<p>KRB5_KTNAME：本地主机的keytab文件存放位置，这也是5.2.5.2一节需要完成的一项操作，合并到本节一起完成。</p>
 </li>
 </ul>
-<p>注意：部分文章中提到的在CentOS&#x2F;RHEL系统下配置的&#x2F;etc&#x2F;saslauthd.conf（对应于Ubuntu下的&#x2F;etc&#x2F;default&#x2F;saslauthd）文件并不存在，应与OS和saslauthd的版本差异有关，本例中，基于我们的操作环境，实际使用并生效的是&#x2F;etc&#x2F;sysconfig&#x2F;saslauthd文件，请在操作中注意区分。</p>
-<h6 id="5-2-5-5-启用saslauthd"><a href="#5-2-5-5-启用saslauthd" class="headerlink" title="5.2.5.5 启用saslauthd"></a>5.2.5.5 启用saslauthd</h6><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<p>注意：部分文章中提到的在CentOS/RHEL系统下配置的/etc/saslauthd.conf（对应于Ubuntu下的/etc/default/saslauthd）文件并不存在，应与OS和saslauthd的版本差异有关，本例中，基于我们的操作环境，实际使用并生效的是/etc/sysconfig/saslauthd文件，请在操作中注意区分。</p>
+<h6 id="5-2-5-5-启用saslauthd">5.2.5.5 启用saslauthd</h6>
+<p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
 <p>默认情况下saslauthd是未被激活的，需要手动激活并启用它：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">systemctl <span class="built_in">enable</span> saslauthd</span><br><span class="line">systemctl start saslauthd</span><br><span class="line">systemctl status saslauthd</span><br></pre></td></tr></table></figure>
-
-<h6 id="5-2-5-6-重启slapd服务"><a href="#5-2-5-6-重启slapd服务" class="headerlink" title="5.2.5.6 重启slapd服务"></a>5.2.5.6 重启slapd服务</h6><p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
+<h6 id="5-2-5-6-重启slapd服务">5.2.5.6 重启slapd服务</h6>
+<p>※ 提示：本节操作在 [ OpenLDAP ] 上执行</p>
 <p>上述部分操作同要需要重启slapd服务才会生效，故执行命令：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">systemctl restart slapd; systemctl status slapd</span><br></pre></td></tr></table></figure>
-
-<h6 id="5-2-5-7-验证"><a href="#5-2-5-7-验证" class="headerlink" title="5.2.5.7 验证"></a>5.2.5.7 验证</h6><p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
+<h6 id="5-2-5-7-验证">5.2.5.7 验证</h6>
+<p>※ 提示：本节操作在 [ 大数据集群各个节点 ] 上执行</p>
 <p>为了验证委派验证和saslauthd是否生效，我们可以在客户端使用ldapsearch检索一下DN：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ldapsearch -x -LLL -H ldap://ip-10-0-0-70.cn-north-1.compute.internal -b <span class="string">&quot;dc=example,dc=com&quot;</span> -D <span class="string">&#x27;uid=user1,ou=users,dc=example,dc=com&#x27;</span> -w Admin1234! | grep dn</span><br></pre></td></tr></table></figure>
-
 <p>与此前的ldapsearch命令行不同的是，这一次我们使用-x参数显式地以LDAP账号登录，登录用户是user1的LDAP账号，但这次提供的密码其实是user1的Kerberos密码，如果命令能输出DN信息就表明所有配置已经生效了（如果读者感兴趣，可以修改user1的Kerberos密码，再使用该命令验证一下）。此外，同样可以再次使用ldapwhoami进行验证：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ldapwhoami -x -H ldap://ip-10-0-0-70.cn-north-1.compute.internal -D <span class="string">&#x27;uid=user1,ou=users,dc=example,dc=com&#x27;</span> -w Admin1234!</span><br></pre></td></tr></table></figure>
-
-<h3 id="6-简化方案"><a href="#6-简化方案" class="headerlink" title="6. 简化方案"></a>6. 简化方案</h3><p>我们的系列文章即将接近尾声，所有的操作和配置都已全部结束，尽管这个方案整合了大量的技术用以弥合OpenLDAP和Kerberos之间的隔阂，但这依然难掩两个认证系统无法实现绝对统一的事实，最直接的表现就是：无论如何，都必须要在OpenLDAP和Kerberos上分别创建账号，因为本质上它们都是基于各自的账号运作，不存在以某一方账号为中心的集成方式。所以，如果读者认为此前介绍的集成操作过去复杂，也可以考虑这样一种简化版本：</p>
-<p><img src="/../../images/security/openldap-kerberos-3-sasl-gssapi/7.jpeg" alt="在这里插入图片描述"></p>
+<h3 id="6-简化方案">6. 简化方案</h3>
+<p>我们的系列文章即将接近尾声，所有的操作和配置都已全部结束，尽管这个方案整合了大量的技术用以弥合OpenLDAP和Kerberos之间的隔阂，但这依然难掩两个认证系统无法实现绝对统一的事实，最直接的表现就是：无论如何，都必须要在OpenLDAP和Kerberos上分别创建账号，因为本质上它们都是基于各自的账号运作，不存在以某一方账号为中心的集成方式。所以，如果读者认为此前介绍的集成操作过去复杂，也可以考虑这样一种简化版本：</p>
+<p><img src="../../images/security/openldap-kerberos-3-sasl-gssapi/7.jpeg" alt="在这里插入图片描述"></p>
 <center>图6: OpenLDAP与Kerberos集成的简化方案</center>
-
 <p>省略此前方案中的第②、⑤、⑥、⑦四步操作，这一简化版本会大幅削减环境搭建阶段的工作量，但是会增加一定的后期维护工作，主要差异体现在：</p>
 <ul>
-<li><p>简化版本下，OpenLDAP和Kerberos无统一数据库，账号数据各自存储，各自维护</p>
+<li>
+<p>简化版本下，OpenLDAP和Kerberos无统一数据库，账号数据各自存储，各自维护</p>
 </li>
-<li><p>简化版本下，创建OpenLDAP和Kerberos账号时，除用户名一致外，OpenLDAP账户需显式配置密码，且密码要与Kerberos密码一致，后期维护时，如需修改密码，也必须在两系统中同时更新</p>
+<li>
+<p>简化版本下，创建OpenLDAP和Kerberos账号时，除用户名一致外，OpenLDAP账户需显式配置密码，且密码要与Kerberos密码一致，后期维护时，如需修改密码，也必须在两系统中同时更新</p>
 </li>
 </ul>
-<h3 id="7-回顾总结"><a href="#7-回顾总结" class="headerlink" title="7. 回顾总结"></a>7. 回顾总结</h3><p>回顾一下我们整个系列文章的探索历程：在第一篇文章中，我们将OpenLDAP配置为Kerberos的后台数据库，然后通过 <code>addprinc -x dn=...</code> 方式创建Kerberos用户，将Kerberos用户的数据存储到一个已存在的OpenLDAP用户上，实现了两套认证系统在用户数据库上的统一；在第二篇文章中，我们配置了SSSD，让各个Linux主机可以同步LDAP账号，为用户提交大数据作业铺平了道路；在第三篇文章中，我们通过SASL&#x2F;GSSAPI，实现了以Kerberos账号登录OpenLDAP的目标，并将登录后的Kerberos账号映射到OpenLDAP的配套账号上，实现了两个系统的账号统一，然后继续通过配置saslauthd，实现了两个系统的密码统一。</p>
-<h3 id="附录：常见错误"><a href="#附录：常见错误" class="headerlink" title="附录：常见错误"></a>附录：常见错误</h3><ul>
-<li>登录OpenLDAP时报错：Server ldap&#x2F;localhost@xxx not found in Kerberos database</li>
+<h3 id="7-回顾总结">7. 回顾总结</h3>
+<p>回顾一下我们整个系列文章的探索历程：在第一篇文章中，我们将OpenLDAP配置为Kerberos的后台数据库，然后通过 <code>addprinc -x dn=...</code> 方式创建Kerberos用户，将Kerberos用户的数据存储到一个已存在的OpenLDAP用户上，实现了两套认证系统在用户数据库上的统一；在第二篇文章中，我们配置了SSSD，让各个Linux主机可以同步LDAP账号，为用户提交大数据作业铺平了道路；在第三篇文章中，我们通过SASL/GSSAPI，实现了以Kerberos账号登录OpenLDAP的目标，并将登录后的Kerberos账号映射到OpenLDAP的配套账号上，实现了两个系统的账号统一，然后继续通过配置saslauthd，实现了两个系统的密码统一。</p>
+<h3 id="附录：常见错误">附录：常见错误</h3>
+<ul>
+<li>登录OpenLDAP时报错：Server ldap/localhost@xxx not found in Kerberos database</li>
 </ul>
 <blockquote>
-<p>ldap_initialize( )<br>SASL&#x2F;GSSAPI authentication started<br>ldap_sasl_interactive_bind_s: Local error (-2)<br>additional info: SASL(-1): generic failure: GSSAPI Error: Unspecified GSS failure. Minor code may provide more information (Server ldap&#x2F;localhost@xxx not found in Kerberos database)</p>
+<p>ldap_initialize( )<br>
+SASL/GSSAPI authentication started<br>
+ldap_sasl_interactive_bind_s: Local error (-2)<br>
+additional info: SASL(-1): generic failure: GSSAPI Error: Unspecified GSS failure. Minor code may provide more information (Server ldap/localhost@xxx not found in Kerberos database)</p>
 </blockquote>
-<p>这个错误是指在KDC里没有找到 <code>ldap/localhost@xxx</code> 这个Sevice Principal，但实际上我们给OpenLDAP创建的Princial的机器名部分不是localhost，而是机器的FQDN，所以错误是出在了OpenLDAP的客户端配置上，OpenLDAP的客户端配置文件是&#x2F;etc&#x2F;openldap&#x2F;ldap.conf，该文件中的URI配置就是用来配置OpenLDAP服务器地址的，如果我们没有显式地修改URI的值，那么它的默认值就是ldap:&#x2F;&#x2F;localhost，这会导致拼接Sevice Principal时使用的主机名也是localhost而不是FQDN。解决方法也很简单，就是修改&#x2F;etc&#x2F;openldap&#x2F;ldap.conf中URI这一项，使用OpenLDAP服务器的FQDN来配置URI。</p>
+<p>这个错误是指在KDC里没有找到 <code>ldap/localhost@xxx</code> 这个Sevice Principal，但实际上我们给OpenLDAP创建的Princial的机器名部分不是localhost，而是机器的FQDN，所以错误是出在了OpenLDAP的客户端配置上，OpenLDAP的客户端配置文件是/etc/openldap/ldap.conf，该文件中的URI配置就是用来配置OpenLDAP服务器地址的，如果我们没有显式地修改URI的值，那么它的默认值就是ldap://localhost，这会导致拼接Sevice Principal时使用的主机名也是localhost而不是FQDN。解决方法也很简单，就是修改/etc/openldap/ldap.conf中URI这一项，使用OpenLDAP服务器的FQDN来配置URI。</p>
 <ul>
 <li>登录OpenLDAP时报错：result: 32 No such object</li>
 </ul>
@@ -333,36 +359,52 @@
 <li>登录OpenLDAP时报错：No worthy mechs found</li>
 </ul>
 <blockquote>
-<p>ldap_sasl_interactive_bind_s: Unknown authentication method (-6)<br>additional info: SASL(-4): no mechanism available: No worthy mechs found</p>
+<p>ldap_sasl_interactive_bind_s: Unknown authentication method (-6)<br>
+additional info: SASL(-4): no mechanism available: No worthy mechs found</p>
 </blockquote>
 <p>错误原因：Linux主机上尚未安装cyrus-sasl-gssapi，或安装了但并未重启slapd服务。</p>
 <ul>
 <li>登录OpenLDAP时报错：No Kerberos credentials available</li>
 </ul>
 <blockquote>
-<p>SASL&#x2F;GSSAPI authentication started<br>ldap_sasl_interactive_bind_s: Local error (-2)<br>additional info: SASL(-1): generic failure: GSSAPI Error: Unspecified GSS failure. Minor code may provide more information (No Kerberos credentials available (default cache: FILE:&#x2F;tmp&#x2F;krb5cc_0))</p>
+<p>SASL/GSSAPI authentication started<br>
+ldap_sasl_interactive_bind_s: Local error (-2)<br>
+additional info: SASL(-1): generic failure: GSSAPI Error: Unspecified GSS failure. Minor code may provide more information (No Kerberos credentials available (default cache: FILE:/tmp/krb5cc_0))</p>
 </blockquote>
 <p>当前用户尚未获得相应的Principal身份，需先执行kinit命令获得kerberos身份。</p>
 <hr>
 <p>关于作者：</p>
-<p>耿立超，架构师，多年系统开发与架构经验，对大数据、云计算、企业级应用、SaaS、分布式存储和领域驱动设计有丰富的实践经验，著有 《大数据平台架构与原型实现：数据中台建设实战》（ <a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">https://item.jd.com/12677623.html</a> ）一书，个人技术博客： <a href="/">https://laurence.enlightgram.com</a> </p>
+<p>耿立超，架构师，多年系统开发与架构经验，对大数据、云计算、企业级应用、SaaS、分布式存储和领域驱动设计有丰富的实践经验，著有 《大数据平台架构与原型实现：数据中台建设实战》（ <a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">https://item.jd.com/12677623.html</a> ）一书，个人技术博客： <a href="/">https://laurence.enlightgram.com</a></p>
 <hr>
 <p>关联阅读：</p>
-<p>集成OpenLDAP与Kerberos实现统一认证(一)：整合后台数据库<br><a href="/security/openldap-kerberos-1-backend-database/">https://laurence.enlightgram.com/security/openldap-kerberos-1-backend-database/</a> </p>
-<p>集成OpenLDAP与Kerberos实现统一认证(二)：基于SSSD同步LDAP账号<br><a href="/security/openldap-kerberos-2-sssd/">https://laurence.enlightgram.com/security/openldap-kerberos-2-sssd/</a> </p>
-<p>集成OpenLDAP与Kerberos实现统一认证(三)：基于SASL&#x2F;GSSAPI深度集成<br><a href="/security/openldap-kerberos-3-sasl-gssapi/">https://laurence.enlightgram.com/security/openldap-kerberos-3-sasl-gssapi/</a> </p>
+<p>集成OpenLDAP与Kerberos实现统一认证(一)：整合后台数据库<br>
+<a href="/security/openldap-kerberos-1-backend-database/">https://laurence.enlightgram.com/security/openldap-kerberos-1-backend-database/</a></p>
+<p>集成OpenLDAP与Kerberos实现统一认证(二)：基于SSSD同步LDAP账号<br>
+<a href="/security/openldap-kerberos-2-sssd/">https://laurence.enlightgram.com/security/openldap-kerberos-2-sssd/</a></p>
+<p>集成OpenLDAP与Kerberos实现统一认证(三)：基于SASL/GSSAPI深度集成<br>
+<a href="/security/openldap-kerberos-3-sasl-gssapi/">https://laurence.enlightgram.com/security/openldap-kerberos-3-sasl-gssapi/</a></p>
 <hr>
 <p>参考资料：</p>
-<p>OpenLDAP官方文档<br><a target="_blank" rel="noopener" href="https://www.openldap.org/doc/admin26/sasl.html">https://www.openldap.org/doc/admin26/sasl.html</a> </p>
-<p>Cyrus SASL官方文档<br><a target="_blank" rel="noopener" href="https://www.cyrusimap.org/sasl/sasl/faqs/openldap-sasl-gssapi.html">https://www.cyrusimap.org/sasl/sasl/faqs/openldap-sasl-gssapi.html</a> </p>
-<p>Kerberos (I): How does Kerberos work? - Theory<br><a target="_blank" rel="noopener" href="https://www.tarlogic.com/blog/how-kerberos-works/">https://www.tarlogic.com/blog/how-kerberos-works/</a> </p>
-<p>Introduction to Kerberos Authentication<br><a target="_blank" rel="noopener" href="https://software.intel.com/sites/manageability/AMT_Implementation_and_Reference_Guide/default.htm?turl=WordDocuments/introductiontokerberosauthentication.htm">https://software.intel.com/sites/manageability/AMT_Implementation_and_Reference_Guide&#x2F;default.htm?turl&#x3D;WordDocuments%2Fintroductiontokerberosauthentication.htm</a> </p>
-<p>What is SASL&#x2F;GSSAPI?<br><a target="_blank" rel="noopener" href="https://serverfault.com/questions/139896/what-is-sasl-gssapi">https://serverfault.com/questions/139896/what-is-sasl-gssapi</a> </p>
-<p>Setting up LDAP authentication with SASL<br><a target="_blank" rel="noopener" href="https://docs.percona.com/percona-server-for-mongodb/4.4/sasl-auth.html">https://docs.percona.com/percona-server-for-mongodb/4.4/sasl-auth.html</a> </p>
-<p>Pass-through OpenLDAP Authentication (Using SASL) to Active Directory on Centos<br><a target="_blank" rel="noopener" href="https://www.hellovinoth.com/pass-through-openldap-authentication-using-sasl-to-active-directory-on-centos/">https://www.hellovinoth.com/pass-through-openldap-authentication-using-sasl-to-active-directory-on-centos/</a> </p>
-<p>Stack Overflow<br><a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/45566096/server-ldap-example-comexample-com-not-found-in-kerberos-database">https://stackoverflow.com/questions/45566096/server-ldap-example-comexample-com-not-found-in-kerberos-database</a> </p>
-<p>OpenLDAP Authentication With Kerberos Backend Using SASL<br><a target="_blank" rel="noopener" href="http://labs.opinsys.com/blog/2010/03/16/openldap-authentication-with-kerberos-backend-using-sasl/">http://labs.opinsys.com/blog/2010/03/16/openldap-authentication-with-kerberos-backend-using-sasl/</a> </p>
-<p>打造统一的 Kerberos 和 OpenLDAP 服务<br><a target="_blank" rel="noopener" href="https://blog.7v1.net/system/kerberos-openldap.html">https://blog.7v1.net/system/kerberos-openldap.html</a> </p>
+<p>OpenLDAP官方文档<br>
+<a target="_blank" rel="noopener" href="https://www.openldap.org/doc/admin26/sasl.html">https://www.openldap.org/doc/admin26/sasl.html</a></p>
+<p>Cyrus SASL官方文档<br>
+<a target="_blank" rel="noopener" href="https://www.cyrusimap.org/sasl/sasl/faqs/openldap-sasl-gssapi.html">https://www.cyrusimap.org/sasl/sasl/faqs/openldap-sasl-gssapi.html</a></p>
+<p>Kerberos (I): How does Kerberos work? - Theory<br>
+<a target="_blank" rel="noopener" href="https://www.tarlogic.com/blog/how-kerberos-works/">https://www.tarlogic.com/blog/how-kerberos-works/</a></p>
+<p>Introduction to Kerberos Authentication<br>
+<a target="_blank" rel="noopener" href="https://software.intel.com/sites/manageability/AMT_Implementation_and_Reference_Guide/default.htm?turl=WordDocuments%2Fintroductiontokerberosauthentication.htm">https://software.intel.com/sites/manageability/AMT_Implementation_and_Reference_Guide/default.htm?turl=WordDocuments%2Fintroductiontokerberosauthentication.htm</a></p>
+<p>What is SASL/GSSAPI?<br>
+<a target="_blank" rel="noopener" href="https://serverfault.com/questions/139896/what-is-sasl-gssapi">https://serverfault.com/questions/139896/what-is-sasl-gssapi</a></p>
+<p>Setting up LDAP authentication with SASL<br>
+<a target="_blank" rel="noopener" href="https://docs.percona.com/percona-server-for-mongodb/4.4/sasl-auth.html">https://docs.percona.com/percona-server-for-mongodb/4.4/sasl-auth.html</a></p>
+<p>Pass-through OpenLDAP Authentication (Using SASL) to Active Directory on Centos<br>
+<a target="_blank" rel="noopener" href="https://www.hellovinoth.com/pass-through-openldap-authentication-using-sasl-to-active-directory-on-centos/">https://www.hellovinoth.com/pass-through-openldap-authentication-using-sasl-to-active-directory-on-centos/</a></p>
+<p>Stack Overflow<br>
+<a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/45566096/server-ldap-example-comexample-com-not-found-in-kerberos-database">https://stackoverflow.com/questions/45566096/server-ldap-example-comexample-com-not-found-in-kerberos-database</a></p>
+<p>OpenLDAP Authentication With Kerberos Backend Using SASL<br>
+<a target="_blank" rel="noopener" href="http://labs.opinsys.com/blog/2010/03/16/openldap-authentication-with-kerberos-backend-using-sasl/">http://labs.opinsys.com/blog/2010/03/16/openldap-authentication-with-kerberos-backend-using-sasl/</a></p>
+<p>打造统一的 Kerberos 和 OpenLDAP 服务<br>
+<a target="_blank" rel="noopener" href="https://blog.7v1.net/system/kerberos-openldap.html">https://blog.7v1.net/system/kerberos-openldap.html</a></p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>集成 OpenLDAP 与 Kerberos 实现统一认证 (3)：基于 SASL/GSSAPI 深度集成</p><p><a href="https://laurence.enlightgram.com/security/openldap-kerberos-3-sasl-gssapi/">https://laurence.enlightgram.com/security/openldap-kerberos-3-sasl-gssapi/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2022-06-07</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/Kerberos/">Kerberos</a><a class="link-muted mr-2" rel="tag" href="/tags/OpenLDAP/">OpenLDAP</a><a class="link-muted mr-2" rel="tag" href="/tags/SASL/">SASL</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/security/emr-ranger-iam-roles/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">AWS EMR内置Ranger插件使用的IAM Role及其设计策略</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/security/openldap-kerberos-2-sssd/"><span class="level-item">集成 OpenLDAP 与 Kerberos 实现统一认证 (2)：基于 SSSD 同步 LDAP 账号</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {

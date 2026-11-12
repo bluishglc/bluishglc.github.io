@@ -45,10 +45,45 @@
 </head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence 的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Cache与Fetch（二）</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/Java/">Java</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2010-06-13T01:22:00.000Z" title="2010-06-12 18:22:00">2010-06-12</time></span><span class="level-item is-hidden-mobile">阅读用时：9 分钟 (约 1410 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><div class="content"><p>这两天一直百思不得其解的问题终于解决了，这个问题如下：</p>
 <p>通过HQL：“select distinct forumGroup from ForumGroup as forumGroup left join fetch forumGroup.forums”查询所有ForumGroup，并将它们的Forum一并抓取出来。查询启用了查询缓存，ForumGroup和Forum都被映射为可缓存的。</p>
 <p>第一次执行时，自然不会命中，生成了如下SQL：</p>
-<p>&#x2F;* select<br>distinct forumGroup<br>from<br>ForumGroup as forumGroup<br>left join<br>fetch forumGroup.forums *&#x2F; select<br>distinct forumgroup0_.id as id3_0_,<br>forums1_.id as id2_1_,<br>forumgroup0_.creationTime as creation2_3_0_,<br>forumgroup0_.description as descript3_3_0_,<br>forumgroup0_.modifiedTime as modified4_3_0_,<br>forumgroup0_.name as name3_0_,<br>forums1_.creationTime as creation2_2_1_,<br>forums1_.description as descript3_2_1_,<br>forums1_.groupId as groupId2_1_,<br>forums1_.modifiedTime as modified4_2_1_,<br>forums1_.name as name2_1_,<br>forums1_.groupId as groupId0__,<br>forums1_.id as id0__<br>from<br>ForumGroup forumgroup0_<br>left outer join<br>Forum forums1_<br>on forumgroup0_.id&#x3D;forums1_.groupId</p>
+<p>/* select<br>
+distinct forumGroup<br>
+from<br>
+ForumGroup as forumGroup<br>
+left join<br>
+fetch forumGroup.forums */ select<br>
+distinct forumgroup0_.id as id3_0_,<br>
+forums1_.id as id2_1_,<br>
+forumgroup0_.creationTime as creation2_3_0_,<br>
+forumgroup0_.description as descript3_3_0_,<br>
+forumgroup0_.modifiedTime as modified4_3_0_,<br>
+forumgroup0_.name as name3_0_,<br>
+forums1_.creationTime as creation2_2_1_,<br>
+forums1_.description as descript3_2_1_,<br>
+forums1_.groupId as groupId2_1_,<br>
+forums1_.modifiedTime as modified4_2_1_,<br>
+forums1_.name as name2_1_,<br>
+forums1_.groupId as groupId0__,<br>
+forums1_.id as id0__<br>
+from<br>
+ForumGroup forumgroup0_<br>
+left outer join<br>
+Forum forums1_<br>
+on forumgroup0_.id=forums1_.groupId</p>
 <p>第二次执行时，按理是应该命中，不会有任何SQL生成，但是实际结果却是：</p>
-<p>DEBUG [13178395@qtp-12191562-0] StandardQueryCache.get(142) | returning cached query results </p>
-<p>&#x2F;* load one-to-many oobbs.domainmodel.forum.ForumGroup.forums *&#x2F; select<br>forums0_.groupId as groupId1_,<br>forums0_.id as id1_,<br>forums0_.id as id2_0_,<br>forums0_.creationTime as creation2_2_0_,<br>forums0_.description as descript3_2_0_,<br>forums0_.groupId as groupId2_0_,<br>forums0_.modifiedTime as modified4_2_0_,<br>forums0_.name as name2_0_<br>from<br>Forum forums0_<br>where<br>forums0_.groupId&#x3D;?</p>
+<p>DEBUG [13178395@qtp-12191562-0] StandardQueryCache.get(142) | returning cached query results</p>
+<p>/* load one-to-many oobbs.domainmodel.forum.ForumGroup.forums */ select<br>
+forums0_.groupId as groupId1_,<br>
+forums0_.id as id1_,<br>
+forums0_.id as id2_0_,<br>
+forums0_.creationTime as creation2_2_0_,<br>
+forums0_.description as descript3_2_0_,<br>
+forums0_.groupId as groupId2_0_,<br>
+forums0_.modifiedTime as modified4_2_0_,<br>
+forums0_.name as name2_0_<br>
+from<br>
+Forum forums0_<br>
+where<br>
+forums0_.groupId=?</p>
 <p>.</p>
 <p>.</p>
 <p>.</p>
@@ -57,10 +92,13 @@
 <p>这里让我迷惑的是：Forum被标记为了可缓存，明明是被Fetch出来的，在第一次查询时它们就被加载出来并进入到二级缓存了，为什么在第二次第三次查询时却找不到这些对象，还要重新查数据库呢？经过排查发现，在ForumGroup的Forum集合字段上没有将该集合配制为可缓存。这样，虽然第一次这些Forum都被抓取出来并进入了二级缓存，但是ForumGroup对象的forums集合（一个存放Forum的ID的集合，不是Forum对象的集合）在上次查询时就没有进入二级缓存，现在，这些集合没有保存forum的ID（在第一次查询的结果集中是有这些ID的，但是因为这个forums集合没有配为可缓存的，所以在ForumGroup对象进入二级缓存时，这些forum集合的信息就被舍弃了）。 这样，下一次查询时，虽然查询命中，但是查询结果中的ForumGroup的fourms集合是空的，因而会重新生成SQL查询。</p>
 <p>另外，通过Debug，我发现，Query Cache缓存一个查询，其key就不多说了，在log中都会打出，其Value很有意思。上面的这个查询这的value是[5228208135548928, 1, 1, 2]，第一个数据是一个时间戳，第二，三，四就是ForumGroup的ID。因为做过表连接，所以ForumGroup_1重复出现了一次。Forum的ID并没有在缓存的value中。由此可以确定，Query Cache只缓存结果集中对象的ID。被Fetch出来的Forum不被视为结果集的一部分，因而没有出现在结果集中。</p>
 <p>还会有一些相似的问题可能会出现，比如：</p>
-<p>相同条件第一次<br>list的时候，因为查询缓存中找不到，不管class缓存是否存在数据，总是发送一条sql语句到数据库获取全部数据，然后填充查询缓存和class缓存。但是第二次执行的时候，问题就来了，如果你的class缓存的超时时间比较短，现在class缓存都超时了，但是查询缓存还在，那么list方法在获取id串以后，将会一个一个去数据库load（ N+1次<br>查询问题 ）！因此，class缓存的超时时间一定不能短于查询缓存设置的超时时间！如果还设置了发呆时间的话，保证class缓存的发呆时间也大于查询缓存的生存时间。这里还有其他情况，比如class缓存被程序强制evict了，这种情况就请自己注意了。如果以上问题没有处理好，就必然会出现N+1次查询问题。</p>
+<p>相同条件第一次<br>
+list的时候，因为查询缓存中找不到，不管class缓存是否存在数据，总是发送一条sql语句到数据库获取全部数据，然后填充查询缓存和class缓存。但是第二次执行的时候，问题就来了，如果你的class缓存的超时时间比较短，现在class缓存都超时了，但是查询缓存还在，那么list方法在获取id串以后，将会一个一个去数据库load（ N+1次<br>
+查询问题 ）！因此，class缓存的超时时间一定不能短于查询缓存设置的超时时间！如果还设置了发呆时间的话，保证class缓存的发呆时间也大于查询缓存的生存时间。这里还有其他情况，比如class缓存被程序强制evict了，这种情况就请自己注意了。如果以上问题没有处理好，就必然会出现N+1次查询问题。</p>
 <p>通过这个问题，总结两点：</p>
 <p>1.查询缓存只保存储查询结果集中对象的ID，对象的实例存放在二级缓存中。这种缓存格局可能有两种不一致的情况发生：一.二级缓存中有实体对象，但是查询缓存中没有缓存某些关联对象的ID，这时个会导致重新生成SQL查询数据库。比如上面提到的Forums集合问题。二.查询缓存中有对象的ID，但是这些对象的实例却不在二级缓存中了。比如二级缓存已经失效等等，这也会导致生成SQL查询数据库。</p>
-<p>2.对于集合字段，必须显式地使用@Cache标记，集合才会被缓存。注意，这里缓存的并不是集合的元素，而是元素的ID。集合元素能否被缓存取决于元素类有没有声明为可缓存的。<br>如果没有配制集合为可缓存，那么，即使在第一次查询时它们都进行入了二级缓存，下一次通过宿主类导航这个集合时还是会生成SQL，因为集合没有缓存，也就是所有元素的ID没有缓存，Hibernate不知道宿主对象关联的是那一些元素。虽然这些元素都已经在缓存中了。</p>
+<p>2.对于集合字段，必须显式地使用@Cache标记，集合才会被缓存。注意，这里缓存的并不是集合的元素，而是元素的ID。集合元素能否被缓存取决于元素类有没有声明为可缓存的。<br>
+如果没有配制集合为可缓存，那么，即使在第一次查询时它们都进行入了二级缓存，下一次通过宿主类导航这个集合时还是会生成SQL，因为集合没有缓存，也就是所有元素的ID没有缓存，Hibernate不知道宿主对象关联的是那一些元素。虽然这些元素都已经在缓存中了。</p>
 <p>从这个例子中我们可以看到：Cache的设置总是静态的全局的，不像Fetch那样可以动态重写。</p>
 </div><div class="article-licensing box"><div class="licensing-title"><p>Cache与Fetch（二）</p><p><a href="https://laurence.enlightgram.com/java/cache-and-fetch-2/">https://laurence.enlightgram.com/java/cache-and-fetch-2/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2010-06-12</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-05</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/SQL/">SQL</a><a class="link-muted mr-2" rel="tag" href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a><a class="link-muted mr-2" rel="tag" href="/tags/%E7%BC%93%E5%AD%98/">缓存</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/java/hibernate-second-level-and-query-cache/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">对于Hibernate二级缓存和查询缓存的总结</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/database/sharding/"><span class="level-item">Sharding</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
