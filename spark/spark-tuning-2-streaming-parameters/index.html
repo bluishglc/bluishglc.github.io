@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Spark性能调优系列二：Spark流计算重要性能参数测试与分析 - Laurence的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence的技术博客"><meta name="msapplication-TileImage" content="/img/favicon.ico"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="在本系列的前一篇文章 《Spark性能调优系列一：Spark的作业模型》 中介绍了Spark作业的基础模型之后，我们要在本文讨论与Spark流计算性能相关的几个重要参数，这些参数对作业执行的并发性和资源分配有着很大的影响，我们会析这些参数以怎样的方式发挥作用，同时本文会讨论一系列的测试用例，这些用例通过设定不同的参数和数值的组合来辅助我们验证和理解这些参数配置的实际效果。本文原文链接: https"><meta property="og:type" content="article"><meta property="og:title" content="Spark性能调优系列二：Spark流计算重要性能参数测试与分析"><meta property="og:url" content="https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/"><meta property="og:site_name" content="Laurence的技术博客"><meta property="og:description" content="在本系列的前一篇文章 《Spark性能调优系列一：Spark的作业模型》 中介绍了Spark作业的基础模型之后，我们要在本文讨论与Spark流计算性能相关的几个重要参数，这些参数对作业执行的并发性和资源分配有着很大的影响，我们会析这些参数以怎样的方式发挥作用，同时本文会讨论一系列的测试用例，这些用例通过设定不同的参数和数值的组合来辅助我们验证和理解这些参数配置的实际效果。本文原文链接: https"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/spark/spark-tuning-2-streaming-parameters/2.png"><meta property="article:published_time" content="2018-06-21T16:39:41.000Z"><meta property="article:modified_time" content="2026-11-11T03:37:39.399Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="性能调优"><meta property="article:tag" content="Spark"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/spark/spark-tuning-2-streaming-parameters/2.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/"},"headline":"Spark性能调优系列二：Spark流计算重要性能参数测试与分析","image":["https://laurence.enlightgram.com/images/spark/spark-tuning-2-streaming-parameters/2.png"],"datePublished":"2018-06-21T16:39:41.000Z","dateModified":"2026-11-11T03:37:39.399Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"在本系列的前一篇文章 《Spark性能调优系列一：Spark的作业模型》 中介绍了Spark作业的基础模型之后，我们要在本文讨论与Spark流计算性能相关的几个重要参数，这些参数对作业执行的并发性和资源分配有着很大的影响，我们会析这些参数以怎样的方式发挥作用，同时本文会讨论一系列的测试用例，这些用例通过设定不同的参数和数值的组合来辅助我们验证和理解这些参数配置的实际效果。本文原文链接: https"}</script><link rel="canonical" href="https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/"><link rel="icon" href="/img/favicon.ico"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Spark性能调优系列二：Spark流计算重要性能参数测试与分析 - Laurence的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence的技术博客"><meta name="msapplication-TileImage" content="/img/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png"><link rel="apple-touch-icon" sizes="192x192" href="/img/icon-192.png"><link rel="apple-touch-icon" sizes="512x512" href="/img/icon-512.png"><meta name="description" content="在本系列的前一篇文章《Spark性能调优系列一：Spark的作业模型》中介绍了Spark作业的基础模型之后，我们要在本文讨论与Spark流计算性能相关的几个重要参数，这些参数对作业执行的并发性和资源分配有着很大的影响…"><meta property="og:type" content="article"><meta property="og:title" content="Spark性能调优系列二：Spark流计算重要性能参数测试与分析"><meta property="og:url" content="https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/"><meta property="og:site_name" content="Laurence的技术博客"><meta property="og:description" content="在本系列的前一篇文章《Spark性能调优系列一：Spark的作业模型》中介绍了Spark作业的基础模型之后，我们要在本文讨论与Spark流计算性能相关的几个重要参数，这些参数对作业执行的并发性和资源分配有着很大的影响…"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/spark/spark-tuning-2-streaming-parameters/2.png"><meta property="article:published_time" content="2018-06-21T16:39:41.000Z"><meta property="article:modified_time" content="2018-06-21T16:39:41.000Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="性能调优"><meta property="article:tag" content="Spark"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/spark/spark-tuning-2-streaming-parameters/2.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/"},"headline":"Spark性能调优系列二：Spark流计算重要性能参数测试与分析","image":["https://laurence.enlightgram.com/images/spark/spark-tuning-2-streaming-parameters/2.png"],"datePublished":"2018-06-21T16:39:41.000Z","dateModified":"2018-06-21T16:39:41.000Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"在本系列的前一篇文章《Spark性能调优系列一：Spark的作业模型》中介绍了Spark作业的基础模型之后，我们要在本文讨论与Spark流计算性能相关的几个重要参数，这些参数对作业执行的并发性和资源分配有着很大的影响…"}</script><link rel="canonical" href="https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/"><link rel="icon" href="/img/favicon.ico"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
     document.documentElement.classList.add('is-animating');
 }</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
   (function () {
@@ -72,17 +72,17 @@
 <ul>
 <li>
 <p>Job<br>
-<img src="../../images/spark/spark-tuning-2-streaming-parameters/2.png" alt="这里写图片描述"></p>
+<img src="../../images/spark/spark-tuning-2-streaming-parameters/2.png" alt="Test Case 1-1: FIFO - Spark性能调优系列二：Spark流计算重要性能参数测试与分析 图1"></p>
 </li>
 <li>
 <p>Stage 0</p>
 </li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/3.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/3.png" alt="Test Case 1-1: FIFO - Spark性能调优系列二：Spark流计算重要性能参数测试与分析 图2"></p>
 <ul>
 <li>Stage 1</li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/4.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/4.png" alt="Test Case 1-1: FIFO - Spark性能调优系列二：Spark流计算重要性能参数测试与分析 图3"></p>
 <h5 id="Test-Case-1-2-FAIR">Test Case 1-2: FAIR</h5>
 <ul>
 <li>配置</li>
@@ -102,17 +102,17 @@ spark.sql.shuffle.partitions=100<br>
 <ul>
 <li>
 <p>Job<br>
-<img src="../../images/spark/spark-tuning-2-streaming-parameters/5.png" alt="这里写图片描述"></p>
+<img src="../../images/spark/spark-tuning-2-streaming-parameters/5.png" alt="Test Case 1-2: FAIR - Spark性能调优系列二：Spark流计算重要性能参数测试与分析 图1"></p>
 </li>
 <li>
 <p>Stage 6<br>
-<img src="../../images/spark/spark-tuning-2-streaming-parameters/6.png" alt="这里写图片描述"></p>
+<img src="../../images/spark/spark-tuning-2-streaming-parameters/6.png" alt="Test Case 1-2: FAIR - Spark性能调优系列二：Spark流计算重要性能参数测试与分析 图2"></p>
 </li>
 <li>
 <p>Stage 4</p>
 </li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/7.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/7.png" alt="Test Case 1-2: FAIR - Spark性能调优系列二：Spark流计算重要性能参数测试与分析 图3"></p>
 <h4 id="Test-Case-Group-2-FIFO-1-Slot-vs-FIFO-4-Slots">Test Case Group 2: FIFO 1 Slot vs. FIFO 4 Slots</h4>
 <h5 id="Test-Case-2-1-FIFO-1-Slot">Test Case 2-1: FIFO 1 Slot</h5>
 <p>这个Case就是 Test Case 1-1: FIFO</p>
@@ -129,25 +129,25 @@ spark.sql.shuffle.partitions=100<br>
 <ul>
 <li>Job</li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/8.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/8.png" alt="Test Case 2-2: FIFO 4 Slots - Spark性能调优系列二：Spark流计算重要性能参数测试与… 图1"></p>
 <ul>
 <li>
 <p>Stage 0<br>
-<img src="../../images/spark/spark-tuning-2-streaming-parameters/9.png" alt="这里写图片描述"></p>
+<img src="../../images/spark/spark-tuning-2-streaming-parameters/9.png" alt="Test Case 2-2: FIFO 4 Slots - Spark性能调优系列二：Spark流计算重要性能参数测试与… 图2"></p>
 </li>
 <li>
 <p>Stage 1</p>
 </li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/10.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/10.png" alt="Test Case 2-2: FIFO 4 Slots - Spark性能调优系列二：Spark流计算重要性能参数测试与… 图3"></p>
 <ul>
 <li>Stage 2</li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/11.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/11.png" alt="Test Case 2-2: FIFO 4 Slots - Spark性能调优系列二：Spark流计算重要性能参数测试与… 图4"></p>
 <ul>
 <li>Stage 3</li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/12.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/12.png" alt="Test Case 2-2: FIFO 4 Slots - Spark性能调优系列二：Spark流计算重要性能参数测试与… 图5"></p>
 <h4 id="Test-Case-Group-3-FIFO-4-Slots-vs-FAIR-4-Slots">Test Case Group 3: FIFO 4 Slots vs. FAIR 4 Slots</h4>
 <h5 id="Test-Case-3-1-FIFO-4-Slots">Test Case 3-1: FIFO 4 Slots</h5>
 <p>这个Case就是 Test Case 2-2: FIFO 4 Slots</p>
@@ -165,28 +165,28 @@ spark.sql.shuffle.partitions=100<br>
 <ul>
 <li>
 <p>Job<br>
-<img src="../../images/spark/spark-tuning-2-streaming-parameters/13.png" alt="这里写图片描述"></p>
+<img src="../../images/spark/spark-tuning-2-streaming-parameters/13.png" alt="Test Case 3-2：FAIR 4 Slots - Spark性能调优系列二：Spark流计算重要性能参数测试与分… 图1"></p>
 </li>
 <li>
 <p>Stage 0</p>
 </li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/14.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/14.png" alt="Test Case 3-2：FAIR 4 Slots - Spark性能调优系列二：Spark流计算重要性能参数测试与分… 图2"></p>
 <ul>
 <li>Stage 1</li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/15.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/15.png" alt="Test Case 3-2：FAIR 4 Slots - Spark性能调优系列二：Spark流计算重要性能参数测试与分… 图3"></p>
 <ul>
 <li>Stage 2</li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/16.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/16.png" alt="Test Case 3-2：FAIR 4 Slots - Spark性能调优系列二：Spark流计算重要性能参数测试与分… 图4"></p>
 <ul>
 <li>Stage 3</li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/17.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/17.png" alt="Test Case 3-2：FAIR 4 Slots - Spark性能调优系列二：Spark流计算重要性能参数测试与分… 图5"></p>
 <ul>
 <li>Stage 6<br>
-<img src="../../images/spark/spark-tuning-2-streaming-parameters/18.png" alt="这里写图片描述"></li>
+<img src="../../images/spark/spark-tuning-2-streaming-parameters/18.png" alt="Test Case 3-2：FAIR 4 Slots - Spark性能调优系列二：Spark流计算重要性能参数测试与分… 图6"></li>
 </ul>
 <h4 id="Test-Case-Group-4-FAIR-4-Slots-concurrentJobs-1-vs-FAIR-4-Slots-concurrentJobs-4">Test Case Group 4: FAIR 4 Slots, concurrentJobs = 1 vs. FAIR 4 Slots, concurrentJobs = 4</h4>
 <h5 id="Test-Case-4-1-FAIR-4-Slots-concurrentJobs-1">Test Case 4-1: FAIR 4 Slots, concurrentJobs = 1</h5>
@@ -207,31 +207,31 @@ spark.sql.shuffle.partitions=100<br>
 <ul>
 <li>Job</li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/19.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/19.png" alt="Test Case 4-2: FAIR 4 Slots, concurrentJobs  4 图1"></p>
 <ul>
 <li>
 <p>Stage 0<br>
-<img src="../../images/spark/spark-tuning-2-streaming-parameters/20.png" alt="这里写图片描述"></p>
+<img src="../../images/spark/spark-tuning-2-streaming-parameters/20.png" alt="Test Case 4-2: FAIR 4 Slots, concurrentJobs  4 图2"></p>
 </li>
 <li>
 <p>Stage 1</p>
 </li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/21.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/21.png" alt="Test Case 4-2: FAIR 4 Slots, concurrentJobs  4 图3"></p>
 <ul>
 <li>
 <p>Stage 2<br>
-<img src="../../images/spark/spark-tuning-2-streaming-parameters/22.png" alt="这里写图片描述"></p>
+<img src="../../images/spark/spark-tuning-2-streaming-parameters/22.png" alt="Test Case 4-2: FAIR 4 Slots, concurrentJobs  4 图4"></p>
 </li>
 <li>
 <p>Stage 6</p>
 </li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/23.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/23.png" alt="Test Case 4-2: FAIR 4 Slots, concurrentJobs  4 图5"></p>
 <ul>
 <li>Stage 4</li>
 </ul>
-<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/24.png" alt="这里写图片描述"></p>
+<p><img src="../../images/spark/spark-tuning-2-streaming-parameters/24.png" alt="Test Case 4-2: FAIR 4 Slots, concurrentJobs  4 图6"></p>
 <h4 id="Test-Case-Group-5-FAIR-4-Slots-concurrentJobs-4-Root-Pool-vs-FAIR-4-Slots-concurrentJobs-4-Independent-Pools">Test Case Group 5: FAIR 4 Slots, concurrentJobs = 4, Root Pool vs. FAIR 4 Slots, concurrentJobs = 4, Independent Pools</h4>
 <h5 id="Test-Case-5-1-FAIR-4-Slots-concurrentJobs-4-Root-Pool">Test Case 5-1: FAIR 4 Slots, concurrentJobs = 4, Root Pool</h5>
 <p>该测试用例就是《Test Case 4-2: FAIR 4 Slots, concurrentJobs = 4》</p>
@@ -251,9 +251,9 @@ spark.sql.shuffle.partitions=100<br>
 <p>但是这一定是好的吗？这要看我们到底想如何协调长短作业之间的资源竞争关系！因为总的资源就这么多了，分配给了短作业更多的资源就意味了长作业获得的资源别消减了，这可以从长作业完成的数量上得到验证，在本测试用例中，一共完成了28个长作业（evaluate_cpu_usage和evaluate_mem_free），而在前一个对比测试中，完成的长作业数量是122/2=61个，所以总结下来最重点的结论是： <strong>pool是从整体计算资源上按份额(weight)进行切分的，在一个pool内部，如果是FAIR模式，则作业是按均等的执行机会来划分的。</strong></p>
 <ul>
 <li>Job<br>
-<img src="../../images/spark/spark-tuning-2-streaming-parameters/25.png" alt="这里写图片描述"></li>
+<img src="../../images/spark/spark-tuning-2-streaming-parameters/25.png" alt="Test Case 5-2: FAIR 4 Slots, concurrentJobs  4, Independent…"></li>
 </ul>
-</div><div class="article-licensing box"><div class="licensing-title"><p>Spark性能调优系列二：Spark流计算重要性能参数测试与分析</p><p><a href="https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/">https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2018-06-21</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-10</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/">性能调优</a><a class="link-muted mr-2" rel="tag" href="/tags/Spark/">Spark</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/spark/spark-watermark-and-mapgroupswithstate/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Spark基于事件时间的“状态”流的深层分析 - withWatermark与mapGroupsWithState的关系</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/spark/spark-tuning-1-job-model/"><span class="level-item">Spark性能调优系列一：Spark的作业模型</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+</div><div class="article-licensing box"><div class="licensing-title"><p>Spark性能调优系列二：Spark流计算重要性能参数测试与分析</p><p><a href="https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/">https://laurence.enlightgram.com/spark/spark-tuning-2-streaming-parameters/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2018-06-21</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2018-06-21</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/">性能调优</a><a class="link-muted mr-2" rel="tag" href="/tags/Spark/">Spark</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/spark/spark-watermark-and-mapgroupswithstate/"><i class="level-item fas fa-chevron-left" aria-hidden="true"></i><span class="level-item">Spark基于事件时间的“状态”流的深层分析 - withWatermark与mapGroupsWithState的关系</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/spark/spark-tuning-1-job-model/"><span class="level-item">Spark性能调优系列一：Spark的作业模型</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
     var element = document.querySelector("head");
     if (!element) {
       return;
