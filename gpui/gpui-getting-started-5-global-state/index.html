@@ -1,0 +1,965 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Rust GPUI 桌面应用开发入门：全局状态（Global 类型） - Laurence的技术博客</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Laurence的技术博客"><meta name="msapplication-TileImage" content="/img/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Laurence的技术博客"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png"><link rel="apple-touch-icon" sizes="192x192" href="/img/icon-192.png"><link rel="apple-touch-icon" sizes="512x512" href="/img/icon-512.png"><meta name="description" content="基于 Zed v1.23.3 源码讲解 Rust GPUI 全局状态：Global trait 与存储机制、Blanket Implementation 自动生成读写方法，以及孤儿规则下的 newtype 包裹与可见性设计。"><meta property="og:type" content="article"><meta property="og:title" content="Rust GPUI 桌面应用开发入门：全局状态（Global 类型）"><meta property="og:url" content="https://laurence.enlightgram.com/gpui/gpui-getting-started-5-global-state/"><meta property="og:site_name" content="Laurence的技术博客"><meta property="og:description" content="基于 Zed v1.23.3 源码讲解 Rust GPUI 全局状态：Global trait 与存储机制、Blanket Implementation 自动生成读写方法，以及孤儿规则下的 newtype 包裹与可见性设计。"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://laurence.enlightgram.com/images/gpui/gpui-getting-started-5-global-state/cover.jpg"><meta property="article:published_time" content="2026-11-18T06:11:06.000Z"><meta property="article:modified_time" content="2026-11-18T06:11:06.000Z"><meta property="article:author" content="Laurence Geng"><meta property="article:tag" content="GPUI"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://laurence.enlightgram.com/images/gpui/gpui-getting-started-5-global-state/cover.jpg"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://laurence.enlightgram.com/gpui/gpui-getting-started-5-global-state/"},"headline":"Rust GPUI 桌面应用开发入门：全局状态（Global 类型）","image":["https://laurence.enlightgram.com/images/gpui/gpui-getting-started-5-global-state/cover.jpg"],"datePublished":"2026-11-18T06:11:06.000Z","dateModified":"2026-11-18T06:11:06.000Z","author":{"@type":"Person","name":"Laurence Geng"},"publisher":{"@type":"Organization","name":"Laurence的技术博客","logo":{"@type":"ImageObject","url":"https://laurence.enlightgram.com/img/logo.jpg"}},"description":"基于 Zed v1.23.3 源码讲解 Rust GPUI 全局状态：Global trait 与存储机制、Blanket Implementation 自动生成读写方法，以及孤儿规则下的 newtype 包裹与可见性设计。"}</script><link rel="canonical" href="https://laurence.enlightgram.com/gpui/gpui-getting-started-5-global-state/"><link rel="icon" href="/img/favicon.ico"><link rel="preconnect" href="https://use.fontawesome.com" crossorigin="anonymous"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.0.0/css/all.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/atom-one-light.css"><script>window.IcarusAppearance.sync();</script><link data-variant rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro&amp;display=swap"><link data-variant rel="stylesheet" href="/css/default.css"><script>if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('is-animating');
+}</script><style>html.is-animating body>.footer,html.is-animating body>.navbar,html.is-animating body>.section{opacity:0}</style><!--!--><!--!--><!--!--><script data-pjax src="https://events.vercount.one/js" defer></script><script data-pjax src="/js/vercount_list.js" defer></script><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/assets/justified-gallery.css" data-pjax><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><meta name="follow.it-verification-code" content="2yh7QKxJnrfFM8v8T9lf"><!-- hexo injector head_end start --><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><link rel="icon" type="image/png" sizes="16x16" href="/img/favicon-16.png"><link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png"><link rel="icon" type="image/png" sizes="192x192" href="/img/icon-192.png"><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="Laurence的技术博客" type="application/atom+xml">
+</head><body class="is-2-column"><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main" data-sticky="all"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.jpg" alt="Laurence的技术博客" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-mobile" target="_blank" rel="noopener" title="GitHub" href="https://github.com/bluishglc" aria-label="GitHub"><i class="fab fa-github" aria-hidden="true"></i></a><button class="navbar-item is-hidden-tablet catalogue" type="button" title="目录" aria-label="目录"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button class="navbar-item search" type="button" title="搜索" aria-label="搜索"><i class="fas fa-search" aria-hidden="true"></i></button></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><div class="card"><article class="card-content article is-detail" role="article"><h1 class="title is-3 is-size-4-mobile">Rust GPUI 桌面应用开发入门：全局状态（Global 类型）</h1><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item article-label">原创</span><span class="level-item"><span>分类：</span><a class="link-muted" href="/categories/GPUI/">GPUI</a></span><span class="level-item is-hidden-mobile">发表于：<time dateTime="2026-11-18T06:11:06.000Z" title="2026-11-17 22:11:06">2026-11-17</time></span><span class="level-item is-hidden-mobile">阅读用时：32 分钟 (约 4734 字)</span><span class="level-item" id="busuanzi_container_page_pv">阅读：<span id="busuanzi_value_page_pv">0</span></span></div></div><figure class="image article-cover"><img class="not-gallery-item" src="/../../images/gpui/gpui-getting-started-5-global-state/cover.jpg" alt="Rust GPUI 桌面应用开发入门：全局状态（Global 类型）" fetchpriority="high"></figure><div class="content"><p>一个 GPUI 应用需要持有一些全局使用的实例或数据，它们中的大多数都是在应用启动时就创建好并存放在了 App 里一个按类型索引的 map 里：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">globals_by_type: TypeIdHashMap&lt;<span class="type">Box</span>&lt;<span class="keyword">dyn</span> Any&gt;&gt;</span><br></pre></td></tr></table></figure>
+<p>并且，如果一个类型想要添加到这个 map 中，必须要实现 gpui::global::Global 这个 marker trait，因为用于将一个实例或数据添加进这个 map 的方法 gpui::app::App::set_global 只接受 Global 类型。所以，我们把这些要放进 App 的 globals_by_type 中去维护的实例称为：全局状态。备注：本文内容基于的是 Zed 当前（2026年10月）最新版本 <code>v1.23.3</code>。</p>
+<h1 id="1-全局状态的分类">1. 全局状态的分类</h1>
+<p>一份数据或一个实例需要保存为全局状态的理由是不尽相同的，我们梳理了一些典型的分类：</p>
+<h2 id="1-1-服务-客户端-工具类">1.1 服务/客户端/工具类</h2>
+<p>这是非常典型的一类实例，通常这些类型都是无状态的，在一些语言中往往会处理成单例或是由静态方法组成的 util 类。其实，这些类型中的大多数并不是真的需要成为一个单例，它们只是找不到合适的创建者或所有者。所以，Zed 让 App 扮演类似于 ServiceLocator 的角色，在需要使用它们的地方通过 <code>cx.read_global()</code> 或者是某个类型上的静态 global 方法（例如：SettingsStore::global(cx)）直接获取它们。此类情形的代表有：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">类型</th>
+<th style="text-align:left">功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">db::AppDatabase</td>
+<td style="text-align:left">全局公用 SQLite 数据库客户端</td>
+</tr>
+<tr>
+<td style="text-align:left">client::GlobalClient</td>
+<td style="text-align:left">全局公用 Http 客户端（基于 Reqwest 封装）</td>
+</tr>
+<tr>
+<td style="text-align:left">fs::GlobalFs</td>
+<td style="text-align:left">文件操作工具类（基于 smol::fs 对文件进行异步操作）</td>
+</tr>
+<tr>
+<td style="text-align:left">gpui_tokio::GlobalTokio</td>
+<td style="text-align:left">一个 Tokio Runtime，供依赖 Tokio 的三方库使用</td>
+</tr>
+<tr>
+<td style="text-align:left">project::connection_manager::GlobalManager</td>
+<td style="text-align:left">已废弃，不再使用</td>
+</tr>
+</tbody>
+</table>
+<h2 id="1-2-全局共享状态-数据">1.2 全局共享状态/数据</h2>
+<p>这也是非常典型的一类情形，无需过多解释。此类情形的代表有：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">类型</th>
+<th style="text-align:left">功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">workspace::GlobalAppState</td>
+<td style="text-align:left">Zed 应用级核心依赖的集合，可以理解为&quot;打开一个工作区需要的全部基础设施&quot;</td>
+</tr>
+<tr>
+<td style="text-align:left">theme::GlobalTheme</td>
+<td style="text-align:left">当前使用中的主题</td>
+</tr>
+<tr>
+<td style="text-align:left">settings::settings_store::SettingsStore</td>
+<td style="text-align:left">应用的配置信息（加载自 settings.json）</td>
+</tr>
+<tr>
+<td style="text-align:left">channel::channel_store::ChannelStore</td>
+<td style="text-align:left">Zed 协作频道（Channels）功能在客户端的数据中心</td>
+</tr>
+<tr>
+<td style="text-align:left">release_channel::GlobalAppVersion</td>
+<td style="text-align:left">当前 Zed 的版本</td>
+</tr>
+<tr>
+<td style="text-align:left">release_channel::GlobalAppCommitSha</td>
+<td style="text-align:left">这个二进制是从哪个 Git 提交构建出来的</td>
+</tr>
+<tr>
+<td style="text-align:left">release_channel::GlobalReleaseChannel</td>
+<td style="text-align:left">这是哪个发布渠道的 Zed</td>
+</tr>
+<tr>
+<td style="text-align:left">json_schema_store::SchemaStore</td>
+<td style="text-align:left">几乎不保存数据，只记录当前所有的 LspStore（弱引用），在 schema 失效时通知各个 JSON 语言服务器重新拉取</td>
+</tr>
+<tr>
+<td style="text-align:left">keymap_editor::KeymapEventChannel</td>
+<td style="text-align:left">用空 Global 做的&quot;键位已变更&quot;信号</td>
+</tr>
+</tbody>
+</table>
+<p>workspace::GlobalAppState 可以说是所有 Global 实例中最为重要的一个，它包含了&quot;打开一个工作区需要的全部基础设施&quot;，它把 Arc<AppState> 注册为 Global，任何持有 cx 的代码都可以通过 AppState::global(cx) 拿到语言注册表、网络客户端、文件系统、Node 运行时等共享服务，不需要一层层传参。以下是 AppState 的所有字段信息：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">字段</th>
+<th style="text-align:left">内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><code>languages</code></td>
+<td style="text-align:left"><code>LanguageRegistry</code>：所有语言定义、语法、LSP adapter</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>client</code></td>
+<td style="text-align:left"><code>Client</code>：与 zed.dev 和 collab 服务器通信，内含 <code>HttpClientWithUrl</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><code>user_store</code></td>
+<td style="text-align:left">当前登录用户、联系人等信息</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>workspace_store</code></td>
+<td style="text-align:left"><code>WorkspaceStore</code>：记录所有打开的 <code>(窗口, Workspace)</code>，负责协作跟随等跨工作区的消息分发</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>fs</code></td>
+<td style="text-align:left"><code>Arc&lt;dyn Fs&gt;</code>，也就是 <code>RealFs</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><code>build_window_options</code></td>
+<td style="text-align:left"><strong>函数指针</strong>，用来生成新窗口的 <code>WindowOptions</code>；生产环境是 <code>zed::build_window_options</code>（<code>zed.rs:359</code>）</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>node_runtime</code></td>
+<td style="text-align:left">Node 与 npm 管理器</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>session</code></td>
+<td style="text-align:left"><code>AppSession</code>：本次会话的 id 和上次会话的 id，用于恢复工作区</td>
+</tr>
+</tbody>
+</table>
+<p>而 KeymapEventChannel 非常特殊，也很有代表性，因为它是一个空的结构体，不含任何数据，所以也谈不上是共享数据，但是，它是想利用 Global 的更新通知机制，将&quot;键位绑定刚刚重新加载过&quot;这个信号广播给所有的观察者，让它们自动更新！</p>
+<h2 id="1-3-注册表">1.3 注册表</h2>
+<p>注册表其实也是一类共享数据，只是它们的“特点”更突出一些。在 Zed 的 Workspace 中有几个同类的&quot;类型 → 构造函数&quot;注册表，它们的机制相同：在泛型函数中把具体类型固定成函数指针，以 <code>TypeId</code> 或字符串为 key 存入一个 Global。</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">类型</th>
+<th style="text-align:left">功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">workspace::ProjectItemRegistry</td>
+<td style="text-align:left">保存文件和视图的映射关系，即哪种文件应由哪种编辑器打开</td>
+</tr>
+<tr>
+<td style="text-align:left">workspace::FollowableViewRegistry</td>
+<td style="text-align:left">协作时跟随别人，收到远端视图的 proto 描述后，在本地重建对应的视图</td>
+</tr>
+<tr>
+<td style="text-align:left">workspace::SerializableItemRegistry</td>
+<td style="text-align:left">重启时，根据数据库中的 <code>item_kind</code> 恢复对应的视图</td>
+</tr>
+</tbody>
+</table>
+<h1 id="2-Global-的实现机制">2. Global 的实现机制</h1>
+<p><code>Global</code> 保存在 App 的 <code>globals_by_type: TypeIdHashMap&lt;Box&lt;dyn Any&gt;&gt;</code> 字段中。这个 map 会自动使用类型的 TypeId 作为 key，读写 <code>Global</code> 数据的方法都带有泛型参数 <code>G</code>，通过给出的类型，GPUI 可以直接找到对应的 <code>Global</code> 实例。</p>
+<p>一个类型想要成为全局性的，必须实现 <code>Global</code> 这个 trait，如前所述，<code>Global</code> 只是一个 marker trait，所以实现它并不需要实现特定的方法：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">trait</span> <span class="title class_">Global</span>: <span class="symbol">&#x27;static</span> &#123;&#125;</span><br></pre></td></tr></table></figure>
+<p>以上是 Global 机制中的公共部分，接下来就是在 Zed 中实现的两套相对独立的 Global 机制了，我们分开了解一下。</p>
+<h2 id="2-1-原始类型直接实现-Global">2.1 原始类型直接实现 Global</h2>
+<p>想让一个类型放到 App 的全局状态中，那就实现 <code>Global</code> trait，然后，提供一下从 App 全局状态中读写这个类型实例的方法就可以了，这是人们最容易想到的、最直白也最方便的实现方式。实现 trait 的部分前面已经说过，这里要介绍的是 <code>Global</code> 类型的读写方法。</p>
+<p>首先，既然所有的 <code>Global</code> 类型的实例都是存放在 App 中，那么，App 自然应该提供对应的读写方法，尤其是 <code>cx</code> 遍布应用的各个角落，通过它来读写 <code>Global</code> 实例是非常自然的，而 GPUI 也是这样做的。下面是通过 <code>cx</code> 读写 <code>SettingsStore</code> 这种 Global 实例的示例代码：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">cx.global::&lt;SettingsStore&gt;();</span><br><span class="line">cx.<span class="title function_ invoke__">set_global</span>(store);</span><br><span class="line">cx.update_global::&lt;SettingsStore, _&gt;(|store, cx| &#123;....&#125;);</span><br></pre></td></tr></table></figure>
+<p>与此同时，鉴于长久以来形成的习惯，对于全局唯一单例，我们更习惯通过类型的静态方法直接读写它们，写法应该是这样：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">SettingsStore::<span class="title function_ invoke__">global</span>(cx);</span><br><span class="line">SettingsStore::<span class="title function_ invoke__">set_global</span>(cx, store);</span><br><span class="line">SettingsStore::<span class="title function_ invoke__">update_global</span>(cx, ....);</span><br></pre></td></tr></table></figure>
+<p>这种调用形式显然让人觉得更舒适，也更能彰显这些方法是在“读写全局唯一单例”的“意味”，但是，这得给每一种类型手动添加上这些方法的实现，整个 Zed 应用有 50 多个 Global 类型，一个一个地实现会很笨拙，好在，<strong>Rust 有 Blanket Implementation 这种机制，可以让我们一次性地给所有的 <code>Global</code> 类型都自动添加上读写方法</strong>。具体是这样做：</p>
+<p>在 <code>crates/gpui/src/global.rs</code> 中，除了声明了 <code>Global</code> 这个 trait 外，还声明了 <code>ReadGlobal</code>、<code>UpdateGlobal</code> 这两个提供 <code>Global</code> 类型读写能力的 trait，然后以 <strong>Blanket Implementation</strong> 的形式，给所有实现了 <code>Global</code> 的类型自动添加上了 <code>global()</code>、<code>set_global()</code>、<code>update_global()</code> 三个方法。我们以 <code>ReadGlobal</code> 为例看一下具体实现：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// global.rs:29-34  ← 第 30 行附近：声明一个 trait</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">trait</span> <span class="title class_">ReadGlobal</span> &#123;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">global</span>(cx: &amp;App) <span class="punctuation">-&gt;</span> &amp;<span class="keyword">Self</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// global.rs:36-40  ← 第 37 行：为所有 Global 类型统一实现</span></span><br><span class="line"><span class="keyword">impl</span>&lt;T: Global&gt; ReadGlobal <span class="keyword">for</span> <span class="title class_">T</span> &#123;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">global</span>(cx: &amp;App) <span class="punctuation">-&gt;</span> &amp;<span class="keyword">Self</span> &#123;</span><br><span class="line">        cx.global::&lt;T&gt;()</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><strong>1.</strong> 第一段声明了 <code>ReadGlobal</code> trait：实现了它的类型，可以通过 <code>类型::global(cx)</code> 取得自己的全局实例的引用 <code>&amp;Self</code>。</p>
+<p><strong>2.</strong> 第二段是 blanket impl（覆盖实现）：<code>impl&lt;T: Global&gt; ReadGlobal for T</code> 的意思是，<strong>任何实现了 <code>Global</code> 的类型 <code>T</code>，都自动实现了 <code>ReadGlobal</code></strong>。实现内容只有一行，把调用转发给 <code>cx.global::&lt;T&gt;()</code>。</p>
+<p><code>UpdateGlobal</code> 使用了完全一样的做法，所以，<strong>一个类型 <code>Xyz</code> 只要实现了 <code>Global</code>，即：<code>impl Global for Xyz {}</code>，不需要再写任何代码，就可以使用以下三个方法</strong>:</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Xyz::<span class="title function_ invoke__">global</span>(cx);               <span class="comment">// ReadGlobal 提供的方法</span></span><br><span class="line">Xyz::<span class="title function_ invoke__">update_global</span>(cx, ...);   <span class="comment">// UpdateGlobal 提供的方法</span></span><br><span class="line">Xyz::<span class="title function_ invoke__">set_global</span>(cx, ...);      <span class="comment">// UpdateGlobal 提供的方法</span></span><br></pre></td></tr></table></figure>
+<p>完整沿用这套机制的例子是 <code>SettingsStore</code>，我们来看一下它的相关代码：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// crates/settings/src/settings_store.rs</span></span><br><span class="line"><span class="keyword">use</span> gpui::Global;</span><br><span class="line"></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">SettingsStore</span> &#123;</span><br><span class="line">    setting_values: TypeIdHashMap&lt;<span class="type">Box</span>&lt;<span class="keyword">dyn</span> AnySettingValue&gt;&gt;,</span><br><span class="line">    default_settings: Rc&lt;SettingsContent&gt;,</span><br><span class="line">    user_settings: <span class="type">Option</span>&lt;UserSettingsContent&gt;,</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">impl</span> <span class="title class_">Global</span> <span class="keyword">for</span> <span class="title class_">SettingsStore</span> &#123;&#125;</span><br></pre></td></tr></table></figure>
+<p>然后，搜索代码你就会发现在其他文件中大量使用了：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">SettingsStore::<span class="title function_ invoke__">global</span>(cx);</span><br><span class="line">SettingsStore::<span class="title function_ invoke__">update_global</span>(cx, ....);</span><br></pre></td></tr></table></figure>
+<p>让原始类型直接实现 <code>Global</code> 从而晋升为全局单一实例的类型有这些（非完全统计）：</p>
+<ul>
+<li>SettingsStore</li>
+<li>InlineAssistant</li>
+<li>FeatureFlagStore</li>
+<li>SchemaStore</li>
+</ul>
+<h2 id="2-2-基于-newtype-的-Global-类型">2.2 基于 newtype 的 Global 类型</h2>
+<p>让原始类型直接实现 <code>Global</code> 的方式是最直白、易懂的，但遗憾的是，通过这种方式实现的 <code>Global</code> 类型并不多，更多的类型其实是<strong>单独引入了一个新的类型，让这个类型去实现 Global 特质，也就是所谓的 newtype 模式</strong>（参考<a target="_blank" rel="noopener" href="https://laurence.blog.csdn.net/article/details/168145388">《Rust 设计模式：newtype》</a>)<br>
+举个例子就清楚了：<code>AppState</code> 是各处都需要的一种全局状态，但它并没有实现 <code>Global</code> 特质，而是另外引入一个 <code>GlobalAppState</code>，让它去包裹 <code>Arc&lt;AppState&gt;</code>：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">GlobalAppState</span>(Arc&lt;AppState&gt;) <span class="comment">// GlobalAppState 是一个典型的 newtype</span></span><br></pre></td></tr></table></figure>
+<p>Zed 为什么要这样设计呢？首先，由于 AppState 在某些场景下使用时需要获得它的所有权，所以，它基本是以 <code>Arc&lt;AppState&gt;</code> 的形式被传递和使用的，那问题其实就变成了：<strong>为什么不让 <code>Arc&lt;AppState&gt;</code> 直接实现 <code>Global</code></strong>？就像下面这样：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span> <span class="title class_">Global</span> <span class="keyword">for</span> <span class="title class_">Arc</span>&lt;AppState&gt; &#123;&#125;   <span class="comment">// error[E0117]</span></span><br></pre></td></tr></table></figure>
+<p>原因是：这样编译不过！<strong>Rust 的“孤儿规则”（Orphan Rule）规定：要为某个类型实现某个 trait，trait 和类型至少有一个必须定义在当前 crate 中</strong>（这是简化后的孤儿规则描述，完整的孤儿规则请参考<a target="_blank" rel="noopener" href="https://laurence.blog.csdn.net/article/details/169366791">《Rust “一致性”和“孤儿规则”深度解读》</a>）。<code>Global</code> 定义在 <code>gpui</code> crate，<code>Arc</code> 定义在标准库，<code>gpui</code> crate 只定义上层接口，也就是像 <code>Global</code> 这样的特质，各种类型如需实现 <code>Global</code> 应在自己的 crate 中去完成，就像 <code>SettingsStore</code> 那样，但是，此处的 <code>Arc</code> 是标准库中的类型，我们没有下手的“地方”。</p>
+<p>“孤儿规则”的设立是为了增加程序的“一致性”（coherence），确保别人不能轻易破坏你编写的代码，同样的，你也不能随意改写别人的代码。如果没有这条规则，两个 crate 可以分别对相同类型实现相同的 trait，这会让 Rust 无法确定应该使用哪一个实现。关于孤儿规则更多的介绍，请移步<a target="_blank" rel="noopener" href="https://laurence.blog.csdn.net/article/details/169366791">《Rust “一致性”和“孤儿规则”深度解读》</a>。</p>
+<p>在“gpui 不适合，std 又不能写”的“两头堵”情形下，Zed 只能在 <code>AppState</code> 所在的 crate 中引入一个新类型，让这个新类型去包裹 <code>Arc&lt;AppState&gt;</code>。注意：新引入的类型是零成本的，不会多占用内存。实际上，这种做法在 Rust 中是很普遍的，被称为“newtype”模式，这种模式的一种典型用途就是用来克服因孤儿规则限制无法为一个目标类型实现外部 trait 这种“困境”的。</p>
+<p>所以，总结起来只有一句话：<strong>引入 newtype 只是为了脱离“孤儿规则”（Orphan Rule）导致的无法在 <code>Arc</code> / <code>Entity</code> 包裹的原始类型上直接实现 <code>Global</code> 特质的困境，Zed 所有的 newtype 类型的 Global 都是因为要包裹 <code>Arc</code> 或 <code>Entity</code> 而引入的</strong>。</p>
+<h3 id="2-2-1-pub-的-newtype-类型">2.2.1 pub 的 newtype 类型</h3>
+<p>引入 newtype 后，自动获取的读写方法也是针对 newtype 而不是原始类型的，但这也不算是个大问题，取出 newtype 后，用 <code>.0</code> 做一个“脱壳”处理也就可以了。从这个角度上看，引入 newtype 只是多了一层包裹而已，并没有带来特别的改变。但这不是 newtype 的全部，引入 newtype 意味着多了一层“可见性”的控制层，我们认为“没有带来特别的改变”的情形是 newtype 前面有 <code>pub</code> 修饰，newtype 是公开可见的，例如：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">GlobalColors</span>(<span class="keyword">pub</span> Arc&lt;Colors&gt;);</span><br></pre></td></tr></table></figure>
+<p>属于这一情形的 <code>Global</code> 类型有（非完全统计，全局搜索 “pub struct Global” 可以找到全部类型）：</p>
+<ul>
+<li>GlobalColors</li>
+<li>GlobalCopilotAuth</li>
+<li>GlobalTheme</li>
+</ul>
+<p>通常这些 <code>Global</code> 类型不管是自身还是包裹的原始类型，都不会再额外设计 getter / setter 方法，因为它们是 pub 的，没有可见性问题，在各处都可以通过 <code>cx.global::&lt;Xyz&gt;()</code> 或 <code>Xyz::global(cx)</code> 获得全局唯一实例。不过，有很多类型其实并不会直接使用 getter / setter 方法，而是结合自身的属性，提供一些读取特定内容的方法，这些方法已经不是标准的 getter / setter 了，但在它们的实现中却需要使用 <code>cx.global::&lt;Xyz&gt;()</code>，这种例子特别多，比如 <code>GlobalTheme</code> 的 <code>update_theme</code> 方法。</p>
+<h3 id="2-2-2-非-pub-的-newtype-类型">2.2.2 非 pub 的 newtype 类型</h3>
+<p>与 pub 相对应的就是特意不声明 pub 关键字的 newtype 类型，也就是将 newtype 设为私有，让它在其他 crate 中不可见，然后通过在原始类型上添加静态的 getter / setter 方法来控制 newtype 类型的读写权限。例如：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">GlobalAppState</span>(Arc&lt;AppState&gt;);</span><br></pre></td></tr></table></figure>
+<p>这种形式的 newtype 的设计意图非常明显，它故意不让 newtype 在其他 crate 中可见，这就意味着，一旦离开了定义这个 newtype 的 crate，用户无法再使用 <code>cx.global::&lt;GlobalAppState&gt;()</code> 和 <code>GlobalAppState::global(cx)</code> 这两种方法获得全局唯一实例了，因为那时 <code>GlobalAppState</code> 这个类型就不可见了。怎么办呢？那就在公开可见的 <code>AppState</code> 类型上添加需要的静态 getter / setter 方法，这些方法的定义是在 <code>AppState</code> 和 <code>GlobalAppState</code> 所在的 <code>workspace</code> crate 内，所以 <code>GlobalAppState</code> 还是可见的，一旦定义好，到了 <code>workspace</code> crate 之外，这些 getter / setter 就变成了唯一可以访问 <code>AppState</code> 全局唯一实例的方法了。我们来看一下具体的代码：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// 以下代码全部位于 workspace.rs 内</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">AppState</span> &#123;                   <span class="comment">// ① 原有业务类型（公开）</span></span><br><span class="line">    <span class="keyword">pub</span> languages: Arc&lt;LanguageRegistry&gt;,</span><br><span class="line">    <span class="keyword">pub</span> client: Arc&lt;Client&gt;,</span><br><span class="line">    <span class="keyword">pub</span> fs: Arc&lt;<span class="keyword">dyn</span> fs::Fs&gt;,</span><br><span class="line">    <span class="comment">// ……</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">GlobalAppState</span>(Arc&lt;AppState&gt;);   <span class="comment">// ② newtype 包裹类型，没有 pub 修饰，仅 crate 内可见</span></span><br><span class="line"><span class="keyword">impl</span> <span class="title class_">Global</span> <span class="keyword">for</span> <span class="title class_">GlobalAppState</span> &#123;&#125;       <span class="comment">// ③ 只让 newtype 实现 Global</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">impl</span> <span class="title class_">AppState</span> &#123;                         <span class="comment">// ④ 在原有业务类型上提供静态的 getter / setter 方法</span></span><br><span class="line">    <span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">global</span>(cx: &amp;App) <span class="punctuation">-&gt;</span> Arc&lt;<span class="keyword">Self</span>&gt; &#123;</span><br><span class="line">        cx.global::&lt;GlobalAppState&gt;().<span class="number">0</span>.<span class="title function_ invoke__">clone</span>()</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">try_global</span>(cx: &amp;App) <span class="punctuation">-&gt;</span> <span class="type">Option</span>&lt;Arc&lt;<span class="keyword">Self</span>&gt;&gt; &#123;</span><br><span class="line">        cx.try_global::&lt;GlobalAppState&gt;().<span class="title function_ invoke__">map</span>(|state| state.<span class="number">0</span>.<span class="title function_ invoke__">clone</span>())</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">set_global</span>(state: Arc&lt;AppState&gt;, cx: &amp;<span class="keyword">mut</span> App) &#123;</span><br><span class="line">        cx.<span class="title function_ invoke__">set_global</span>(<span class="title function_ invoke__">GlobalAppState</span>(state));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>回溯我们前面对每一种设计策略的介绍，<code>GlobalAppState</code> 的设计意图一共包含了三个层次：</p>
+<p>1. 因为实际的全局唯一类型是 <code>Arc&lt;AppState&gt;</code>，受到 Orphan Rule 的制约，不能直接为其实现 <code>Global</code>，必须引入 <code>GlobalAppState</code> 这一 newtype 类型；</p>
+<p>2. Global 机制自动赋予了 <code>GlobalAppState</code> 读、更新、设置新实例三种能力：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">GlobalAppState::<span class="title function_ invoke__">global</span>(cx);                <span class="comment">// ReadGlobal 提供的方法，返回的是 &amp;Arc&lt;AppState&gt;</span></span><br><span class="line">GlobalAppState::<span class="title function_ invoke__">update_global</span>(cx, ....);   <span class="comment">// UpdateGlobal 提供的方法</span></span><br><span class="line">GlobalAppState::<span class="title function_ invoke__">set_global</span>(cx, ....);      <span class="comment">// UpdateGlobal 提供的方法</span></span><br></pre></td></tr></table></figure>
+<p>但是，这并不符合 <code>AppState</code> 的使用场景，例如：<code>GlobalAppState::global(cx)</code> 返回的是一个 <code>Arc&lt;AppState&gt;</code> 的引用，而大多数情况下，调用侧需要的是一个 <code>Arc&lt;AppState&gt;</code> 实例，所以<strong>需要屏蔽掉这三个默认实现，为 <code>AppState</code> 单独设计读写接口</strong>。</p>
+<p>3. 给 <code>AppState</code> 单独设计 getter / setter， getter 取到的是 <code>Arc&lt;AppState&gt;</code> 实例而非引用，去除 update_global 方法，只提供整体替换的 set_global 方法。这些方法的实现会使用到：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">cx.global::&lt;GlobalAppState&gt;()                     </span><br><span class="line">cx.try_global::&lt;GlobalAppState&gt;()                  </span><br><span class="line">cx.<span class="title function_ invoke__">set_global</span>(<span class="title function_ invoke__">GlobalAppState</span>(..))                  </span><br></pre></td></tr></table></figure>
+<p>这些方法的定义与 <code>GlobalAppState</code> 同在 <code>workspace</code> crate 内，<code>GlobalAppState</code> 是可见的。离开 <code>workspace</code> crate 后，就再也不能像上面那样通过 cx 去读写 <code>GlobalAppState</code> 了，因为那时 <code>GlobalAppState</code> 已经不可见了，所以，在 <code>workspace</code> crate 之外，能读写 <code>Arc&lt;AppState&gt;</code> 的只有下面这三个接口了：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">AppState::<span class="title function_ invoke__">global</span>(cx); </span><br><span class="line">AppState::<span class="title function_ invoke__">try_global</span>(cx); </span><br><span class="line">AppState::<span class="title function_ invoke__">set_global</span>(state, cx)</span><br></pre></td></tr></table></figure>
+<p>最后，我们再来<strong>总结一下“不让 <code>GlobalAppState</code> 声明为 pub”的动机：<code>GlobalAppState</code> 通过 Blanket Implementation 自动获得的三个读写方法并不适用于 <code>Arc&lt;AppState&gt;</code>，所以，需要单独为 <code>Arc&lt;AppState&gt;</code> 设计 getter / setter。既然如此，为保证实现方案干净而统一，直接将 <code>GlobalAppState</code> 限制为仅 crate 内可见，杜绝了在外部通过它来读写 <code>Arc&lt;AppState&gt;</code> 的可能，然后统一使用 <code>AppState</code> 上的 pub 的 getter / setter 来读写全局唯一实例，并且可以通过提供限定的 getter / setter 来控制外界对 <code>Arc&lt;AppState&gt;</code> 的读写权限</strong>。下面的表格罗列了 <code>GlobalAppState</code> 加 pub 与不加 pub 对外界读写造成的影响：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">外部 crate 想做的事</th>
+<th style="text-align:left">如果 <code>GlobalAppState</code> 是 <code>pub</code> 的，可提供的写法</th>
+<th style="text-align:left">实际的私有写法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">读取</td>
+<td style="text-align:left"><code>cx.global::&lt;GlobalAppState&gt;().0.clone()</code></td>
+<td style="text-align:left"><code>AppState::global(cx)</code></td>
+</tr>
+<tr>
+<td style="text-align:left">安全地读取</td>
+<td style="text-align:left"><code>cx.try_global::&lt;GlobalAppState&gt;().map(|s| s.0.clone())</code></td>
+<td style="text-align:left"><code>AppState::try_global(cx)</code></td>
+</tr>
+<tr>
+<td style="text-align:left">设置</td>
+<td style="text-align:left"><code>cx.set_global(GlobalAppState(state))</code></td>
+<td style="text-align:left"><code>AppState::set_global(state, cx)</code></td>
+</tr>
+<tr>
+<td style="text-align:left">用 <code>update_global</code> 修改</td>
+<td style="text-align:left">可以</td>
+<td style="text-align:left"><strong>不能</strong>，没有提供这样的访问器</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>remove_global</code> 删除</td>
+<td style="text-align:left">可以</td>
+<td style="text-align:left"><strong>不能</strong></td>
+</tr>
+<tr>
+<td style="text-align:left"><code>observe_global</code> 观察</td>
+<td style="text-align:left">可以</td>
+<td style="text-align:left"><strong>不能</strong></td>
+</tr>
+</tbody>
+</table>
+<p>其实在这个示例中，将 <code>GlobalAppState</code> 设为私有并没有多么关键，即使是 pub 的也不是什么大问题，最多就是在 crate 之外，用户能使用 <code>cx.global::&lt;GlobalAppState&gt;()</code> 这种形式去访问 <code>Arc&lt;AppState&gt;</code>。</p>
+<h2 id="2-3-小结">2.3 小结</h2>
+<ul>
+<li>
+<p><strong>要不要 newtype</strong>：看存放形式。存的是本地类型的值，就直接实现；存的是 <code>Arc</code> / <code>Entity</code> / 外部类型，就需要 newtype。</p>
+</li>
+<li>
+<p><strong>newtype 或 Global 类型要不要公开</strong>：看是否希望外部用 <code>update_global</code> 这类泛型 API 原地修改。<code>SettingsStore</code> 希望，所以公开；<code>GlobalAppState</code> 只提供读和整体替换，所以私有。</p>
+</li>
+</ul>
+<h1 id="3-附录">3. 附录</h1>
+<p>以下是会作为全局状态保存的类型（不完全统计）：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br></pre></td><td class="code"><pre><span class="line">agent::db::GlobalThreadsDatabase</span><br><span class="line">agent::thread_store::GlobalThreadStore</span><br><span class="line">agent_settings::user_agents_md::UserAgentsMd</span><br><span class="line">agent_skills::SkillIndex</span><br><span class="line">agent_skills::SkillsUpdatedHook</span><br><span class="line">agent_ui::agent_diff::AgentDiffGlobal</span><br><span class="line">agent_ui::inline_assistant::InlineAssistant</span><br><span class="line">agent_ui::terminal_inline_assistant::TerminalInlineAssistant</span><br><span class="line">agent_ui::terminal_thread_metadata_store::GlobalTerminalThreadMetadataStore</span><br><span class="line">agent_ui::thread_metadata_store::GlobalThreadMetadataStore</span><br><span class="line">auto_update::GlobalAutoUpdate</span><br><span class="line">breadcrumbs::RenderBreadcrumbText</span><br><span class="line">channel::channel_store::GlobalChannelStore</span><br><span class="line">client::GlobalClient</span><br><span class="line">client::llm_token::GlobalRefreshLlmTokenListener</span><br><span class="line">codestral::GlobalCodestralApiKey</span><br><span class="line">command_palette_hooks::GlobalCommandPaletteFilter</span><br><span class="line">copilot_chat::GlobalCopilotChat</span><br><span class="line">dap::registry::DapRegistry</span><br><span class="line">db::AppDatabase</span><br><span class="line">edit_prediction::EditPredictionStoreGlobal</span><br><span class="line">edit_prediction::mercury::GlobalMercuryApiKey</span><br><span class="line">edit_prediction::open_ai_compatible::GlobalOpenAiCompatibleApiKey</span><br><span class="line">editor::diagnostics::GlobalDiagnosticRenderer</span><br><span class="line">editor::git::blame::GlobalBlameRenderer</span><br><span class="line">etw_tracing::GlobalEtwSession</span><br><span class="line">extension::extension_events::GlobalExtensionEvents</span><br><span class="line">extension::extension_host_proxy::GlobalExtensionHostProxy</span><br><span class="line">extension_host::GlobalExtensionStore</span><br><span class="line">feature_flags::store::FeatureFlagStore</span><br><span class="line">fs::GlobalFs</span><br><span class="line">git::hosting_provider::GlobalGitHostingProviderRegistry</span><br><span class="line">git_ui_core::BranchPickerBuilderGlobal</span><br><span class="line">git_ui_core::FileHistoryOpenerGlobal</span><br><span class="line">gpui::app::SystemWindowTabController</span><br><span class="line">gpui::elements::div::GroupHitboxes</span><br><span class="line">gpui_tokio::GlobalTokio</span><br><span class="line">json_schema_store::SchemaStore</span><br><span class="line">keymap_editor::KeymapEventChannel</span><br><span class="line">language_model::registry::GlobalLanguageModelRegistry</span><br><span class="line">language_models::provider::mistral::GlobalMistralLanguageModelProvider</span><br><span class="line">markdown_preview::markdown_preview_view::SuppressedAutoPreviews</span><br><span class="line">notifications::notification_store::GlobalNotificationStore</span><br><span class="line">project::agent_registry_store::GlobalAgentRegistryStore</span><br><span class="line">project::connection_manager::GlobalManager</span><br><span class="line">project::context_server_store::registry::GlobalContextServerDescriptorRegistry</span><br><span class="line">project::lsp_store::json_language_server_ext::SchemaHandlingImpl</span><br><span class="line">project::lsp_store::log_store::GlobalLogStore</span><br><span class="line">project::manifest_tree::manifest_store::GlobalManifestProvider</span><br><span class="line">project::trusted_worktrees::TrustedWorktrees</span><br><span class="line">project::worktree_store::WorktreeIdCounter</span><br><span class="line">prompt_store::GlobalPromptStore</span><br><span class="line">release_channel::GlobalAppCommitSha</span><br><span class="line">release_channel::GlobalAppVersion</span><br><span class="line">release_channel::GlobalReleaseChannel</span><br><span class="line">repl::repl_store::GlobalReplStore</span><br><span class="line">search::project_search::ActiveSettings</span><br><span class="line">settings::settings_store::DefaultSemanticTokenRules</span><br><span class="line">settings::settings_store::SettingsStore</span><br><span class="line">settings_ui::ProjectSettingsUpdateQueue</span><br><span class="line">settings_ui::SettingFieldRenderer</span><br><span class="line">snippet_provider::GlobalSnippetWatcher</span><br><span class="line">snippet_provider::registry::GlobalSnippetRegistry</span><br><span class="line">theme::GlobalSystemAppearance</span><br><span class="line">theme::GlobalTheme</span><br><span class="line">theme::font_family_cache::GlobalFontFamilyCache</span><br><span class="line">theme::registry::GlobalThemeRegistry</span><br><span class="line">theme::theme_settings_provider::GlobalThemeSettingsProvider</span><br><span class="line">ui::components::keybinding::KeyBindingVisibility</span><br><span class="line">ui::components::keybinding::VimStyle</span><br><span class="line">ui::components::scrollbar::scrollbars::ScrollbarAutoHide</span><br><span class="line">vim::state::VimGlobals</span><br><span class="line">web_search::GlobalWebSearchRegistry</span><br><span class="line">workspace::FollowableViewRegistry</span><br><span class="line">workspace::GlobalAnyActiveCall</span><br><span class="line">workspace::GlobalAppState</span><br><span class="line">workspace::ProjectItemRegistry</span><br><span class="line">workspace::SerializableItemRegistry</span><br><span class="line">workspace::history_manager::GlobalHistoryManager</span><br><span class="line">workspace::modal_layer::ReopenablePickerRegistry</span><br><span class="line">workspace::toolbar::PaneSearchBarCallbacks</span><br><span class="line">zed::zed::migrate::GlobalMigrationNotification</span><br><span class="line">zed::zed::open_listener::OpenListener</span><br></pre></td></tr></table></figure>
+</div><div class="article-licensing box"><div class="licensing-title"><p>Rust GPUI 桌面应用开发入门：全局状态（Global 类型）</p><p><a href="https://laurence.enlightgram.com/gpui/gpui-getting-started-5-global-state/">https://laurence.enlightgram.com/gpui/gpui-getting-started-5-global-state/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>Laurence Geng</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-11-17</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-17</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="icons" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="icon fab fa-creative-commons-by"></i></a><a class="icons" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="icon fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/GPUI/">GPUI</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/rust/rust-coherence-and-orphan-rule/"><span class="level-item">Rust “一致性”和“孤儿规则”深度解读</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="giscus" id="giscus-thread"></div><script>(function () {
+    var element = document.querySelector("head");
+    if (!element) {
+      return;
+    }
+    var attrs = {"data-repo":"bluishglc/bluishglc.github.io","data-repo-id":"R_kgDOVc13Eg","data-category-id":"DIC_kwDOVc13Es4DKMW-","data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN","data-loading":"lazy","crossorigin":"anonymous"};
+    attrs["data-theme"] = (function (appearance) {
+    return appearance === 'dark' || (appearance === 'auto' && !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  })(document.documentElement.getAttribute('data-appearance')) ? "dark" : "light";
+    var script = document.createElement('script');
+    for (var name in attrs) {
+      script.setAttribute(name, attrs[name]);
+    }
+    script.src = "https://giscus.app/client.js";
+    script.async = true;
+    setTimeout(function () {
+      element.appendChild(script);
+    });
+  })();</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/img/avatar.jpg" alt="Laurence"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Laurence</p><div class="content profile-about"><p>架构师，专注后端与大数据领域，著有<a target="_blank" rel="noopener" href="https://item.jd.com/12677623.html">《大数据平台架构与原型实现：数据中台建设实战》</a>一书，前海外科技大厂资深架构师，主导过多个大型系统平台建设，热爱徒步和旅行，见过最美的风景是六月的喀拉峻大草原，微信公众号：十万公里通票</p>
+</div></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">681</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">26</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">312</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="javascript:;" role="button" data-follow-qrcode="follow-qrcode-modal" aria-haspopup="dialog"><span class="icon"><i class="fab fa-weixin" aria-hidden="true"></i></span><span>关注我</span></a></div><div class="modal follow-qrcode-modal" id="follow-qrcode-modal" role="dialog" aria-modal="true" aria-label="微信公众号：「 十万公里通票 」"><div class="modal-background" data-follow-qrcode-close></div><div class="modal-content"><div class="box has-text-centered"><img class="follow-qrcode-image not-gallery-item" src="/images/profile/wechat-qrcode.jpg" alt="微信公众号：「 十万公里通票 」" loading="lazy" decoding="async"><p class="follow-qrcode-caption">微信公众号：「 十万公里通票 」</p><p class="follow-qrcode-tip is-hidden-tablet">手机上可长按识别二维码</p></div></div><button class="modal-close is-large" type="button" aria-label="关闭" data-follow-qrcode-close></button></div><script data-pjax src="/js/follow_qrcode.js" defer></script><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Github" href="https://github.com/bluishglc" aria-label="Github"><i class="fab fa-github" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto://bluishglc@126.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#1-全局状态的分类"><span class="level-left"><span class="level-item">1. 全局状态的分类</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#1-1-服务-客户端-工具类"><span class="level-left"><span class="level-item">1.1 服务/客户端/工具类</span></span></a></li><li><a class="level is-mobile" href="#1-2-全局共享状态-数据"><span class="level-left"><span class="level-item">1.2 全局共享状态/数据</span></span></a></li><li><a class="level is-mobile" href="#1-3-注册表"><span class="level-left"><span class="level-item">1.3 注册表</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-Global-的实现机制"><span class="level-left"><span class="level-item">2. Global 的实现机制</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-1-原始类型直接实现-Global"><span class="level-left"><span class="level-item">2.1 原始类型直接实现 Global</span></span></a></li><li><a class="level is-mobile" href="#2-2-基于-newtype-的-Global-类型"><span class="level-left"><span class="level-item">2.2 基于 newtype 的 Global 类型</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#2-2-1-pub-的-newtype-类型"><span class="level-left"><span class="level-item">2.2.1 pub 的 newtype 类型</span></span></a></li><li><a class="level is-mobile" href="#2-2-2-非-pub-的-newtype-类型"><span class="level-left"><span class="level-item">2.2.2 非 pub 的 newtype 类型</span></span></a></li></ul></li><li><a class="level is-mobile" href="#2-3-小结"><span class="level-left"><span class="level-item">2.3 小结</span></span></a></li></ul></li><li><a class="level is-mobile" href="#3-附录"><span class="level-left"><span class="level-item">3. 附录</span></span></a></li></ul></div></div><script src="/js/toc.js" defer></script></div></div><!--!--></div></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings = {"gallery":true,"article":{"highlight":{"clipboard":true,"fold":"unfolded","fold_preview":0}},"i18n":{"copy":"复制","copied":"已复制！"}};
+if (document.readyState !== 'loading') {
+    window.HexoGallery.init(document, {
+        lightGallery: IcarusThemeSettings.gallery,
+        justifiedGallery: IcarusThemeSettings.gallery
+    });
+}</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer></script><script src="/js/github-calendar.js" defer></script><script src="/js/pjax-page.js"></script><script src="/js/pjax-prefetch.js"></script><script src="/js/animation.js" onerror="document.documentElement.classList.remove(&#039;is-animating&#039;)"></script><button type="button" id="back-to-top" title="回到顶端" aria-label="回到顶端"><i class="fas fa-chevron-up" aria-hidden="true"></i></button><script data-pjax src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/zoom/lg-zoom.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/lightgallery@3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "https://cdn.jsdelivr.net/npm/justified-gallery@4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><!--!--><!--!--><!--!--><script src="/js/pjax-core.js"></script><script src="/js/pjax.js"></script><!--!--><!--!--><!--!--><script data-pjax src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script data-pjax>(function installSearchbox(window) {
+  if (window.loadSearchbox) return;
+  const document = window.document;
+  let current;
+  window.loadSearchbox = function ($main, options) {
+    const $ = window.jQuery;
+    options = options || {};
+    // Preserve focus state only when replacing the controller for the same open DOM element.
+    let opener = current ? current.destroy($main[0]) : null;
+    let touch = false;
+    const $document = $(document);
+    const namespace = '.hexoSearchbox';
+    const controller = {
+      isCurrent: function () {
+        return current === controller && document.contains($main[0]);
+      },
+      destroy: function (nextMain) {
+        if (current !== controller) return null;
+        const nextOpener = nextMain === $main[0] && $main.hasClass('show') ? opener : null;
+        $document.off(namespace);
+        opener = null;
+        current = null;
+        if (options.onDestroy) options.onDestroy();
+        return nextOpener;
+      }
+    };
+    current = controller;
+    function open() {
+      if (!controller.isCurrent()) return;
+      if (!$main.hasClass('show')) {
+        opener = document.activeElement;
+        $main.addClass('show');
+      }
+      $main.find('.searchbox-input').focus();
+    }
+    function close(restoreFocus) {
+      $main.removeClass('show');
+      if (restoreFocus !== false && opener && document.contains(opener)) opener.focus();
+      opener = null;
+    }
+    function isSearchShortcut(e) {
+      if (e.altKey) return false;
+      if (e.ctrlKey || e.metaKey) {
+        return !e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      }
+      // e.key already accounts for the keyboard layout (including Shift).
+      const target = e.target;
+      const typing = target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName);
+      return e.key === '/' && !typing;
+    }
+    $document.on('click' + namespace, '.navbar-main .search', open).on('click' + namespace + (options.touch ? ' touchend' + namespace : ''), '.searchbox-close, .searchbox .searchbox-mask', e => {
+      if (!controller.isCurrent()) return;
+      if (e.type !== 'click' && !touch) return;
+      if (options.touch) {
+        $('.navbar-main').css('pointer-events', 'none');
+        setTimeout(() => {
+          $('.navbar-main').css('pointer-events', 'auto');
+        }, 400);
+      }
+      close();
+      touch = false;
+    }).on('focusin' + namespace, e => {
+      if (controller.isCurrent() && $main.hasClass('show') && !$main[0].contains(e.target)) {
+        close(false);
+      }
+    }).on('keydown' + namespace, e => {
+      if (!controller.isCurrent()) return;
+      if (isSearchShortcut(e)) {
+        e.preventDefault();
+        open();
+        return;
+      }
+      if (!$main.hasClass('show')) return;
+      if (e.keyCode === 27) close();else if (options.onKeyDown) options.onKeyDown(e);
+    }).on('touchstart' + namespace, () => {
+      touch = true;
+    }).on('touchmove' + namespace, () => {
+      touch = false;
+    });
+    return controller;
+  };
+})(window);
+window.searchInsight = (function createInsightSearch() {
+  const content = {
+    fields: ['title', 'text'],
+    weights: [3, 1]
+  };
+  const taxonomy = {
+    fields: ['name', 'slug'],
+    weights: [1, 1]
+  };
+  const sections = {
+    posts: content,
+    pages: content,
+    categories: taxonomy,
+    tags: taxonomy
+  };
+  function parseKeywords(query) {
+    return query.split(' ').filter(keyword => {
+      return !!keyword;
+    }).map(keyword => {
+      return keyword.toLowerCase();
+    });
+  }
+
+  // Every keyword must occur in at least one own field; keywords may span different fields.
+  function filter(keywords, obj, fields) {
+    const containKeywords = keywords.filter(keyword => {
+      const containFields = fields.filter(field => {
+        if (!Object.prototype.hasOwnProperty.call(obj, field)) {
+          return false;
+        }
+        if (obj[field].toLowerCase().indexOf(keyword) > -1) {
+          return true;
+        }
+        return false;
+      });
+      if (containFields.length > 0) {
+        return true;
+      }
+      return false;
+    });
+    return containKeywords.length === keywords.length;
+  }
+
+  // Count non-overlapping occurrences of a literal lowercase keyword, not a regular expression.
+  function countMatches(text, keyword) {
+    let count = 0;
+    for (let i = text.indexOf(keyword); i !== -1; i = text.indexOf(keyword, i + keyword.length)) {
+      count++;
+    }
+    return count;
+  }
+  function weight(keywords, obj, fields, weights) {
+    let value = 0;
+    keywords.forEach(keyword => {
+      fields.forEach((field, index) => {
+        if (Object.prototype.hasOwnProperty.call(obj, field)) {
+          value += countMatches(obj[field].toLowerCase(), keyword) * weights[index];
+        }
+      });
+    });
+    return value;
+  }
+
+  // Weigh each matching item once. Equal weights retain the input order, including an empty query.
+  function topItems(items, keywords, config) {
+    return items.filter(item => {
+      return filter(keywords, item, config.fields);
+    }).map(item => {
+      return {
+        item,
+        weight: weight(keywords, item, config.fields, config.weights)
+      };
+    }).sort((a, b) => {
+      return b.weight - a.weight;
+    }).slice(0, 5).map(result => {
+      return result.item;
+    });
+  }
+  return function search(json, query) {
+    const keywords = parseKeywords(query);
+    const results = {};
+    Object.keys(sections).forEach(section => {
+      results[section] = topItems(json[section], keywords, sections[section]);
+    });
+    return {
+      keywords,
+      results
+    };
+  };
+})();</script><script data-pjax src="/js/insight.js" defer></script><script data-pjax>function initInsight() {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInsight, { once: true });
+        } else {
+            initInsight();
+        }</script></body></html>
